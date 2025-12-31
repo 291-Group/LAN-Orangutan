@@ -104,7 +104,7 @@ function editDevice(ip) {
     if (!modal || !row) return;
     document.getElementById('edit-ip').value = ip;
     document.getElementById('edit-ip-display').value = ip;
-    document.getElementById('edit-label').value = row.dataset.label || '';
+    document.getElementById('edit-label').value = row.dataset.labelOriginal || '';
     document.getElementById('edit-group').value = row.querySelector('.group-select')?.value || '';
     document.getElementById('edit-notes').value = '';
     modal.style.display = 'flex';

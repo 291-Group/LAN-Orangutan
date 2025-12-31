@@ -162,12 +162,13 @@ function timeAgo($timestamp) {
                             $isRecent = $lastSeen && (time() - $lastSeen) < 300;
                             $statusClass = $isRecent ? 'online' : ($isOnline ? 'recent' : 'offline');
                         ?>
-                        <tr class="device-row <?= $statusClass ?>" 
+                        <tr class="device-row <?= $statusClass ?>"
                             data-ip="<?= htmlspecialchars($ip) ?>"
                             data-hostname="<?= htmlspecialchars(strtolower($device['hostname'] ?? '')) ?>"
                             data-mac="<?= htmlspecialchars(strtolower($device['mac'] ?? '')) ?>"
                             data-vendor="<?= htmlspecialchars(strtolower($device['vendor'] ?? '')) ?>"
                             data-label="<?= htmlspecialchars(strtolower($device['label'] ?? '')) ?>"
+                            data-label-original="<?= htmlspecialchars($device['label'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
                             data-status="<?= $statusClass ?>">
                             <td><span class="status-indicator <?= $statusClass ?>">●</span></td>
                             <td class="ip-cell"><?= htmlspecialchars($ip) ?></td>
