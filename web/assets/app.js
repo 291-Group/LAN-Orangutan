@@ -137,7 +137,10 @@ async function saveDevice() {
 async function deleteDevice(ip) {
     if (!confirm(`Delete device ${ip}?`)) return;
     try {
-        const response = await fetch(`api.php?action=device&ip=${encodeURIComponent(ip)}`, { method: 'DELETE' });
+        const response = await fetch(`api.php?action=device&ip=${encodeURIComponent(ip)}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' }
+        });
         const result = await response.json();
         if (result.success) {
             showToast('Device deleted', 'success');

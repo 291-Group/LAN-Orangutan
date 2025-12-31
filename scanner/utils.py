@@ -53,7 +53,13 @@ def detect_networks():
 
         ip = iface["ip"]
         prefix = iface["netmask"]
-        ip_parts = [int(x) for x in ip.split('.')]
+        ip_split = ip.split('.')
+        if len(ip_split) != 4:
+            continue  # Skip malformed IPs
+        try:
+            ip_parts = [int(x) for x in ip_split]
+        except ValueError:
+            continue  # Skip if parts aren't integers
         mask = (0xFFFFFFFF << (32 - prefix)) & 0xFFFFFFFF
         mask_parts = [(mask >> 24) & 0xFF, (mask >> 16) & 0xFF,
                       (mask >> 8) & 0xFF, mask & 0xFF]

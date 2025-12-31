@@ -26,8 +26,12 @@ function sanitizeTheme($value) {
 
 function sanitizePortRange($value) {
     // Only allow valid port range format: number-number or single number
-    if (preg_match('/^(\d{1,5})(-\d{1,5})?$/', $value)) {
-        return $value;
+    if (preg_match('/^(\d{1,5})(-(\d{1,5}))?$/', $value, $m)) {
+        $start = (int)$m[1];
+        $end = isset($m[3]) ? (int)$m[3] : $start;
+        if ($start >= 1 && $start <= 65535 && $end >= 1 && $end <= 65535 && $start <= $end) {
+            return $value;
+        }
     }
     return '1-1024';
 }
