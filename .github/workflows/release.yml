@@ -9,7 +9,70 @@ permissions:
   contents: write
 
 jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            suffix: linux-amd64
+          - goos: linux
+            goarch: arm64
+            suffix: linux-arm64
+          - goos: linux
+            goarch: arm
+            goarm: "7"
+            suffix: linux-arm
+          - goos: darwin
+            goarch: amd64
+            suffix: darwin-amd64
+          - goos: darwin
+            goarch: arm64
+            suffix: darwin-arm64
+          - goos: windows
+            goarch: amd64
+            suffix: windows-amd64
+            ext: .exe
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm }}
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          COMMIT=$(git rev-parse --short HEAD)
+          BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          LDFLAGS="-s -w \
+            -X 'github.com/291-Group/LAN-Orangutan/internal/cli.Version=${VERSION}' \
+            -X 'github.com/291-Group/LAN-Orangutan/internal/cli.Commit=${COMMIT}' \
+            -X 'github.com/291-Group/LAN-Orangutan/internal/cli.BuildDate=${BUILD_DATE}'"
+
+          go build -ldflags "${LDFLAGS}" -o orangutan-${{ matrix.suffix }}${{ matrix.ext }} ./cmd/orangutan
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: orangutan-${{ matrix.suffix }}
+          path: orangutan-${{ matrix.suffix }}${{ matrix.ext }}
+
   release:
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -19,15 +82,41 @@ jobs:
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
-      - name: Create release archive
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Prepare release files
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+
+          # Move binaries to dist root and create archives
+          cd dist
+
+          # Process each artifact directory
+          for dir in orangutan-*/; do
+            binary=$(ls "${dir}")
+            mv "${dir}${binary}" .
+            rmdir "${dir}"
+
+            # Create archive
+            if [[ "${binary}" == *.exe ]]; then
+              zip "${binary%.exe}.zip" "${binary}"
+            else
+              tar -czvf "${binary}.tar.gz" "${binary}"
+            fi
+          done
+
+      - name: Create legacy archive (for install.sh compatibility)
         run: |
           VERSION=${{ steps.version.outputs.VERSION }}
           ARCHIVE_NAME="lan-orangutan-${VERSION}"
 
-          # Create clean directory for release
+          # Create clean directory for legacy release
           mkdir -p "dist/${ARCHIVE_NAME}"
 
-          # Copy release files
+          # Copy release files (for backwards compatibility with install.sh)
           cp -r scanner dist/${ARCHIVE_NAME}/
           cp -r web dist/${ARCHIVE_NAME}/
           cp -r cli dist/${ARCHIVE_NAME}/
@@ -37,47 +126,65 @@ jobs:
           cp uninstall.sh dist/${ARCHIVE_NAME}/
           cp config.example.ini dist/${ARCHIVE_NAME}/
           cp README.md dist/${ARCHIVE_NAME}/
-          cp LICENSE dist/${ARCHIVE_NAME}/
+          cp LICENSE dist/${ARCHIVE_NAME}/ 2>/dev/null || true
+
+          # Also include the Go binary
+          cp dist/orangutan-linux-amd64 dist/${ARCHIVE_NAME}/ 2>/dev/null || true
 
           # Create tarball
           cd dist
           tar -czvf "${ARCHIVE_NAME}.tar.gz" "${ARCHIVE_NAME}"
-
-          # Create zip
-          zip -r "${ARCHIVE_NAME}.zip" "${ARCHIVE_NAME}"
+          rm -rf "${ARCHIVE_NAME}"
 
       - name: Build .deb package
         run: |
           VERSION=${{ steps.version.outputs.VERSION }}
           PKG_NAME="lan-orangutan"
-          PKG_DIR="dist/${PKG_NAME}_${VERSION}_all"
 
-          # Create package structure
-          mkdir -p "${PKG_DIR}/DEBIAN"
-          mkdir -p "${PKG_DIR}/opt/lan-orangutan"
-          mkdir -p "${PKG_DIR}/etc/lan-orangutan"
-          mkdir -p "${PKG_DIR}/var/lib/lan-orangutan"
-          mkdir -p "${PKG_DIR}/usr/local/bin"
-          mkdir -p "${PKG_DIR}/lib/systemd/system"
+          # Build for each architecture
+          for arch_info in "amd64:linux-amd64" "arm64:linux-arm64" "armhf:linux-arm"; do
+            DEB_ARCH="${arch_info%%:*}"
+            BIN_SUFFIX="${arch_info##*:}"
+            PKG_DIR="dist/${PKG_NAME}_${VERSION}_${DEB_ARCH}"
 
-          # Copy files
-          cp -r scanner "${PKG_DIR}/opt/lan-orangutan/"
-          cp -r web "${PKG_DIR}/opt/lan-orangutan/"
-          cp -r cli "${PKG_DIR}/opt/lan-orangutan/"
-          cp -r scripts "${PKG_DIR}/opt/lan-orangutan/"
-          cp config.example.ini "${PKG_DIR}/etc/lan-orangutan/config.ini"
-          cp systemd/lan-orangutan.service "${PKG_DIR}/lib/systemd/system/"
+            # Create package structure
+            mkdir -p "${PKG_DIR}/DEBIAN"
+            mkdir -p "${PKG_DIR}/usr/local/bin"
+            mkdir -p "${PKG_DIR}/etc/lan-orangutan"
+            mkdir -p "${PKG_DIR}/var/lib/lan-orangutan"
+            mkdir -p "${PKG_DIR}/lib/systemd/system"
 
-          # Create symlink placeholder (will be created in postinst)
+            # Copy binary
+            cp "dist/orangutan-${BIN_SUFFIX}" "${PKG_DIR}/usr/local/bin/orangutan"
+            chmod 755 "${PKG_DIR}/usr/local/bin/orangutan"
 
-          # Create control file
-          cat > "${PKG_DIR}/DEBIAN/control" << EOF
+            # Copy config
+            cp config.example.ini "${PKG_DIR}/etc/lan-orangutan/config.ini"
+
+            # Create systemd service for Go version
+            cat > "${PKG_DIR}/lib/systemd/system/lan-orangutan.service" << EOF
+          [Unit]
+          Description=LAN Orangutan Network Discovery
+          After=network.target
+
+          [Service]
+          Type=simple
+          ExecStart=/usr/local/bin/orangutan serve
+          Restart=on-failure
+          RestartSec=5
+
+          [Install]
+          WantedBy=multi-user.target
+          EOF
+
+            # Create control file
+            cat > "${PKG_DIR}/DEBIAN/control" << EOF
           Package: lan-orangutan
           Version: ${VERSION}
           Section: net
           Priority: optional
-          Architecture: all
-          Depends: python3, php-cli, nmap
+          Architecture: ${DEB_ARCH}
+          Depends: nmap
           Maintainer: 291 Group <info@291group.com>
           Description: LAN Orangutan - Network Discovery Tool
            A lightweight network discovery and device tracking tool
@@ -87,64 +194,44 @@ jobs:
           Homepage: https://github.com/291-Group/LAN-Orangutan
           EOF
 
-          # Create postinst script
-          cat > "${PKG_DIR}/DEBIAN/postinst" << 'EOF'
+            # Create postinst script
+            cat > "${PKG_DIR}/DEBIAN/postinst" << 'POSTINST'
           #!/bin/bash
           set -e
-
-          # Set permissions
-          chmod +x /opt/lan-orangutan/cli/orangutan
-          chmod +x /opt/lan-orangutan/scripts/start-server.sh
-          chmod +x /opt/lan-orangutan/scanner/scan.py
-
-          # Create symlink
-          ln -sf /opt/lan-orangutan/cli/orangutan /usr/local/bin/orangutan
-
-          # Reload systemd and enable service
           systemctl daemon-reload
           systemctl enable lan-orangutan
-
           echo ""
           echo "LAN Orangutan installed successfully!"
           echo ""
           echo "Start the service with: sudo systemctl start lan-orangutan"
           echo "Access the web UI at: http://localhost:291"
           echo ""
-          EOF
-          chmod 755 "${PKG_DIR}/DEBIAN/postinst"
+          POSTINST
+            chmod 755 "${PKG_DIR}/DEBIAN/postinst"
 
-          # Create prerm script
-          cat > "${PKG_DIR}/DEBIAN/prerm" << 'EOF'
+            # Create prerm script
+            cat > "${PKG_DIR}/DEBIAN/prerm" << 'PRERM'
           #!/bin/bash
           set -e
-
-          # Stop service if running
           systemctl stop lan-orangutan 2>/dev/null || true
           systemctl disable lan-orangutan 2>/dev/null || true
-          EOF
-          chmod 755 "${PKG_DIR}/DEBIAN/prerm"
+          PRERM
+            chmod 755 "${PKG_DIR}/DEBIAN/prerm"
 
-          # Create postrm script
-          cat > "${PKG_DIR}/DEBIAN/postrm" << 'EOF'
+            # Create postrm script
+            cat > "${PKG_DIR}/DEBIAN/postrm" << 'POSTRM'
           #!/bin/bash
           set -e
-
-          # Remove symlink
-          rm -f /usr/local/bin/orangutan
-
-          # Reload systemd
           systemctl daemon-reload
+          POSTRM
+            chmod 755 "${PKG_DIR}/DEBIAN/postrm"
 
-          # Note: config and data directories are preserved
-          # To remove completely: rm -rf /etc/lan-orangutan /var/lib/lan-orangutan
-          EOF
-          chmod 755 "${PKG_DIR}/DEBIAN/postrm"
+            # Create conffiles
+            echo "/etc/lan-orangutan/config.ini" > "${PKG_DIR}/DEBIAN/conffiles"
 
-          # Create conffiles (mark config as conffile so it's not overwritten on upgrade)
-          echo "/etc/lan-orangutan/config.ini" > "${PKG_DIR}/DEBIAN/conffiles"
-
-          # Build the package
-          dpkg-deb --build "${PKG_DIR}"
+            # Build the package
+            dpkg-deb --build "${PKG_DIR}"
+          done
 
       - name: Generate checksums
         run: |

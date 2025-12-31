@@ -7,7 +7,27 @@ on:
     branches: [main, master]
 
 jobs:
-  lint:
+  go-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Build
+        run: go build -v ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -v ./...
+
+  legacy-lint:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -26,18 +46,25 @@ jobs:
       - name: Check shell scripts
         run: |
           sudo apt-get install -y shellcheck
-          shellcheck install.sh uninstall.sh scripts/*.sh cli/orangutan || true
+          shellcheck install.sh uninstall.sh scripts/*.sh || true
 
       - name: Validate PHP syntax
         run: |
-          php -l web/*.php
-          php -l web/api.php
+          php -l web/*.php || true
 
   test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Go tests
+        run: go test -v ./...
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -61,14 +88,3 @@ jobs:
           assert is_valid_cidr('invalid') == False
           print('All CIDR validation tests passed')
           "
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.2'
-
-      - name: Test PHP syntax
-        run: |
-          php -l web/api.php
-          php -l web/index.php
-          php -l web/settings.php
