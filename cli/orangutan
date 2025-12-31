@@ -21,7 +21,7 @@ cmd_scan() {
     if [[ "$network" == "all" ]]; then
         echo -e "${BLUE}→${NC} Scanning all networks..."
         python3 -c "
-import sys; sys.path.insert(0, '$(dirname $SCANNER)')
+import sys; sys.path.insert(0, '$(dirname "$SCANNER")')
 from utils import detect_networks
 for n in detect_networks(): print(n['cidr'])
 " | while read cidr; do
@@ -67,8 +67,9 @@ for ip, dev in sorted(devices.items(), key=lambda x: tuple(map(int, x[0].split('
     if last_seen:
         try:
             seen = datetime.fromisoformat(last_seen.replace('Z', '+00:00'))
+            if seen.tzinfo: seen = seen.replace(tzinfo=None)
             if seen > one_hour_ago: status = 'online'
-        except: pass
+        except ValueError: pass
     filter_val = "$filter"
     if filter_val and filter_val != status: continue
     group_val = "$group_filter"
@@ -108,7 +109,7 @@ cmd_config() { [[ -f "$CONFIG_FILE" ]] && cat "$CONFIG_FILE" || echo "Config not
 cmd_networks() {
     echo -e "${BLUE}→${NC} Detected networks:"
     python3 -c "
-import sys; sys.path.insert(0, '$(dirname $SCANNER)')
+import sys; sys.path.insert(0, '$(dirname "$SCANNER")')
 from utils import detect_networks
 for n in detect_networks():
     ts = ' [Tailscale]' if n.get('is_tailscale') else ''

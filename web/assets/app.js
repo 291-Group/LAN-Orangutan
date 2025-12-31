@@ -100,7 +100,7 @@ function filterDevices() {
 
 function editDevice(ip) {
     const modal = document.getElementById('edit-modal');
-    const row = document.querySelector(`.device-row[data-ip="${ip}"]`);
+    const row = document.querySelector(`.device-row[data-ip="${CSS.escape(ip)}"]`);
     if (!modal || !row) return;
     document.getElementById('edit-ip').value = ip;
     document.getElementById('edit-ip-display').value = ip;
@@ -141,7 +141,7 @@ async function deleteDevice(ip) {
         const result = await response.json();
         if (result.success) {
             showToast('Device deleted', 'success');
-            document.querySelector(`.device-row[data-ip="${ip}"]`)?.remove();
+            document.querySelector(`.device-row[data-ip="${CSS.escape(ip)}"]`)?.remove();
         } else {
             showToast('Failed to delete', 'error');
         }

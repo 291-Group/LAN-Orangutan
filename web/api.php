@@ -96,12 +96,18 @@ class LanOrangutanAPI {
         return file_put_contents($this->devicesFile, json_encode($data, JSON_PRETTY_PRINT)) !== false;
     }
 
+    private function isValidIp($ip) {
+        return filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false;
+    }
+
     public function getDevice($ip) {
+        if (!$this->isValidIp($ip)) return null;
         $data = $this->getDevices();
         return $data['devices'][$ip] ?? null;
     }
 
     public function updateDevice($ip, $updates) {
+        if (!$this->isValidIp($ip)) return false;
         $data = $this->getDevices();
         if (!isset($data['devices'][$ip])) return false;
         foreach ($updates as $key => $value) {
@@ -113,6 +119,7 @@ class LanOrangutanAPI {
     }
 
     public function deleteDevice($ip) {
+        if (!$this->isValidIp($ip)) return false;
         $data = $this->getDevices();
         if (isset($data['devices'][$ip])) {
             unset($data['devices'][$ip]);
@@ -251,6 +258,20 @@ if (basename($_SERVER['SCRIPT_NAME']) === 'api.php') {
     $api = new LanOrangutanAPI();
     $method = $_SERVER['REQUEST_METHOD'];
     $path = $_GET['action'] ?? '';
+
+    // CSRF protection for state-changing API calls
+    // Require X-Requested-With header for POST/DELETE (set by JavaScript fetch)
+    $isMutatingRequest = in_array($method, ['POST', 'PUT', 'DELETE']);
+    $hasXhrHeader = isset($_SERVER['HTTP_X_REQUESTED_WITH']) &&
+                    strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+    $hasContentTypeJson = isset($_SERVER['CONTENT_TYPE']) &&
+                          strpos($_SERVER['CONTENT_TYPE'], 'application/json') !== false;
+
+    if ($isMutatingRequest && !$hasXhrHeader && !$hasContentTypeJson) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'error' => 'CSRF validation failed']);
+        exit;
+    }
 
     try {
         switch ($path) {
