@@ -1,0 +1,165 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Create release archive
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          ARCHIVE_NAME="lan-orangutan-${VERSION}"
+
+          # Create clean directory for release
+          mkdir -p "dist/${ARCHIVE_NAME}"
+
+          # Copy release files
+          cp -r scanner dist/${ARCHIVE_NAME}/
+          cp -r web dist/${ARCHIVE_NAME}/
+          cp -r cli dist/${ARCHIVE_NAME}/
+          cp -r scripts dist/${ARCHIVE_NAME}/
+          cp -r systemd dist/${ARCHIVE_NAME}/
+          cp install.sh dist/${ARCHIVE_NAME}/
+          cp uninstall.sh dist/${ARCHIVE_NAME}/
+          cp config.example.ini dist/${ARCHIVE_NAME}/
+          cp README.md dist/${ARCHIVE_NAME}/
+          cp LICENSE dist/${ARCHIVE_NAME}/
+
+          # Create tarball
+          cd dist
+          tar -czvf "${ARCHIVE_NAME}.tar.gz" "${ARCHIVE_NAME}"
+
+          # Create zip
+          zip -r "${ARCHIVE_NAME}.zip" "${ARCHIVE_NAME}"
+
+      - name: Build .deb package
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          PKG_NAME="lan-orangutan"
+          PKG_DIR="dist/${PKG_NAME}_${VERSION}_all"
+
+          # Create package structure
+          mkdir -p "${PKG_DIR}/DEBIAN"
+          mkdir -p "${PKG_DIR}/opt/lan-orangutan"
+          mkdir -p "${PKG_DIR}/etc/lan-orangutan"
+          mkdir -p "${PKG_DIR}/var/lib/lan-orangutan"
+          mkdir -p "${PKG_DIR}/usr/local/bin"
+          mkdir -p "${PKG_DIR}/lib/systemd/system"
+
+          # Copy files
+          cp -r scanner "${PKG_DIR}/opt/lan-orangutan/"
+          cp -r web "${PKG_DIR}/opt/lan-orangutan/"
+          cp -r cli "${PKG_DIR}/opt/lan-orangutan/"
+          cp -r scripts "${PKG_DIR}/opt/lan-orangutan/"
+          cp config.example.ini "${PKG_DIR}/etc/lan-orangutan/config.ini"
+          cp systemd/lan-orangutan.service "${PKG_DIR}/lib/systemd/system/"
+
+          # Create symlink placeholder (will be created in postinst)
+
+          # Create control file
+          cat > "${PKG_DIR}/DEBIAN/control" << EOF
+          Package: lan-orangutan
+          Version: ${VERSION}
+          Section: net
+          Priority: optional
+          Architecture: all
+          Depends: python3, php-cli, nmap
+          Maintainer: 291 Group <info@291group.com>
+          Description: LAN Orangutan - Network Discovery Tool
+           A lightweight network discovery and device tracking tool
+           with a web dashboard and CLI. Discover devices on your
+           local network, track online/offline status, and organize
+           with labels and groups.
+          Homepage: https://github.com/291-Group/LAN-Orangutan
+          EOF
+
+          # Create postinst script
+          cat > "${PKG_DIR}/DEBIAN/postinst" << 'EOF'
+          #!/bin/bash
+          set -e
+
+          # Set permissions
+          chmod +x /opt/lan-orangutan/cli/orangutan
+          chmod +x /opt/lan-orangutan/scripts/start-server.sh
+          chmod +x /opt/lan-orangutan/scanner/scan.py
+
+          # Create symlink
+          ln -sf /opt/lan-orangutan/cli/orangutan /usr/local/bin/orangutan
+
+          # Reload systemd and enable service
+          systemctl daemon-reload
+          systemctl enable lan-orangutan
+
+          echo ""
+          echo "LAN Orangutan installed successfully!"
+          echo ""
+          echo "Start the service with: sudo systemctl start lan-orangutan"
+          echo "Access the web UI at: http://localhost:291"
+          echo ""
+          EOF
+          chmod 755 "${PKG_DIR}/DEBIAN/postinst"
+
+          # Create prerm script
+          cat > "${PKG_DIR}/DEBIAN/prerm" << 'EOF'
+          #!/bin/bash
+          set -e
+
+          # Stop service if running
+          systemctl stop lan-orangutan 2>/dev/null || true
+          systemctl disable lan-orangutan 2>/dev/null || true
+          EOF
+          chmod 755 "${PKG_DIR}/DEBIAN/prerm"
+
+          # Create postrm script
+          cat > "${PKG_DIR}/DEBIAN/postrm" << 'EOF'
+          #!/bin/bash
+          set -e
+
+          # Remove symlink
+          rm -f /usr/local/bin/orangutan
+
+          # Reload systemd
+          systemctl daemon-reload
+
+          # Note: config and data directories are preserved
+          # To remove completely: rm -rf /etc/lan-orangutan /var/lib/lan-orangutan
+          EOF
+          chmod 755 "${PKG_DIR}/DEBIAN/postrm"
+
+          # Create conffiles (mark config as conffile so it's not overwritten on upgrade)
+          echo "/etc/lan-orangutan/config.ini" > "${PKG_DIR}/DEBIAN/conffiles"
+
+          # Build the package
+          dpkg-deb --build "${PKG_DIR}"
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum *.tar.gz *.zip *.deb > SHA256SUMS.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.deb
+            dist/SHA256SUMS.txt
+          generate_release_notes: true
+          draft: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
