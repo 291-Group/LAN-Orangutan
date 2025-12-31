@@ -109,8 +109,8 @@ def get_gateway():
             parts = result.stdout.split()
             if len(parts) >= 3 and parts[0] == "default":
                 return parts[2]
-    except:
-        pass
+    except (subprocess.TimeoutExpired, OSError) as e:
+        print(f"Warning: Could not get gateway: {e}", file=sys.stderr)
     return ""
 
 
@@ -128,8 +128,8 @@ def get_dns_servers():
                 for line in f:
                     if line.startswith('nameserver'):
                         servers.append(line.split()[1])
-    except:
-        pass
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError, IndexError) as e:
+        print(f"Warning: Could not get DNS servers: {e}", file=sys.stderr)
     return servers
 
 
@@ -151,20 +151,25 @@ def get_device_count():
             first_seen = device.get("first_seen", "")
             if last_seen:
                 try:
+                    # Parse timestamp and make timezone-naive for comparison
                     seen = datetime.fromisoformat(last_seen.replace('Z', '+00:00'))
+                    if seen.tzinfo is not None:
+                        seen = seen.replace(tzinfo=None)
                     if seen > one_hour_ago:
                         stats["online"] += 1
-                except:
+                except ValueError:
                     pass
             if first_seen:
                 try:
                     first = datetime.fromisoformat(first_seen.replace('Z', '+00:00'))
+                    if first.tzinfo is not None:
+                        first = first.replace(tzinfo=None)
                     if first > one_day_ago:
                         stats["new_24h"] += 1
-                except:
+                except ValueError:
                     pass
-    except:
-        pass
+    except (IOError, json.JSONDecodeError, OSError) as e:
+        print(f"Warning: Could not get device count: {e}", file=sys.stderr)
     return stats
 
 
@@ -203,8 +208,15 @@ def parse_config():
                         value = True
                     elif value.lower() in ('false', 'no', 'off'):
                         value = False
-                    elif value.isdigit():
-                        value = int(value)
+                    else:
+                        # Try to parse as int or float
+                        try:
+                            value = int(value)
+                        except ValueError:
+                            try:
+                                value = float(value)
+                            except ValueError:
+                                pass  # Keep as string
                     config[current_section][key] = value
     except Exception as e:
         print(f"Error parsing config: {e}", file=sys.stderr)
@@ -222,7 +234,8 @@ def check_disk_space(path="/var/lib/lan-orangutan"):
             "percent_free": (free_bytes / total_bytes * 100) if total_bytes > 0 else 0,
             "ok": free_bytes > (100 * 1024 * 1024)
         }
-    except:
+    except OSError as e:
+        print(f"Warning: Could not check disk space: {e}", file=sys.stderr)
         return {"free_mb": 0, "total_mb": 0, "percent_free": 0, "ok": False}
 
 

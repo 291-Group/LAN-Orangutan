@@ -64,8 +64,8 @@ def load_scan_state():
         if os.path.exists(STATE_FILE):
             with open(STATE_FILE, 'r') as f:
                 return json.load(f)
-    except:
-        pass
+    except (IOError, json.JSONDecodeError, OSError) as e:
+        print(f"Warning: Could not load scan state: {e}", file=sys.stderr)
     return {"last_scan": {}}
 
 
@@ -93,6 +93,7 @@ def update_scan_time(network):
 
 
 def run_nmap(cidr):
+    """Run nmap scan. Returns tuple of (devices_list, success_bool)."""
     devices = []
     try:
         result = subprocess.run(
@@ -100,7 +101,7 @@ def run_nmap(cidr):
             capture_output=True, text=True, timeout=300
         )
         if result.returncode != 0:
-            return devices
+            return devices, False
 
         output = result.stdout
         host_pattern = r'<host[^>]*>(.*?)</host>'
@@ -137,14 +138,17 @@ def run_nmap(cidr):
             if device["ip"]:
                 devices.append(device)
 
+        return devices, True
+
     except subprocess.TimeoutExpired:
         print("nmap scan timed out", file=sys.stderr)
+        return devices, False
     except FileNotFoundError:
         print("nmap not found", file=sys.stderr)
+        return devices, False
     except Exception as e:
         print(f"nmap error: {e}", file=sys.stderr)
-
-    return devices
+        return devices, False
 
 
 def run_arp_scan(cidr, interface=None):
@@ -192,12 +196,13 @@ def scan_network(cidr, interface=None):
         return {"success": False, "error": f"Rate limited. Wait {wait_time} seconds.",
                 "devices": [], "network": cidr, "timestamp": datetime.now().isoformat()}
 
-    devices = run_nmap(cidr)
+    devices, nmap_success = run_nmap(cidr)
     scanner_used = "nmap"
 
-    if not devices:
+    # Only fallback to arp-scan if nmap actually failed, not if it found 0 devices
+    if not nmap_success:
         devices = run_arp_scan(cidr, interface)
-        scanner_used = "arp-scan"
+        scanner_used = "arp-scan" if devices else "none"
 
     update_scan_time(cidr)
 
@@ -210,26 +215,41 @@ def load_devices():
         if os.path.exists(DEVICES_FILE):
             with open(DEVICES_FILE, 'r') as f:
                 return json.load(f)
-    except:
+    except (IOError, json.JSONDecodeError, OSError) as e:
+        print(f"Warning: Could not load devices file: {e}", file=sys.stderr)
         backup = DEVICES_FILE + ".backup"
         if os.path.exists(backup):
             try:
                 with open(backup, 'r') as f:
                     return json.load(f)
-            except:
-                pass
+            except (IOError, json.JSONDecodeError, OSError) as e2:
+                print(f"Warning: Could not load backup file: {e2}", file=sys.stderr)
     return {"devices": {}, "networks": {}}
 
 
 def save_devices(data):
     os.makedirs(os.path.dirname(DEVICES_FILE), exist_ok=True)
-    if os.path.exists(DEVICES_FILE):
-        try:
-            os.rename(DEVICES_FILE, DEVICES_FILE + ".backup")
-        except:
-            pass
-    with open(DEVICES_FILE, 'w') as f:
-        json.dump(data, f, indent=2)
+    backup_file = DEVICES_FILE + ".backup"
+    temp_file = DEVICES_FILE + ".tmp"
+
+    # Write to temp file first for atomic operation
+    try:
+        with open(temp_file, 'w') as f:
+            json.dump(data, f, indent=2)
+
+        # Backup existing file if present
+        if os.path.exists(DEVICES_FILE):
+            try:
+                os.replace(DEVICES_FILE, backup_file)
+            except OSError as e:
+                print(f"Warning: Could not create backup: {e}", file=sys.stderr)
+
+        # Atomic rename of temp to target
+        os.replace(temp_file, DEVICES_FILE)
+    except OSError as e:
+        print(f"Error saving devices: {e}", file=sys.stderr)
+        if os.path.exists(temp_file):
+            os.remove(temp_file)
 
 
 def merge_devices(existing, new_devices, network):
@@ -260,6 +280,18 @@ def merge_devices(existing, new_devices, network):
     return existing
 
 
+def is_valid_cidr(cidr):
+    """Validate CIDR notation with proper octet range checking."""
+    match = re.match(r'^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})$', cidr)
+    if not match:
+        return False
+    octets = [int(match.group(i)) for i in range(1, 5)]
+    if any(o > 255 for o in octets):
+        return False
+    prefix = int(match.group(5))
+    return 0 <= prefix <= 32
+
+
 def main():
     if len(sys.argv) < 2:
         print(json.dumps({"success": False, "error": "Usage: scan.py <network_cidr> [interface]"}))
@@ -268,7 +300,7 @@ def main():
     cidr = sys.argv[1]
     interface = sys.argv[2] if len(sys.argv) > 2 else None
 
-    if not re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/\d{1,2}$', cidr):
+    if not is_valid_cidr(cidr):
         print(json.dumps({"success": False, "error": f"Invalid CIDR format: {cidr}"}))
         sys.exit(1)
 

@@ -4,6 +4,34 @@
  */
 require_once __DIR__ . '/api.php';
 
+// CSRF token generation and validation
+session_start();
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
+function validateCsrfToken($token) {
+    return isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token);
+}
+
+function sanitizeBindAddress($value) {
+    $allowed = ['0.0.0.0', '127.0.0.1'];
+    return in_array($value, $allowed, true) ? $value : '0.0.0.0';
+}
+
+function sanitizeTheme($value) {
+    $allowed = ['light', 'dark', 'auto'];
+    return in_array($value, $allowed, true) ? $value : 'auto';
+}
+
+function sanitizePortRange($value) {
+    // Only allow valid port range format: number-number or single number
+    if (preg_match('/^(\d{1,5})(-\d{1,5})?$/', $value)) {
+        return $value;
+    }
+    return '1-1024';
+}
+
 $api = new LanOrangutanAPI();
 $config = $api->getConfig();
 $networks = $api->getNetworks();
@@ -13,36 +41,55 @@ $message = '';
 $messageType = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_settings') {
-    $newConfig = [
-        'server' => [
-            'port' => intval($_POST['port'] ?? 291),
-            'bind_address' => $_POST['bind_address'] ?? '0.0.0.0',
-            'enable_api' => isset($_POST['enable_api'])
-        ],
-        'scanning' => [
-            'scan_interval' => intval($_POST['scan_interval'] ?? 300),
-            'min_scan_interval' => 30,
-            'enable_port_scan' => isset($_POST['enable_port_scan']),
-            'port_scan_range' => $_POST['port_scan_range'] ?? '1-1024'
-        ],
-        'storage' => [
-            'max_devices' => intval($_POST['max_devices'] ?? 1000),
-            'retention_days' => intval($_POST['retention_days'] ?? 90),
-            'data_dir' => '/var/lib/lan-orangutan'
-        ],
-        'tailscale' => [
-            'enable' => isset($_POST['tailscale_enable']),
-            'auto_detect' => isset($_POST['tailscale_auto_detect'])
-        ],
-        'ui' => ['theme' => $_POST['theme'] ?? 'auto']
-    ];
-    if ($api->saveConfig($newConfig)) {
-        $message = 'Settings saved successfully';
-        $messageType = 'success';
-        $config = $newConfig;
-    } else {
-        $message = 'Failed to save settings';
+    // Validate CSRF token
+    if (!validateCsrfToken($_POST['csrf_token'] ?? '')) {
+        $message = 'Invalid security token. Please try again.';
         $messageType = 'error';
+    } else {
+        $port = intval($_POST['port'] ?? 291);
+        $port = ($port >= 1 && $port <= 65535) ? $port : 291;
+
+        $maxDevices = intval($_POST['max_devices'] ?? 1000);
+        $maxDevices = ($maxDevices >= 10 && $maxDevices <= 10000) ? $maxDevices : 1000;
+
+        $retentionDays = intval($_POST['retention_days'] ?? 90);
+        $retentionDays = ($retentionDays >= 1 && $retentionDays <= 365) ? $retentionDays : 90;
+
+        $scanInterval = intval($_POST['scan_interval'] ?? 300);
+        $allowedIntervals = [0, 300, 900, 1800, 3600];
+        $scanInterval = in_array($scanInterval, $allowedIntervals, true) ? $scanInterval : 300;
+
+        $newConfig = [
+            'server' => [
+                'port' => $port,
+                'bind_address' => sanitizeBindAddress($_POST['bind_address'] ?? '0.0.0.0'),
+                'enable_api' => isset($_POST['enable_api'])
+            ],
+            'scanning' => [
+                'scan_interval' => $scanInterval,
+                'min_scan_interval' => 30,
+                'enable_port_scan' => isset($_POST['enable_port_scan']),
+                'port_scan_range' => sanitizePortRange($_POST['port_scan_range'] ?? '1-1024')
+            ],
+            'storage' => [
+                'max_devices' => $maxDevices,
+                'retention_days' => $retentionDays,
+                'data_dir' => '/var/lib/lan-orangutan'
+            ],
+            'tailscale' => [
+                'enable' => isset($_POST['tailscale_enable']),
+                'auto_detect' => isset($_POST['tailscale_auto_detect'])
+            ],
+            'ui' => ['theme' => sanitizeTheme($_POST['theme'] ?? 'auto')]
+        ];
+        if ($api->saveConfig($newConfig)) {
+            $message = 'Settings saved successfully';
+            $messageType = 'success';
+            $config = $newConfig;
+        } else {
+            $message = 'Failed to save settings';
+            $messageType = 'error';
+        }
     }
 }
 $theme = $config['ui']['theme'] ?? 'auto';
@@ -76,6 +123,7 @@ $theme = $config['ui']['theme'] ?? 'auto';
 
         <form method="POST" class="settings-form">
             <input type="hidden" name="action" value="save_settings">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
 
             <section class="section">
                 <h2 class="section-title">Server Settings</h2>

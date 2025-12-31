@@ -118,6 +118,24 @@ for n in detect_networks():
 
 cmd_export() {
     local output="${1:-devices.csv}"
+
+    # Validate output path - prevent path traversal
+    local realpath_output
+    realpath_output=$(realpath -m "$output" 2>/dev/null) || {
+        echo -e "${RED}✗${NC} Invalid output path"
+        exit 1
+    }
+
+    # Get current working directory realpath
+    local cwd_realpath
+    cwd_realpath=$(realpath "$(pwd)")
+
+    # Ensure output is within current directory or /tmp
+    if [[ "$realpath_output" != "$cwd_realpath"/* ]] && [[ "$realpath_output" != /tmp/* ]]; then
+        echo -e "${RED}✗${NC} Output path must be within current directory or /tmp"
+        exit 1
+    fi
+
     python3 << PYTHON
 import json, csv, os
 devices_file = "$DATA_DIR/devices.json"
@@ -127,13 +145,14 @@ if not os.path.exists(devices_file):
 with open(devices_file) as f:
     data = json.load(f)
 devices = data.get('devices', {})
-with open("$output", 'w', newline='') as f:
+output_path = '''$realpath_output'''
+with open(output_path, 'w', newline='') as f:
     writer = csv.writer(f)
     writer.writerow(['IP', 'Hostname', 'MAC', 'Vendor', 'Label', 'Group', 'First Seen', 'Last Seen'])
     for ip, dev in sorted(devices.items()):
         writer.writerow([ip, dev.get('hostname',''), dev.get('mac',''), dev.get('vendor',''),
                          dev.get('label',''), dev.get('group',''), dev.get('first_seen',''), dev.get('last_seen','')])
-print(f"Exported {len(devices)} devices to $output")
+print(f"Exported {len(devices)} devices to {output_path}")
 PYTHON
 }
 

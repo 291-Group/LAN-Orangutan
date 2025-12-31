@@ -28,8 +28,25 @@ async function api(action, params = {}, method = 'GET') {
         options.headers = { 'Content-Type': 'application/json' };
         options.body = JSON.stringify(params);
     }
-    const response = await fetch(url, options);
-    return response.json();
+    try {
+        const response = await fetch(url, options);
+        if (!response.ok) {
+            throw new Error(`HTTP error: ${response.status}`);
+        }
+        const text = await response.text();
+        if (!text) {
+            throw new Error('Empty response from server');
+        }
+        try {
+            return JSON.parse(text);
+        } catch (parseError) {
+            console.error('JSON parse error:', parseError, 'Response:', text);
+            throw new Error('Invalid JSON response from server');
+        }
+    } catch (error) {
+        console.error('API error:', error);
+        throw error;
+    }
 }
 
 async function scanNetwork(cidr) {

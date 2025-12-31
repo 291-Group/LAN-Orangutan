@@ -32,7 +32,16 @@ class LanOrangutanAPI {
         ];
         if (!file_exists($this->configFile)) return $defaults;
         $config = parse_ini_file($this->configFile, true);
-        return array_merge($defaults, $config ?: []);
+        if (!$config) return $defaults;
+        // Deep merge: merge each section individually
+        foreach ($defaults as $section => $values) {
+            if (!isset($config[$section])) {
+                $config[$section] = $values;
+            } elseif (is_array($values)) {
+                $config[$section] = array_merge($values, $config[$section]);
+            }
+        }
+        return $config;
     }
 
     public function saveConfig($config) {
@@ -48,7 +57,12 @@ class LanOrangutanAPI {
             $content .= "\n";
         }
         $dir = dirname($this->configFile);
-        if (!is_dir($dir)) @mkdir($dir, 0755, true);
+        if (!is_dir($dir)) {
+            if (!mkdir($dir, 0755, true)) {
+                error_log("LAN Orangutan: Failed to create config directory: $dir");
+                return false;
+            }
+        }
         return file_put_contents($this->configFile, $content) !== false;
     }
 
@@ -68,8 +82,17 @@ class LanOrangutanAPI {
 
     public function saveDevices($data) {
         $dir = dirname($this->devicesFile);
-        if (!is_dir($dir)) @mkdir($dir, 0755, true);
-        if (file_exists($this->devicesFile)) @copy($this->devicesFile, $this->devicesFile . '.backup');
+        if (!is_dir($dir)) {
+            if (!mkdir($dir, 0755, true)) {
+                error_log("LAN Orangutan: Failed to create devices directory: $dir");
+                return false;
+            }
+        }
+        if (file_exists($this->devicesFile)) {
+            if (!copy($this->devicesFile, $this->devicesFile . '.backup')) {
+                error_log("LAN Orangutan: Failed to create devices backup");
+            }
+        }
         return file_put_contents($this->devicesFile, json_encode($data, JSON_PRETTY_PRINT)) !== false;
     }
 
@@ -100,13 +123,12 @@ class LanOrangutanAPI {
 
     public function getNetworks() {
         $networks = [];
-        $cmd = "python3 -c \"
-import sys
-sys.path.insert(0, '" . dirname($this->utilsPath) . "')
-from utils import detect_networks
-import json
-print(json.dumps(detect_networks()))
-\" 2>/dev/null";
+        $utilsDir = dirname($this->utilsPath);
+        $cmd = sprintf(
+            'PYTHONPATH=%s python3 -c %s 2>/dev/null',
+            escapeshellarg($utilsDir),
+            escapeshellarg('from utils import detect_networks; import json; print(json.dumps(detect_networks()))')
+        );
         $output = shell_exec($cmd);
         if ($output) {
             $detected = json_decode($output, true);
@@ -143,14 +165,30 @@ print(json.dumps(detect_networks()))
     }
 
     public function scanNetwork($cidr) {
-        if (!preg_match('/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2}$/', $cidr)) {
+        if (!$this->isValidCidr($cidr)) {
             return ['success' => false, 'error' => 'Invalid CIDR format'];
         }
-        $cmd = escapeshellcmd("python3 " . $this->scannerPath . " " . escapeshellarg($cidr)) . " 2>&1";
+        $cmd = sprintf(
+            '%s %s %s 2>&1',
+            escapeshellarg('python3'),
+            escapeshellarg($this->scannerPath),
+            escapeshellarg($cidr)
+        );
         $output = shell_exec($cmd);
         if (!$output) return ['success' => false, 'error' => 'Scanner failed'];
         $result = json_decode($output, true);
         return $result ?: ['success' => false, 'error' => 'Invalid scanner output'];
+    }
+
+    private function isValidCidr($cidr) {
+        if (!preg_match('/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\/(\d{1,2})$/', $cidr, $matches)) {
+            return false;
+        }
+        for ($i = 1; $i <= 4; $i++) {
+            if ((int)$matches[$i] > 255) return false;
+        }
+        $prefix = (int)$matches[5];
+        return $prefix >= 0 && $prefix <= 32;
     }
 
     public function scanAllNetworks() {

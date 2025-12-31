@@ -68,7 +68,7 @@ function timeAgo($timestamp) {
                         </div>
                     </div>
                     <div class="card-footer">
-                        <button class="btn btn-primary btn-sm" onclick="scanNetwork('<?= htmlspecialchars($network['cidr']) ?>')">Scan Now</button>
+                        <button class="btn btn-primary btn-sm" onclick="scanNetwork('<?= htmlspecialchars($network['cidr'], ENT_QUOTES, 'UTF-8') ?>')">Scan Now</button>
                     </div>
                 </div>
                 <?php endforeach; ?>
@@ -151,10 +151,10 @@ function timeAgo($timestamp) {
                         </tr>
                     </thead>
                     <tbody id="devices-tbody">
-                        <?php 
+                        <?php
                         $deviceList = $devices['devices'] ?? [];
                         uksort($deviceList, function($a, $b) {
-                            return ip2long($a) - ip2long($b);
+                            return ip2long($a) <=> ip2long($b);
                         });
                         foreach ($deviceList as $ip => $device): 
                             $lastSeen = strtotime($device['last_seen'] ?? '');
@@ -176,7 +176,7 @@ function timeAgo($timestamp) {
                             <td><?= htmlspecialchars($device['vendor'] ?? 'Unknown') ?></td>
                             <td><?= htmlspecialchars($device['label'] ?? '') ?></td>
                             <td>
-                                <select class="group-select" data-ip="<?= htmlspecialchars($ip) ?>" onchange="updateDeviceGroup(this)">
+                                <select class="group-select" data-ip="<?= htmlspecialchars($ip, ENT_QUOTES, 'UTF-8') ?>" onchange="updateDeviceGroup(this)">
                                     <option value="">-</option>
                                     <option value="Server" <?= ($device['group'] ?? '') === 'Server' ? 'selected' : '' ?>>Server</option>
                                     <option value="Desktop" <?= ($device['group'] ?? '') === 'Desktop' ? 'selected' : '' ?>>Desktop</option>
@@ -189,8 +189,8 @@ function timeAgo($timestamp) {
                             </td>
                             <td class="time-cell"><?= $lastSeen ? timeAgo($lastSeen) : '-' ?></td>
                             <td class="actions-cell">
-                                <button class="btn-icon" onclick="editDevice('<?= htmlspecialchars($ip) ?>')" title="Edit">✎</button>
-                                <button class="btn-icon danger" onclick="deleteDevice('<?= htmlspecialchars($ip) ?>')" title="Delete">✕</button>
+                                <button class="btn-icon" onclick="editDevice('<?= htmlspecialchars($ip, ENT_QUOTES, 'UTF-8') ?>')" title="Edit">✎</button>
+                                <button class="btn-icon danger" onclick="deleteDevice('<?= htmlspecialchars($ip, ENT_QUOTES, 'UTF-8') ?>')" title="Delete">✕</button>
                             </td>
                         </tr>
                         <?php endforeach; ?>
