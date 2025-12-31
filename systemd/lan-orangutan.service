@@ -1,0 +1,24 @@
+[Unit]
+Description=LAN Orangutan Network Discovery
+Documentation=https://github.com/291-Group/LAN-Orangutan
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/lan-orangutan
+ExecStart=/opt/lan-orangutan/scripts/start-server.sh
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/lan-orangutan /etc/lan-orangutan
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

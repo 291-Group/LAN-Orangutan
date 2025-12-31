@@ -1,0 +1,2 @@
+# LAN Orangutan Scanner Dependencies
+# Uses Python standard library - no external dependencies required
