@@ -12,7 +12,6 @@ import re
 import time
 import os
 from datetime import datetime
-from pathlib import Path
 
 STATE_FILE = "/var/lib/lan-orangutan/scan_state.json"
 DEVICES_FILE = "/var/lib/lan-orangutan/devices.json"

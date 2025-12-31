@@ -6,7 +6,6 @@ Network detection, Tailscale integration, and helper functions
 
 import json
 import subprocess
-import socket
 import os
 import sys
 from datetime import datetime, timedelta
