@@ -228,7 +228,7 @@ $theme = $config['ui']['theme'] ?? 'auto';
                     </div>
                     <div class="status-row">
                         <span class="status-label">Disk Space:</span>
-                        <span class="status-value <?= $status['disk_ok'] ? 'online' : 'offline' ?>"><?= $status['disk_free_mb'] ?> MB free</span>
+                        <span class="status-value <?= $status['disk_ok'] ? 'online' : 'offline' ?>"><?= intval($status['disk_free_mb']) ?> MB free</span>
                     </div>
                 </div>
             </section>
@@ -250,7 +250,7 @@ $theme = $config['ui']['theme'] ?? 'auto';
             <section class="section">
                 <h2 class="section-title">System Status</h2>
                 <div class="card">
-                    <div class="status-row"><span class="status-label">PHP:</span><span class="status-value"><?= $status['php_version'] ?></span></div>
+                    <div class="status-row"><span class="status-label">PHP:</span><span class="status-value"><?= htmlspecialchars($status['php_version']) ?></span></div>
                     <div class="status-row"><span class="status-label">Scanner:</span><span class="status-value <?= $status['scanner_available'] ? 'online' : 'offline' ?>"><?= $status['scanner_available'] ? '✓ Available' : '✗ Not found' ?></span></div>
                     <div class="status-row"><span class="status-label">nmap:</span><span class="status-value <?= $status['nmap_available'] ? 'online' : 'warning' ?>"><?= $status['nmap_available'] ? '✓ Installed' : '⚠ Not installed' ?></span></div>
                 </div>

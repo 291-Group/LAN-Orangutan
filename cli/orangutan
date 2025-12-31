@@ -61,7 +61,15 @@ now = datetime.now()
 one_hour_ago = now - timedelta(hours=1)
 print(f"{'STATUS':<8} {'IP ADDRESS':<16} {'HOSTNAME':<25} {'MAC ADDRESS':<18} {'VENDOR':<15} {'LABEL':<15}")
 print("-" * 110)
-for ip, dev in sorted(devices.items(), key=lambda x: tuple(map(int, x[0].split('.')))):
+def ip_sort_key(item):
+    try:
+        parts = item[0].split('.')
+        if len(parts) == 4:
+            return tuple(int(p) for p in parts)
+    except (ValueError, AttributeError):
+        pass
+    return (999, 999, 999, 999)  # Sort malformed IPs last
+for ip, dev in sorted(devices.items(), key=ip_sort_key):
     last_seen = dev.get('last_seen', '')
     status = 'offline'
     if last_seen:

@@ -127,7 +127,7 @@ async function saveDevice() {
             closeModal();
             location.reload();
         } else {
-            showToast('Failed to update', 'error');
+            showToast(result.error || 'Failed to update device', 'error');
         }
     } catch (e) {
         showToast('Error: ' + e.message, 'error');
@@ -146,7 +146,7 @@ async function deleteDevice(ip) {
             showToast('Device deleted', 'success');
             document.querySelector(`.device-row[data-ip="${CSS.escape(ip)}"]`)?.remove();
         } else {
-            showToast('Failed to delete', 'error');
+            showToast(result.error || 'Failed to delete device', 'error');
         }
     } catch (e) {
         showToast('Error: ' + e.message, 'error');
@@ -158,9 +158,13 @@ async function updateDeviceGroup(select) {
     const group = select.value;
     try {
         const result = await api('device', { ip, group }, 'POST');
-        if (result.success) showToast('Group updated', 'success');
+        if (result.success) {
+            showToast('Group updated', 'success');
+        } else {
+            showToast(result.error || 'Failed to update group', 'error');
+        }
     } catch (e) {
-        showToast('Failed to update', 'error');
+        showToast('Failed to update group', 'error');
     }
 }
 
