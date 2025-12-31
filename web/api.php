@@ -288,6 +288,10 @@ if (basename($_SERVER['SCRIPT_NAME']) === 'api.php') {
                     echo json_encode($device ? ['success' => true, 'device' => $device] : ['success' => false, 'error' => 'Not found']);
                 } elseif ($method === 'POST') {
                     $input = json_decode(file_get_contents('php://input'), true) ?: $_POST;
+                    // Get IP from body if not in URL (for POST requests from JavaScript)
+                    if (empty($ip) && isset($input['ip'])) {
+                        $ip = $input['ip'];
+                    }
                     echo json_encode(['success' => $api->updateDevice($ip, $input)]);
                 } elseif ($method === 'DELETE') {
                     echo json_encode(['success' => $api->deleteDevice($ip)]);

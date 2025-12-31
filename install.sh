@@ -53,7 +53,14 @@ if ss -tuln | grep -q ":$PORT "; then
     case "$choice" in
         1) PORT=2910 ;;
         2) PORT=8090 ;;
-        3) read -p "Port: " PORT ;;
+        3)
+            read -p "Port: " PORT
+            # Validate custom port is a number between 1-65535
+            if [[ ! "$PORT" =~ ^[0-9]+$ ]] || [[ "$PORT" -lt 1 ]] || [[ "$PORT" -gt 65535 ]]; then
+                echo -e "${YELLOW}!${NC} Invalid port '$PORT', using 2910"
+                PORT=2910
+            fi
+            ;;
         *) PORT=2910 ;;
     esac
 fi
