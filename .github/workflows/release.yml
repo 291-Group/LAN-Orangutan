@@ -125,30 +125,50 @@ jobs:
         with:
           path: dist
 
+      - name: Debug - Show downloaded artifacts
+        run: |
+          echo "=== Contents of dist/ ==="
+          ls -la dist/
+          echo "=== Contents of each artifact directory ==="
+          for dir in dist/orangutan-*/; do
+            echo "--- $dir ---"
+            ls -la "$dir"
+          done
+
       - name: Prepare release files
         run: |
           VERSION=${{ steps.version.outputs.VERSION }}
-
-          # Move binaries to dist root and create archives
           cd dist
 
           # Process each artifact directory
           for dir in orangutan-*/; do
-            dir_name="${dir%/}"
-            binary=$(ls "${dir}")
+            [ -d "$dir" ] || continue
 
-            # Move binary to temp location, remove dir, then rename
-            mv "${dir}${binary}" "${binary}.tmp"
-            rmdir "${dir}"
-            mv "${binary}.tmp" "${binary}"
+            dir_name="${dir%/}"
+            echo "Processing: $dir_name"
+
+            # Get the binary file (should be only one file in the directory)
+            binary_path=$(find "$dir" -type f | head -1)
+            binary_name=$(basename "$binary_path")
+
+            echo "  Found binary: $binary_name"
+
+            # Move binary to dist root
+            mv "$binary_path" "./$binary_name"
+            rmdir "$dir" 2>/dev/null || rm -rf "$dir"
 
             # Create archive
-            if [[ "${binary}" == *.exe ]]; then
-              zip "${binary%.exe}.zip" "${binary}"
+            if [[ "$binary_name" == *.exe ]]; then
+              echo "  Creating zip: ${binary_name%.exe}.zip"
+              zip "${binary_name%.exe}.zip" "$binary_name"
             else
-              tar -czvf "${binary}.tar.gz" "${binary}"
+              echo "  Creating tar.gz: ${binary_name}.tar.gz"
+              tar -czvf "${binary_name}.tar.gz" "$binary_name"
             fi
           done
+
+          echo "=== Final dist/ contents ==="
+          ls -la
 
       - name: Create legacy archive (for install.sh compatibility)
         run: |
@@ -539,10 +559,29 @@ jobs:
           }
           EOF
 
+      - name: Debug - List all release files
+        run: |
+          echo "=== All files in dist/ before release ==="
+          ls -la dist/
+          echo ""
+          echo "=== tar.gz files ==="
+          ls -la dist/*.tar.gz 2>/dev/null || echo "No tar.gz files"
+          echo ""
+          echo "=== zip files ==="
+          ls -la dist/*.zip 2>/dev/null || echo "No zip files"
+          echo ""
+          echo "=== deb files ==="
+          ls -la dist/*.deb 2>/dev/null || echo "No deb files"
+          echo ""
+          echo "=== rpm files ==="
+          ls -la dist/*.rpm 2>/dev/null || echo "No rpm files"
+
       - name: Generate checksums
         run: |
           cd dist
           sha256sum *.tar.gz *.zip *.deb *.rpm *.apk 2>/dev/null > SHA256SUMS.txt || true
+          echo "=== SHA256SUMS.txt contents ==="
+          cat SHA256SUMS.txt
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
