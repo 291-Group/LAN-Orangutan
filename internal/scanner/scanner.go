@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 
@@ -189,25 +190,14 @@ func (s *Scanner) scanWithArpScan(ctx context.Context, cidr string) ([]types.Dev
 	}
 
 	// Extract interface from CIDR if possible
-	iface := ""
-	cmd := exec.CommandContext(ctx, "ip", "route", "get", strings.Split(cidr, "/")[0])
-	if output, err := cmd.Output(); err == nil {
-		// Parse "... dev eth0 ..."
-		parts := strings.Fields(string(output))
-		for i, p := range parts {
-			if p == "dev" && i+1 < len(parts) {
-				iface = parts[i+1]
-				break
-			}
-		}
-	}
+	iface := getInterfaceForCIDR(ctx, cidr)
 
 	// Run arp-scan
 	args := []string{"--localnet", "-q"}
 	if iface != "" {
 		args = append(args, "-I", iface)
 	}
-	cmd = exec.CommandContext(ctx, "arp-scan", args...)
+	cmd := exec.CommandContext(ctx, "arp-scan", args...)
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, "", fmt.Errorf("arp-scan failed: %w", err)
@@ -303,4 +293,68 @@ func (s *Scanner) CheckRateLimit(lastScan time.Time) (bool, time.Duration) {
 	}
 
 	return false, s.minInterval - elapsed
+}
+
+// getInterfaceForCIDR tries to determine which network interface to use for a given CIDR
+func getInterfaceForCIDR(ctx context.Context, cidr string) string {
+	targetIP := strings.Split(cidr, "/")[0]
+
+	switch runtime.GOOS {
+	case "linux":
+		// Linux: use ip route get
+		cmd := exec.CommandContext(ctx, "ip", "route", "get", targetIP)
+		if output, err := cmd.Output(); err == nil {
+			parts := strings.Fields(string(output))
+			for i, p := range parts {
+				if p == "dev" && i+1 < len(parts) {
+					return parts[i+1]
+				}
+			}
+		}
+
+	case "darwin":
+		// macOS: use route get
+		cmd := exec.CommandContext(ctx, "route", "-n", "get", targetIP)
+		if output, err := cmd.Output(); err == nil {
+			lines := strings.Split(string(output), "\n")
+			for _, line := range lines {
+				if strings.Contains(line, "interface:") {
+					parts := strings.Fields(line)
+					if len(parts) >= 2 {
+						return parts[len(parts)-1]
+					}
+				}
+			}
+		}
+	}
+
+	// Fallback: try to find an interface that matches the CIDR using Go's net package
+	_, cidrNet, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return ""
+	}
+
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return ""
+	}
+
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			if ipNet, ok := addr.(*net.IPNet); ok {
+				if cidrNet.Contains(ipNet.IP) {
+					return iface.Name
+				}
+			}
+		}
+	}
+
+	return ""
 }

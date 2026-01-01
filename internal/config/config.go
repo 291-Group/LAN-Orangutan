@@ -6,16 +6,77 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 )
 
-const (
-	DefaultConfigFile  = "/etc/lan-orangutan/config.ini"
-	DefaultDataDir     = "/var/lib/lan-orangutan"
-	DefaultDevicesFile = "/var/lib/lan-orangutan/devices.json"
-	DefaultStateFile   = "/var/lib/lan-orangutan/scan_state.json"
-)
+// GetDefaultDataDir returns the appropriate default data directory for the current OS
+func GetDefaultDataDir() string {
+	switch runtime.GOOS {
+	case "darwin":
+		// macOS: use Application Support
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "/tmp/lan-orangutan"
+		}
+		return filepath.Join(home, "Library", "Application Support", "lan-orangutan")
+
+	case "windows":
+		// Windows: use AppData
+		appData := os.Getenv("APPDATA")
+		if appData == "" {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return "C:\\lan-orangutan"
+			}
+			return filepath.Join(home, "AppData", "Roaming", "lan-orangutan")
+		}
+		return filepath.Join(appData, "lan-orangutan")
+
+	default:
+		// Linux and others
+		// Use /var/lib if running as root, otherwise use user's local share
+		if os.Getuid() == 0 {
+			return "/var/lib/lan-orangutan"
+		}
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "/tmp/lan-orangutan"
+		}
+		return filepath.Join(home, ".local", "share", "lan-orangutan")
+	}
+}
+
+// GetDefaultConfigFile returns the appropriate default config file path for the current OS
+func GetDefaultConfigFile() string {
+	switch runtime.GOOS {
+	case "darwin":
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "/tmp/lan-orangutan/config.ini"
+		}
+		return filepath.Join(home, "Library", "Application Support", "lan-orangutan", "config.ini")
+
+	case "windows":
+		appData := os.Getenv("APPDATA")
+		if appData == "" {
+			return "C:\\lan-orangutan\\config.ini"
+		}
+		return filepath.Join(appData, "lan-orangutan", "config.ini")
+
+	default:
+		// Linux: use /etc if running as root, otherwise use user config
+		if os.Getuid() == 0 {
+			return "/etc/lan-orangutan/config.ini"
+		}
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "/tmp/lan-orangutan/config.ini"
+		}
+		return filepath.Join(home, ".config", "lan-orangutan", "config.ini")
+	}
+}
 
 // Config holds all application configuration
 type Config struct {
@@ -76,7 +137,7 @@ func Default() *Config {
 		Storage: StorageConfig{
 			MaxDevices:    1000,
 			RetentionDays: 90,
-			DataDir:       DefaultDataDir,
+			DataDir:       GetDefaultDataDir(),
 		},
 		Tailscale: TailscaleConfig{
 			Enable:     true,

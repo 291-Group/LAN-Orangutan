@@ -6,72 +6,58 @@ import (
 	"fmt"
 	"net"
 	"os/exec"
+	"runtime"
 	"strings"
 
 	"github.com/291-Group/LAN-Orangutan/internal/types"
 )
 
-// ipAddrInfo represents the JSON output from `ip -j addr show`
-type ipAddrInfo struct {
-	IfIndex   int    `json:"ifindex"`
-	IfName    string `json:"ifname"`
-	Flags     []string `json:"flags"`
-	AddrInfo  []addrInfo `json:"addr_info"`
-}
-
-type addrInfo struct {
-	Family    string `json:"family"`
-	Local     string `json:"local"`
-	PrefixLen int    `json:"prefixlen"`
-}
-
 // DetectNetworks discovers available network interfaces and their CIDRs
+// Uses Go's standard library for cross-platform compatibility
 func DetectNetworks() ([]types.Network, error) {
-	cmd := exec.Command("ip", "-j", "addr", "show")
-	output, err := cmd.Output()
+	ifaces, err := net.Interfaces()
 	if err != nil {
-		return nil, fmt.Errorf("failed to run ip command: %w", err)
-	}
-
-	var interfaces []ipAddrInfo
-	if err := json.Unmarshal(output, &interfaces); err != nil {
-		return nil, fmt.Errorf("failed to parse ip output: %w", err)
+		return nil, fmt.Errorf("failed to get interfaces: %w", err)
 	}
 
 	var networks []types.Network
-	for _, iface := range interfaces {
+	for _, iface := range ifaces {
 		// Skip loopback and down interfaces
-		if iface.IfName == "lo" {
+		if iface.Flags&net.FlagLoopback != 0 {
 			continue
 		}
-		isUp := false
-		for _, flag := range iface.Flags {
-			if flag == "UP" {
-				isUp = true
-				break
-			}
-		}
-		if !isUp {
+		if iface.Flags&net.FlagUp == 0 {
 			continue
 		}
 
-		for _, addr := range iface.AddrInfo {
-			if addr.Family != "inet" {
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+
+		for _, addr := range addrs {
+			ipNet, ok := addr.(*net.IPNet)
+			if !ok {
 				continue
 			}
 
-			cidr := calculateCIDR(addr.Local, addr.PrefixLen)
-			if cidr == "" {
+			// Skip IPv6
+			if ipNet.IP.To4() == nil {
 				continue
 			}
+
+			// Calculate network CIDR
+			ones, _ := ipNet.Mask.Size()
+			networkIP := ipNet.IP.Mask(ipNet.Mask)
+			cidr := fmt.Sprintf("%s/%d", networkIP.String(), ones)
 
 			network := types.Network{
 				CIDR:         cidr,
-				Interface:    iface.IfName,
-				FriendlyName: getFriendlyName(iface.IfName),
-				IP:           addr.Local,
-				IsTailscale:  isTailscaleInterface(iface.IfName),
-				IsWireless:   isWirelessInterface(iface.IfName),
+				Interface:    iface.Name,
+				FriendlyName: getFriendlyName(iface.Name),
+				IP:           ipNet.IP.String(),
+				IsTailscale:  isTailscaleInterface(iface.Name),
+				IsWireless:   isWirelessInterface(iface.Name),
 			}
 			networks = append(networks, network)
 		}
@@ -107,12 +93,19 @@ func calculateCIDR(ip string, prefixLen int) string {
 // getFriendlyName returns a user-friendly name for an interface
 func getFriendlyName(ifname string) string {
 	switch {
-	case strings.HasPrefix(ifname, "tailscale"):
+	case strings.HasPrefix(ifname, "tailscale") || ifname == "utun4":
 		return "Tailscale VPN"
 	case strings.HasPrefix(ifname, "wlan") || strings.HasPrefix(ifname, "wlp"):
 		return "Wi-Fi"
 	case strings.HasPrefix(ifname, "eth") || strings.HasPrefix(ifname, "enp") || strings.HasPrefix(ifname, "eno"):
 		return "Ethernet"
+	// macOS interfaces
+	case ifname == "en0":
+		return "Wi-Fi" // Usually Wi-Fi on macOS
+	case strings.HasPrefix(ifname, "en"):
+		return "Ethernet" // Other en* interfaces are usually Ethernet
+	case strings.HasPrefix(ifname, "bridge"):
+		return "Bridge"
 	case strings.HasPrefix(ifname, "br"):
 		return "Bridge"
 	case strings.HasPrefix(ifname, "docker"):
@@ -121,6 +114,12 @@ func getFriendlyName(ifname string) string {
 		return "Virtual Ethernet"
 	case strings.HasPrefix(ifname, "virbr"):
 		return "Virtual Bridge"
+	case strings.HasPrefix(ifname, "utun"):
+		return "VPN Tunnel"
+	case strings.HasPrefix(ifname, "awdl"):
+		return "Apple Wireless Direct"
+	case strings.HasPrefix(ifname, "llw"):
+		return "Low Latency WLAN"
 	default:
 		return ifname
 	}
@@ -128,31 +127,63 @@ func getFriendlyName(ifname string) string {
 
 // isTailscaleInterface returns true if the interface is a Tailscale interface
 func isTailscaleInterface(ifname string) bool {
-	return strings.HasPrefix(ifname, "tailscale")
+	return strings.HasPrefix(ifname, "tailscale") || ifname == "utun4"
 }
 
 // isWirelessInterface returns true if the interface is a wireless interface
 func isWirelessInterface(ifname string) bool {
-	return strings.HasPrefix(ifname, "wlan") || strings.HasPrefix(ifname, "wlp")
+	// Linux wireless interfaces
+	if strings.HasPrefix(ifname, "wlan") || strings.HasPrefix(ifname, "wlp") {
+		return true
+	}
+	// macOS - en0 is usually Wi-Fi
+	if ifname == "en0" {
+		return true
+	}
+	return false
 }
 
 // GetDefaultGateway returns the default gateway IP
 func GetDefaultGateway() (string, error) {
-	cmd := exec.Command("ip", "-j", "route", "show", "default")
+	var cmd *exec.Cmd
+
+	switch runtime.GOOS {
+	case "darwin":
+		// macOS: use netstat
+		cmd = exec.Command("netstat", "-rn")
+	case "linux":
+		// Linux: try ip command first
+		cmd = exec.Command("ip", "-j", "route", "show", "default")
+	default:
+		// Fallback for other systems
+		cmd = exec.Command("netstat", "-rn")
+	}
+
 	output, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("failed to get default route: %w", err)
 	}
 
-	var routes []struct {
-		Gateway string `json:"gateway"`
-	}
-	if err := json.Unmarshal(output, &routes); err != nil {
-		return "", fmt.Errorf("failed to parse route output: %w", err)
+	if runtime.GOOS == "linux" {
+		// Parse JSON output from ip command
+		var routes []struct {
+			Gateway string `json:"gateway"`
+		}
+		if err := json.Unmarshal(output, &routes); err == nil && len(routes) > 0 {
+			return routes[0].Gateway, nil
+		}
 	}
 
-	if len(routes) > 0 && routes[0].Gateway != "" {
-		return routes[0].Gateway, nil
+	// Parse netstat output (works on macOS and as fallback)
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		fields := strings.Fields(line)
+		if len(fields) >= 2 && (fields[0] == "default" || fields[0] == "0.0.0.0") {
+			gateway := fields[1]
+			if net.ParseIP(gateway) != nil {
+				return gateway, nil
+			}
+		}
 	}
 
 	return "", nil
