@@ -233,10 +233,157 @@ jobs:
             dpkg-deb --build "${PKG_DIR}"
           done
 
+      - name: Build .rpm package
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          sudo apt-get update && sudo apt-get install -y rpm
+
+          # Build for each architecture
+          for arch_info in "x86_64:linux-amd64" "aarch64:linux-arm64"; do
+            RPM_ARCH="${arch_info%%:*}"
+            BIN_SUFFIX="${arch_info##*:}"
+
+            # Create RPM build structure
+            mkdir -p rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+            mkdir -p "rpmbuild/BUILDROOT/lan-orangutan-${VERSION}-1.${RPM_ARCH}"
+
+            BUILDROOT="rpmbuild/BUILDROOT/lan-orangutan-${VERSION}-1.${RPM_ARCH}"
+            mkdir -p "${BUILDROOT}/usr/local/bin"
+            mkdir -p "${BUILDROOT}/etc/lan-orangutan"
+            mkdir -p "${BUILDROOT}/var/lib/lan-orangutan"
+            mkdir -p "${BUILDROOT}/usr/lib/systemd/system"
+
+            # Copy binary
+            cp "dist/orangutan-${BIN_SUFFIX}" "${BUILDROOT}/usr/local/bin/orangutan"
+            chmod 755 "${BUILDROOT}/usr/local/bin/orangutan"
+
+            # Copy config
+            cp config.example.ini "${BUILDROOT}/etc/lan-orangutan/config.ini"
+
+            # Create systemd service
+            cat > "${BUILDROOT}/usr/lib/systemd/system/lan-orangutan.service" << EOF
+          [Unit]
+          Description=LAN Orangutan Network Discovery
+          After=network.target
+
+          [Service]
+          Type=simple
+          ExecStart=/usr/local/bin/orangutan serve
+          Restart=on-failure
+          RestartSec=5
+
+          [Install]
+          WantedBy=multi-user.target
+          EOF
+
+            # Create spec file
+            cat > "rpmbuild/SPECS/lan-orangutan.spec" << EOF
+          Name:           lan-orangutan
+          Version:        ${VERSION}
+          Release:        1
+          Summary:        Network Discovery Tool
+          License:        MIT
+          URL:            https://github.com/291-Group/LAN-Orangutan
+          Requires:       nmap
+
+          %description
+          A lightweight network discovery and device tracking tool
+          with a web dashboard and CLI.
+
+          %files
+          /usr/local/bin/orangutan
+          %config(noreplace) /etc/lan-orangutan/config.ini
+          /usr/lib/systemd/system/lan-orangutan.service
+          %dir /var/lib/lan-orangutan
+          %dir /etc/lan-orangutan
+
+          %post
+          systemctl daemon-reload
+          systemctl enable lan-orangutan
+
+          %preun
+          systemctl stop lan-orangutan 2>/dev/null || true
+          systemctl disable lan-orangutan 2>/dev/null || true
+
+          %postun
+          systemctl daemon-reload
+          EOF
+
+            # Build RPM
+            rpmbuild --define "_topdir $(pwd)/rpmbuild" \
+                     --define "_arch ${RPM_ARCH}" \
+                     --target "${RPM_ARCH}" \
+                     -bb "rpmbuild/SPECS/lan-orangutan.spec"
+
+            # Move to dist
+            cp rpmbuild/RPMS/${RPM_ARCH}/*.rpm dist/ 2>/dev/null || true
+
+            # Clean up for next iteration
+            rm -rf rpmbuild
+          done
+
+      - name: Build Alpine .apk package
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+
+          # Build for x86_64 only (most common Alpine use case)
+          mkdir -p apk-build
+          cd apk-build
+
+          # Create package directory structure
+          mkdir -p pkg/usr/local/bin
+          mkdir -p pkg/etc/lan-orangutan
+          mkdir -p pkg/var/lib/lan-orangutan
+          mkdir -p pkg/etc/init.d
+
+          # Copy binary
+          cp "../dist/orangutan-linux-amd64" "pkg/usr/local/bin/orangutan"
+          chmod 755 "pkg/usr/local/bin/orangutan"
+
+          # Copy config
+          cp ../config.example.ini "pkg/etc/lan-orangutan/config.ini"
+
+          # Create OpenRC init script (Alpine uses OpenRC, not systemd)
+          cat > "pkg/etc/init.d/lan-orangutan" << 'INITSCRIPT'
+          #!/sbin/openrc-run
+
+          name="lan-orangutan"
+          description="LAN Orangutan Network Discovery"
+          command="/usr/local/bin/orangutan"
+          command_args="serve"
+          command_background="yes"
+          pidfile="/run/${RC_SVCNAME}.pid"
+
+          depend() {
+              need net
+              after firewall
+          }
+          INITSCRIPT
+          chmod 755 "pkg/etc/init.d/lan-orangutan"
+
+          # Create APKBUILD info file
+          mkdir -p pkg/.PKGINFO
+          cat > "pkg/.PKGINFO" << EOF
+          pkgname = lan-orangutan
+          pkgver = ${VERSION}-r0
+          pkgdesc = Network Discovery Tool
+          url = https://github.com/291-Group/LAN-Orangutan
+          size = $(du -sb pkg | cut -f1)
+          arch = x86_64
+          license = MIT
+          depend = nmap
+          EOF
+
+          # Create the package (simple tar.gz with specific structure)
+          cd pkg
+          tar -czvf "../../dist/lan-orangutan-${VERSION}-r0.apk" .
+          cd ../..
+          rm -rf apk-build
+
       - name: Generate checksums
         run: |
           cd dist
-          sha256sum *.tar.gz *.zip *.deb > SHA256SUMS.txt
+          sha256sum *.tar.gz *.zip *.deb *.rpm *.apk 2>/dev/null > SHA256SUMS.txt || true
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
@@ -245,6 +392,8 @@ jobs:
             dist/*.tar.gz
             dist/*.zip
             dist/*.deb
+            dist/*.rpm
+            dist/*.apk
             dist/SHA256SUMS.txt
           generate_release_notes: true
           draft: false
