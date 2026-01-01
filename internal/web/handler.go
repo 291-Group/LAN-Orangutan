@@ -2,6 +2,7 @@
 package web
 
 import (
+	"bytes"
 	"embed"
 	"fmt"
 	"html/template"
@@ -47,9 +48,10 @@ type PageData struct {
 // DeviceView is a device with computed display properties
 type DeviceView struct {
 	*types.Device
-	Status      string
-	StatusClass string
-	TimeAgo     string
+	Status       string
+	StatusClass  string
+	TimeAgo      string
+	LastSeenUnix int64
 }
 
 // NewHandler creates a new web handler
@@ -106,8 +108,9 @@ func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 
 	for _, d := range devices {
 		dv := &DeviceView{
-			Device:  d,
-			TimeAgo: timeAgo(d.LastSeen),
+			Device:       d,
+			TimeAgo:      timeAgo(d.LastSeen),
+			LastSeenUnix: d.LastSeen.Unix(),
 		}
 
 		if d.IsRecent() {
@@ -159,10 +162,14 @@ func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 		Groups:    groups,
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := h.templates.ExecuteTemplate(w, "index.html", data); err != nil {
+	// Buffer the template output to avoid superfluous WriteHeader on error
+	var buf bytes.Buffer
+	if err := h.templates.ExecuteTemplate(&buf, "index.html", data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	buf.WriteTo(w)
 }
 
 // handleSettings renders the settings page
@@ -180,10 +187,14 @@ func (h *Handler) handleSettings(w http.ResponseWriter, r *http.Request) {
 		Stats:     stats,
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := h.templates.ExecuteTemplate(w, "settings.html", data); err != nil {
+	// Buffer the template output to avoid superfluous WriteHeader on error
+	var buf bytes.Buffer
+	if err := h.templates.ExecuteTemplate(&buf, "settings.html", data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	buf.WriteTo(w)
 }
 
 // timeAgo returns a human-readable time difference

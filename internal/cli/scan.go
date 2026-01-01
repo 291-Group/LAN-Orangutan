@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"runtime"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -119,6 +120,7 @@ func runScan(cmd *cobra.Command, args []string) error {
 		if len(result.Devices) > 0 {
 			fmt.Printf("%-16s %-18s %-20s %s\n", "IP", "MAC", "HOSTNAME", "VENDOR")
 			fmt.Printf("%-16s %-18s %-20s %s\n", "──────────────", "─────────────────", "───────────────────", "──────────────────────")
+			hasMac := false
 			for _, d := range result.Devices {
 				hostname := d.Hostname
 				if hostname == "" {
@@ -131,10 +133,25 @@ func runScan(cmd *cobra.Command, args []string) error {
 				mac := d.MAC
 				if mac == "" {
 					mac = "-"
+				} else {
+					hasMac = true
 				}
 				fmt.Printf("%-16s %-18s %-20s %s\n", d.IP, mac, truncate(hostname, 20), truncate(vendor, 30))
 			}
 			fmt.Println()
+
+			// Warn if no MAC addresses found (permission issue)
+			if !hasMac && os.Getuid() != 0 {
+				switch runtime.GOOS {
+				case "darwin":
+					fmt.Println("Note: Run with sudo to get MAC addresses and vendor info:")
+					fmt.Println("  sudo ./orangutan scan")
+				case "linux":
+					fmt.Println("Note: Run with sudo for MAC addresses and vendor info:")
+					fmt.Println("  sudo orangutan scan")
+				}
+				fmt.Println()
+			}
 		}
 	}
 

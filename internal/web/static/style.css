@@ -1,4 +1,5 @@
-:root {
+:root,
+[data-theme="light"] {
     --bg-primary: #ffffff;
     --bg-secondary: #f8fafc;
     --bg-tertiary: #f1f5f9;
@@ -25,7 +26,8 @@
     --transition: all 0.2s ease;
 }
 
-[data-theme="dark"] {
+[data-theme="dark"],
+html[data-theme="dark"] {
     --bg-primary: #0f172a;
     --bg-secondary: #1e293b;
     --bg-tertiary: #334155;
@@ -85,6 +87,13 @@ a:hover { color: var(--accent-hover); }
     display: flex;
     align-items: center;
     gap: 0.75rem;
+    color: inherit;
+    text-decoration: none;
+}
+
+.header-brand:hover {
+    color: inherit;
+    opacity: 0.9;
 }
 
 .logo {

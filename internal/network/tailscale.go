@@ -3,6 +3,7 @@ package network
 import (
 	"encoding/json"
 	"os/exec"
+	"runtime"
 	"strings"
 
 	"github.com/291-Group/LAN-Orangutan/internal/types"
@@ -27,19 +28,55 @@ type tailscaleStatusJSON struct {
 	} `json:"ExitNodeStatus"`
 }
 
+// findTailscaleBinary finds the tailscale CLI binary path
+func findTailscaleBinary() string {
+	// First check if it's in PATH
+	if path, err := exec.LookPath("tailscale"); err == nil {
+		return path
+	}
+
+	// Check platform-specific locations
+	switch runtime.GOOS {
+	case "darwin":
+		// macOS: Tailscale app installs CLI here
+		paths := []string{
+			"/Applications/Tailscale.app/Contents/MacOS/Tailscale",
+			"/usr/local/bin/tailscale",
+		}
+		for _, p := range paths {
+			if _, err := exec.LookPath(p); err == nil {
+				return p
+			}
+		}
+	case "windows":
+		paths := []string{
+			`C:\Program Files\Tailscale\tailscale.exe`,
+			`C:\Program Files (x86)\Tailscale\tailscale.exe`,
+		}
+		for _, p := range paths {
+			if _, err := exec.LookPath(p); err == nil {
+				return p
+			}
+		}
+	}
+
+	return ""
+}
+
 // GetTailscaleStatus returns the current Tailscale status
 func GetTailscaleStatus() types.TailscaleStatus {
 	status := types.TailscaleStatus{}
 
 	// Check if tailscale is installed
-	if _, err := exec.LookPath("tailscale"); err != nil {
+	tailscaleBin := findTailscaleBinary()
+	if tailscaleBin == "" {
 		status.Installed = false
 		return status
 	}
 	status.Installed = true
 
 	// Get tailscale status
-	cmd := exec.Command("tailscale", "status", "--json")
+	cmd := exec.Command(tailscaleBin, "status", "--json")
 	output, err := cmd.Output()
 	if err != nil {
 		// Tailscale is installed but not running or not connected
