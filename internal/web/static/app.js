@@ -35,8 +35,22 @@ async function api(action, params = {}, method = 'GET') {
     }
     try {
         const response = await fetch(url, options);
-        if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
         const text = await response.text();
+        if (!response.ok) {
+            // Try to parse error from response body
+            try {
+                const errData = JSON.parse(text);
+                if (response.status === 429) {
+                    throw new Error(errData.error || 'Rate limited - please wait before scanning again');
+                }
+                throw new Error(errData.error || `HTTP error: ${response.status}`);
+            } catch (parseErr) {
+                if (parseErr.message.includes('Rate limited') || parseErr.message.includes('rate limited')) {
+                    throw parseErr;
+                }
+                throw new Error(`HTTP error: ${response.status}`);
+            }
+        }
         if (!text) throw new Error('Empty response');
         return JSON.parse(text);
     } catch (error) {
@@ -58,7 +72,8 @@ async function scanNetwork(cidr) {
             showToast(result.error || 'Scan failed', 'error');
         }
     } catch (e) {
-        showToast('Scan failed: ' + e.message, 'error');
+        const isRateLimit = e.message.toLowerCase().includes('rate limit');
+        showToast(isRateLimit ? e.message : 'Scan failed: ' + e.message, isRateLimit ? 'warning' : 'error');
     } finally {
         if (progress) progress.style.display = 'none';
     }
@@ -73,10 +88,11 @@ async function scanAllNetworks() {
             showToast('Scan complete', 'success');
             setTimeout(() => location.reload(), 1000);
         } else {
-            showToast('Scan failed', 'error');
+            showToast(result.error || 'Scan failed', 'error');
         }
     } catch (e) {
-        showToast('Scan failed: ' + e.message, 'error');
+        const isRateLimit = e.message.toLowerCase().includes('rate limit');
+        showToast(isRateLimit ? e.message : 'Scan failed: ' + e.message, isRateLimit ? 'warning' : 'error');
     } finally {
         if (progress) progress.style.display = 'none';
     }
