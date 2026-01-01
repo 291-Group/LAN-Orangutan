@@ -403,8 +403,7 @@ jobs:
           INITSCRIPT
           chmod 755 "pkg/etc/init.d/lan-orangutan"
 
-          # Create APKBUILD info file
-          mkdir -p pkg/.PKGINFO
+          # Create APKBUILD info file (note: .PKGINFO is a file, not a directory)
           cat > "pkg/.PKGINFO" << EOF
           pkgname = lan-orangutan
           pkgver = ${VERSION}-r0
