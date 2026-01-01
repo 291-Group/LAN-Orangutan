@@ -1,6 +1,6 @@
 module github.com/291-Group/LAN-Orangutan
 
-go 1.24.7
+go 1.22
 
 require github.com/spf13/cobra v1.10.2
 
