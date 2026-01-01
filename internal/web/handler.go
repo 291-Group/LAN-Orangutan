@@ -28,6 +28,7 @@ var templateFS embed.FS
 type Handler struct {
 	store     *storage.Storage
 	cfg       *config.Config
+	version   string
 	templates *template.Template
 	staticFS  http.Handler
 }
@@ -36,6 +37,7 @@ type Handler struct {
 type PageData struct {
 	Title        string
 	Theme        string
+	Version      string
 	Devices      []*DeviceView
 	Networks     []types.Network
 	Tailscale    types.TailscaleStatus
@@ -55,7 +57,7 @@ type DeviceView struct {
 }
 
 // NewHandler creates a new web handler
-func NewHandler(store *storage.Storage, cfg *config.Config) *Handler {
+func NewHandler(store *storage.Storage, cfg *config.Config, version string) *Handler {
 	// Parse templates with custom functions
 	funcMap := template.FuncMap{
 		"timeAgo": timeAgo,
@@ -71,6 +73,7 @@ func NewHandler(store *storage.Storage, cfg *config.Config) *Handler {
 	return &Handler{
 		store:     store,
 		cfg:       cfg,
+		version:   version,
 		templates: tmpl,
 		staticFS:  staticHandler,
 	}
@@ -183,6 +186,7 @@ func (h *Handler) handleSettings(w http.ResponseWriter, r *http.Request) {
 	data := PageData{
 		Title:     "Settings - LAN Orangutan",
 		Theme:     h.cfg.UI.Theme,
+		Version:   h.version,
 		Tailscale: tailscale,
 		Stats:     stats,
 	}

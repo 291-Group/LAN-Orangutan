@@ -9,10 +9,10 @@
 </head>
 <body>
     <header class="header">
-        <div class="header-brand">
+        <a href="/" class="header-brand">
             <span class="logo">🦧</span>
             <h1>LAN Orangutan</h1>
-        </div>
+        </a>
         <nav class="header-nav">
             <a href="/" class="nav-link">Dashboard</a>
             <a href="/settings" class="nav-link active">Settings</a>
@@ -30,7 +30,7 @@
             <div class="card">
                 <div class="status-row">
                     <span class="status-label">Version:</span>
-                    <span class="status-value">Go Version</span>
+                    <span class="status-value">{{if .Version}}{{.Version}}{{else}}dev{{end}}</span>
                 </div>
                 <div class="status-row">
                     <span class="status-label">Total Devices:</span>

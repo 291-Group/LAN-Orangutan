@@ -58,7 +58,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	mux.Handle("/api/", apiHandler)
 
 	// Register web routes
-	webHandler := web.NewHandler(store, cfg)
+	webHandler := web.NewHandler(store, cfg, Version)
 	mux.Handle("/", webHandler)
 
 	// Create server
