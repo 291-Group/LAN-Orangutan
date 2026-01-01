@@ -1,0 +1,58 @@
+name: lan-orangutan
+base: core22
+version: git
+summary: Network discovery and device tracking tool
+description: |
+  LAN Orangutan is a lightweight network discovery and device tracking tool
+  with a web dashboard and CLI. Discover devices on your local network,
+  track online/offline status, and organize with labels and groups.
+
+  Features:
+  - Automatic network device discovery using nmap
+  - Web dashboard for viewing and managing devices
+  - CLI for scripting and automation
+  - Device labeling and grouping
+  - Tailscale integration
+
+grade: stable
+confinement: strict
+
+architectures:
+  - build-on: amd64
+  - build-on: arm64
+
+apps:
+  lan-orangutan:
+    command: bin/orangutan
+    plugs:
+      - network
+      - network-bind
+      - network-observe
+    daemon: simple
+    restart-condition: on-failure
+
+  cli:
+    command: bin/orangutan
+    plugs:
+      - network
+      - network-observe
+
+parts:
+  orangutan:
+    plugin: go
+    source: .
+    build-snaps:
+      - go/1.22/stable
+    override-build: |
+      go build -ldflags="-s -w" -o $SNAPCRAFT_PART_INSTALL/bin/orangutan ./cmd/orangutan
+
+  nmap:
+    plugin: nil
+    stage-packages:
+      - nmap
+
+layout:
+  /etc/lan-orangutan:
+    bind: $SNAP_DATA/config
+  /var/lib/lan-orangutan:
+    bind: $SNAP_DATA/data

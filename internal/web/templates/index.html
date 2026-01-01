@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{.Theme}}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LAN Orangutan - Network Discovery</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦧</text></svg>">
+</head>
+<body>
+    <header class="header">
+        <a href="/" class="header-brand">
+            <span class="logo">🦧</span>
+            <h1>LAN Orangutan</h1>
+        </a>
+        <nav class="header-nav">
+            <a href="/" class="nav-link active">Dashboard</a>
+            <a href="/settings" class="nav-link">Settings</a>
+            <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme (T)">◐</button>
+        </nav>
+    </header>
+
+    <main class="main">
+        <!-- Stats Section -->
+        <section class="section">
+            <div class="stats-bar">
+                <div class="stat-card">
+                    <div class="stat-icon">📊</div>
+                    <span class="stat-value">{{.Stats.Total}}</span>
+                    <span class="stat-label">Total Devices</span>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">🟢</div>
+                    <span class="stat-value online">{{.Stats.Online}}</span>
+                    <span class="stat-label">Online</span>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">⚪</div>
+                    <span class="stat-value">{{.Stats.Offline}}</span>
+                    <span class="stat-label">Offline</span>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">🌐</div>
+                    <span class="stat-value">{{len .Networks}}</span>
+                    <span class="stat-label">Networks</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Networks Section -->
+        <section class="section">
+            <h2 class="section-title">Networks</h2>
+            <div class="network-cards">
+                {{range .Networks}}
+                <div class="card network-card {{if .IsTailscale}}tailscale{{end}}">
+                    <div class="card-header">
+                        <span class="network-name">{{.FriendlyName}}</span>
+                        <span class="status-badge online">Active</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="network-detail">
+                            <span class="label">Network</span>
+                            <span class="value">{{.CIDR}}</span>
+                        </div>
+                        <div class="network-detail">
+                            <span class="label">Interface</span>
+                            <span class="value">{{.Interface}}</span>
+                        </div>
+                        <div class="network-detail">
+                            <span class="label">Your IP</span>
+                            <span class="value">{{.IP}}</span>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <button class="btn btn-primary btn-sm" onclick="scanNetwork('{{.CIDR}}')">Scan Network</button>
+                    </div>
+                </div>
+                {{end}}
+
+                {{if and .Tailscale.Installed .Tailscale.Running}}
+                <div class="card network-card tailscale">
+                    <div class="card-header">
+                        <span class="network-name">Tailscale VPN</span>
+                        <span class="status-badge online">Connected</span>
+                    </div>
+                    <div class="card-body">
+                        {{if .Tailscale.SelfIP}}
+                        <div class="network-detail">
+                            <span class="label">Your IP</span>
+                            <span class="value">{{.Tailscale.SelfIP}}</span>
+                        </div>
+                        {{end}}
+                        <div class="network-detail">
+                            <span class="label">Peers</span>
+                            <span class="value">{{.Tailscale.PeerCount}} devices</span>
+                        </div>
+                    </div>
+                </div>
+                {{end}}
+            </div>
+        </section>
+
+        <!-- Devices Section -->
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">Discovered Devices</h2>
+                <div class="section-actions">
+                    <div class="auto-refresh">
+                        <span>Auto-refresh</span>
+                        <div class="toggle-switch" id="auto-refresh-toggle" onclick="toggleAutoRefresh()"></div>
+                    </div>
+                    <input type="text" id="device-search" class="input search-input" placeholder="Search devices..." oninput="filterDevices()">
+                    <select id="device-filter" class="select" style="width:auto" onchange="filterDevices()">
+                        <option value="all">All Status</option>
+                        <option value="online">Online</option>
+                        <option value="offline">Offline</option>
+                    </select>
+                    <select id="group-filter" class="select" style="width:auto" onchange="filterDevices()">
+                        <option value="all">All Groups</option>
+                        <option value="Server">Server</option>
+                        <option value="Desktop">Desktop</option>
+                        <option value="Laptop">Laptop</option>
+                        <option value="Mobile">Mobile</option>
+                        <option value="IoT">IoT</option>
+                        <option value="Network">Network</option>
+                        <option value="Pi">Pi</option>
+                    </select>
+                    <div class="dropdown">
+                        <button class="btn" onclick="toggleDropdown('export-menu')">Export</button>
+                        <div id="export-menu" class="dropdown-menu">
+                            <a class="dropdown-item" onclick="exportDevices('csv')">Export as CSV</a>
+                            <a class="dropdown-item" onclick="exportDevices('json')">Export as JSON</a>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" onclick="scanAllNetworks()">Scan All</button>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <div class="table-toolbar">
+                    <span class="table-info" id="device-count">Showing {{len .Devices}} devices</span>
+                </div>
+                <table class="table" id="devices-table">
+                    <thead>
+                        <tr>
+                            <th onclick="sortTable('status')">Status <span class="sort-icon">↕</span></th>
+                            <th onclick="sortTable('ip')">IP Address <span class="sort-icon">↕</span></th>
+                            <th onclick="sortTable('hostname')">Hostname <span class="sort-icon">↕</span></th>
+                            <th onclick="sortTable('mac')">MAC Address <span class="sort-icon">↕</span></th>
+                            <th onclick="sortTable('vendor')">Vendor <span class="sort-icon">↕</span></th>
+                            <th>Label</th>
+                            <th>Group</th>
+                            <th onclick="sortTable('lastseen')">Last Seen <span class="sort-icon">↕</span></th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="devices-tbody">
+                        {{range .Devices}}
+                        <tr class="device-row {{.StatusClass}}"
+                            data-ip="{{.IP}}"
+                            data-hostname="{{lower .Hostname}}"
+                            data-mac="{{lower .MAC}}"
+                            data-vendor="{{lower .Vendor}}"
+                            data-label="{{lower .Label}}"
+                            data-label-original="{{.Label}}"
+                            data-notes="{{.Notes}}"
+                            data-group="{{.Group}}"
+                            data-status="{{.Status}}"
+                            data-lastseen="{{.LastSeenUnix}}">
+                            <td>
+                                <span class="status-indicator {{.StatusClass}}"></span>
+                            </td>
+                            <td class="ip-cell">
+                                <span class="copyable" onclick="copyToClipboard('{{.IP}}', event)" title="Click to copy">{{.IP}}</span>
+                            </td>
+                            <td class="hostname-cell">{{if .Hostname}}{{.Hostname}}{{else}}<span style="color:var(--text-muted)">-</span>{{end}}</td>
+                            <td class="mac-cell">
+                                {{if .MAC}}<span class="copyable" onclick="copyToClipboard('{{.MAC}}', event)" title="Click to copy">{{.MAC}}</span>{{else}}<span style="color:var(--text-muted)">-</span>{{end}}
+                            </td>
+                            <td class="vendor-cell" title="{{.Vendor}}">{{if .Vendor}}{{.Vendor}}{{else}}<span style="color:var(--text-muted)">Unknown</span>{{end}}</td>
+                            <td class="label-cell">{{.Label}}{{if .Notes}}<span class="notes-indicator" title="{{.Notes}}">📝</span>{{end}}</td>
+                            <td>
+                                <select class="group-select" data-ip="{{.IP}}" onchange="updateDeviceGroup(this)">
+                                    <option value="">-</option>
+                                    <option value="Server" {{if eq .Group "Server"}}selected{{end}}>Server</option>
+                                    <option value="Desktop" {{if eq .Group "Desktop"}}selected{{end}}>Desktop</option>
+                                    <option value="Laptop" {{if eq .Group "Laptop"}}selected{{end}}>Laptop</option>
+                                    <option value="Mobile" {{if eq .Group "Mobile"}}selected{{end}}>Mobile</option>
+                                    <option value="IoT" {{if eq .Group "IoT"}}selected{{end}}>IoT</option>
+                                    <option value="Network" {{if eq .Group "Network"}}selected{{end}}>Network</option>
+                                    <option value="Pi" {{if eq .Group "Pi"}}selected{{end}}>Pi</option>
+                                </select>
+                            </td>
+                            <td class="time-cell">{{.TimeAgo}}</td>
+                            <td class="actions-cell">
+                                <button class="btn-icon" onclick="editDevice('{{.IP}}')" title="Edit">✏️</button>
+                                <button class="btn-icon danger" onclick="deleteDevice('{{.IP}}')" title="Delete">🗑️</button>
+                            </td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+            </div>
+            {{if not .Devices}}
+            <div class="empty-state">
+                <div class="empty-state-icon">🔍</div>
+                <h3>No devices discovered yet</h3>
+                <p>Click "Scan All" to discover devices on your network.</p>
+            </div>
+            {{end}}
+        </section>
+    </main>
+
+    <!-- Edit Modal -->
+    <div id="edit-modal" class="modal" style="display:none">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Device</h3>
+                <button class="modal-close" onclick="closeModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="edit-form">
+                    <input type="hidden" id="edit-ip" name="ip">
+                    <div class="form-group">
+                        <label>IP Address</label>
+                        <input type="text" id="edit-ip-display" class="input" disabled>
+                    </div>
+                    <div class="form-group">
+                        <label>Label</label>
+                        <input type="text" id="edit-label" name="label" class="input" placeholder="e.g., Living Room TV">
+                    </div>
+                    <div class="form-group">
+                        <label>Group</label>
+                        <select id="edit-group" name="group" class="select">
+                            <option value="">None</option>
+                            <option value="Server">Server</option>
+                            <option value="Desktop">Desktop</option>
+                            <option value="Laptop">Laptop</option>
+                            <option value="Mobile">Mobile</option>
+                            <option value="IoT">IoT</option>
+                            <option value="Network">Network</option>
+                            <option value="Pi">Pi</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Notes</label>
+                        <textarea id="edit-notes" name="notes" class="input" rows="3" placeholder="Add notes about this device..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closeModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveDevice()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+    <div id="scan-progress" class="scan-progress" style="display:none">
+        <div class="scan-spinner"></div>
+        <span>Scanning network...</span>
+    </div>
+
+    <footer class="footer">
+        <p>🦧 LAN Orangutan &bull; <a href="https://github.com/291-Group/LAN-Orangutan" target="_blank">GitHub</a></p>
+        <p style="margin-top:0.5rem;font-size:0.8rem;">Press <kbd class="kbd">/</kbd> to search &bull; <kbd class="kbd">R</kbd> to refresh &bull; <kbd class="kbd">T</kbd> to toggle theme</p>
+    </footer>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

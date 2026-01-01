@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  go-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Build
+        run: go build -v ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -v ./...
+
+  legacy-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Lint Python
+        run: |
+          pip install flake8
+          flake8 scanner/*.py --max-line-length=120 --ignore=E501,W503
+
+      - name: Check shell scripts
+        run: |
+          sudo apt-get install -y shellcheck
+          shellcheck install.sh uninstall.sh scripts/*.sh || true
+
+      - name: Validate PHP syntax
+        run: |
+          php -l web/*.php || true
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Go tests
+        run: go test -v ./...
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Test Python imports
+        run: |
+          cd scanner
+          python3 -c "import scan; import utils"
+
+      - name: Test CIDR validation
+        run: |
+          cd scanner
+          python3 -c "
+          from scan import is_valid_cidr
+          assert is_valid_cidr('192.168.1.0/24') == True
+          assert is_valid_cidr('10.0.0.0/8') == True
+          assert is_valid_cidr('256.0.0.0/24') == False
+          assert is_valid_cidr('192.168.1.0/33') == False
+          assert is_valid_cidr('invalid') == False
+          print('All CIDR validation tests passed')
+          "

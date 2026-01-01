@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{.Theme}}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - LAN Orangutan</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦧</text></svg>">
+</head>
+<body>
+    <header class="header">
+        <a href="/" class="header-brand">
+            <span class="logo">🦧</span>
+            <h1>LAN Orangutan</h1>
+        </a>
+        <nav class="header-nav">
+            <a href="/" class="nav-link">Dashboard</a>
+            <a href="/settings" class="nav-link active">Settings</a>
+            <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">◐</button>
+        </nav>
+    </header>
+
+    <main class="main">
+        {{if .Error}}
+        <div class="alert alert-error">{{.Error}}</div>
+        {{end}}
+
+        <section class="section">
+            <h2 class="section-title">System Information</h2>
+            <div class="card">
+                <div class="status-row">
+                    <span class="status-label">Version:</span>
+                    <span class="status-value">{{if .Version}}{{.Version}}{{else}}dev{{end}}</span>
+                </div>
+                <div class="status-row">
+                    <span class="status-label">Total Devices:</span>
+                    <span class="status-value">{{.Stats.Total}}</span>
+                </div>
+                <div class="status-row">
+                    <span class="status-label">Online:</span>
+                    <span class="status-value online">{{.Stats.Online}}</span>
+                </div>
+                <div class="status-row">
+                    <span class="status-label">Offline:</span>
+                    <span class="status-value">{{.Stats.Offline}}</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2 class="section-title">Tailscale</h2>
+            <div class="card">
+                <div class="status-row">
+                    <span class="status-label">Status:</span>
+                    {{if .Tailscale.Running}}
+                    <span class="status-value online">✓ Connected</span>
+                    {{else if .Tailscale.Installed}}
+                    <span class="status-value offline">✗ Disconnected</span>
+                    {{else}}
+                    <span class="status-value warning">Not Installed</span>
+                    {{end}}
+                </div>
+                {{if .Tailscale.SelfIP}}
+                <div class="status-row">
+                    <span class="status-label">IP:</span>
+                    <span class="status-value">{{.Tailscale.SelfIP}}</span>
+                </div>
+                {{end}}
+                {{if .Tailscale.SelfHostname}}
+                <div class="status-row">
+                    <span class="status-label">Hostname:</span>
+                    <span class="status-value">{{.Tailscale.SelfHostname}}</span>
+                </div>
+                {{end}}
+                {{if .Tailscale.Running}}
+                <div class="status-row">
+                    <span class="status-label">Peers:</span>
+                    <span class="status-value">{{.Tailscale.PeerCount}}</span>
+                </div>
+                {{end}}
+            </div>
+        </section>
+
+        <section class="section">
+            <h2 class="section-title">Appearance</h2>
+            <div class="card">
+                <div class="form-group">
+                    <label>Theme</label>
+                    <div class="radio-group">
+                        <label class="radio-label">
+                            <input type="radio" name="theme" value="light" {{if eq .Theme "light"}}checked{{end}} onchange="setTheme('light')"> Light
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="theme" value="dark" {{if eq .Theme "dark"}}checked{{end}} onchange="setTheme('dark')"> Dark
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="theme" value="auto" {{if eq .Theme "auto"}}checked{{end}} onchange="setTheme('auto')"> Auto
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2 class="section-title">Data Management</h2>
+            <div class="card">
+                <div class="form-group">
+                    <button class="btn btn-primary" onclick="exportDevices()">Export Devices (CSV)</button>
+                    <p class="form-help">Download all device data as a CSV file.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2 class="section-title">About</h2>
+            <div class="card">
+                <p>LAN Orangutan is a network discovery and monitoring tool that helps you keep track of devices on your local network.</p>
+                <p style="margin-top: 1rem;">
+                    <a href="https://github.com/291-Group/LAN-Orangutan" target="_blank">GitHub</a> ·
+                    <a href="https://291group.com" target="_blank">291 Group</a>
+                </p>
+            </div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <p>🦧 LAN Orangutan by <a href="https://291group.com" target="_blank">291 Group</a></p>
+    </footer>
+
+    <script src="/static/app.js"></script>
+    <script>
+        function setTheme(theme) {
+            document.documentElement.setAttribute('data-theme', theme);
+            localStorage.setItem('theme', theme);
+        }
+
+        function exportDevices() {
+            window.location.href = '/api/devices?format=csv';
+        }
+    </script>
+</body>
+</html>

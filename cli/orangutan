@@ -1,0 +1,201 @@
+#!/bin/bash
+set -e
+
+INSTALL_DIR="/opt/lan-orangutan"
+CONFIG_FILE="/etc/lan-orangutan/config.ini"
+DATA_DIR="/var/lib/lan-orangutan"
+SCANNER="$INSTALL_DIR/scanner/scan.py"
+SERVICE_NAME="lan-orangutan"
+
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[0;33m'; BLUE='\033[0;34m'; NC='\033[0m'
+
+if [[ ! -f "$SCANNER" ]]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+    SCANNER="$SCRIPT_DIR/scanner/scan.py"
+    CONFIG_FILE="$SCRIPT_DIR/config.example.ini"
+    DATA_DIR="/tmp/lan-orangutan"
+fi
+
+cmd_scan() {
+    local network="${1:-all}"
+    if [[ "$network" == "all" ]]; then
+        echo -e "${BLUE}→${NC} Scanning all networks..."
+        python3 -c "
+import sys; sys.path.insert(0, '$(dirname "$SCANNER")')
+from utils import detect_networks
+for n in detect_networks(): print(n['cidr'])
+" | while read cidr; do
+            [[ -n "$cidr" ]] && { echo -e "${BLUE}→${NC} Scanning $cidr..."; python3 "$SCANNER" "$cidr" 2>/dev/null || true; }
+        done
+        echo -e "${GREEN}✓${NC} Scan complete"
+    else
+        echo -e "${BLUE}→${NC} Scanning $network..."
+        python3 "$SCANNER" "$network"
+    fi
+}
+
+cmd_list() {
+    local filter="" group_filter=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --online) filter="online"; shift ;;
+            --offline) filter="offline"; shift ;;
+            --group=*) group_filter="${1#*=}"; shift ;;
+            *) shift ;;
+        esac
+    done
+    python3 << PYTHON
+import json, os
+from datetime import datetime, timedelta
+devices_file = "$DATA_DIR/devices.json"
+if not os.path.exists(devices_file):
+    print("No devices found. Run 'orangutan scan' first.")
+    exit(0)
+with open(devices_file) as f:
+    data = json.load(f)
+devices = data.get('devices', {})
+if not devices:
+    print("No devices found.")
+    exit(0)
+now = datetime.now()
+one_hour_ago = now - timedelta(hours=1)
+print(f"{'STATUS':<8} {'IP ADDRESS':<16} {'HOSTNAME':<25} {'MAC ADDRESS':<18} {'VENDOR':<15} {'LABEL':<15}")
+print("-" * 110)
+def ip_sort_key(item):
+    try:
+        parts = item[0].split('.')
+        if len(parts) == 4:
+            return tuple(int(p) for p in parts)
+    except (ValueError, AttributeError):
+        pass
+    return (999, 999, 999, 999)  # Sort malformed IPs last
+for ip, dev in sorted(devices.items(), key=ip_sort_key):
+    last_seen = dev.get('last_seen', '')
+    status = 'offline'
+    if last_seen:
+        try:
+            seen = datetime.fromisoformat(last_seen.replace('Z', '+00:00'))
+            if seen.tzinfo: seen = seen.replace(tzinfo=None)
+            if seen > one_hour_ago: status = 'online'
+        except ValueError: pass
+    filter_val = "$filter"
+    if filter_val and filter_val != status: continue
+    group_val = "$group_filter"
+    if group_val and dev.get('group', '').lower() != group_val.lower(): continue
+    color = '\033[0;32m' if status == 'online' else '\033[0;90m'
+    reset = '\033[0m'
+    hostname = dev.get('hostname', '-')[:24]
+    mac = dev.get('mac', '-')
+    vendor = dev.get('vendor', 'Unknown')[:14]
+    label = dev.get('label', '')[:14]
+    print(f"{color}{'●':<8}{reset} {ip:<16} {hostname:<25} {mac:<18} {vendor:<15} {label:<15}")
+PYTHON
+}
+
+cmd_status() {
+    echo "=== LAN Orangutan Status ==="
+    if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+        echo -e "${GREEN}✓${NC} Service: Running"
+    else
+        echo -e "${YELLOW}!${NC} Service: Not running"
+    fi
+    if [[ -f "$CONFIG_FILE" ]]; then
+        port=$(grep "^port" "$CONFIG_FILE" 2>/dev/null | cut -d= -f2 | tr -d ' ' || echo "291")
+        echo -e "${BLUE}→${NC} Port: $port"
+    fi
+    if [[ -f "$DATA_DIR/devices.json" ]]; then
+        count=$(python3 -c "import json; print(len(json.load(open('$DATA_DIR/devices.json')).get('devices',{})))" 2>/dev/null || echo "0")
+        echo -e "${BLUE}→${NC} Devices: $count"
+    fi
+    if command -v tailscale &>/dev/null && tailscale status &>/dev/null; then
+        echo -e "${GREEN}✓${NC} Tailscale: Connected"
+    fi
+}
+
+cmd_logs() { journalctl -u "$SERVICE_NAME" -n "${1:-50}" --no-pager; }
+cmd_config() { [[ -f "$CONFIG_FILE" ]] && cat "$CONFIG_FILE" || echo "Config not found"; }
+cmd_networks() {
+    echo -e "${BLUE}→${NC} Detected networks:"
+    python3 -c "
+import sys; sys.path.insert(0, '$(dirname "$SCANNER")')
+from utils import detect_networks
+for n in detect_networks():
+    ts = ' [Tailscale]' if n.get('is_tailscale') else ''
+    print(f\"  {n['friendly_name']}: {n['cidr']} ({n['interface']}){ts}\")
+"
+}
+
+cmd_export() {
+    local output="${1:-devices.csv}"
+
+    # Validate output path - prevent path traversal
+    local realpath_output
+    realpath_output=$(realpath -m "$output" 2>/dev/null) || {
+        echo -e "${RED}✗${NC} Invalid output path"
+        exit 1
+    }
+
+    # Get current working directory realpath
+    local cwd_realpath
+    cwd_realpath=$(realpath "$(pwd)")
+
+    # Ensure output is within current directory or /tmp
+    if [[ "$realpath_output" != "$cwd_realpath"/* ]] && [[ "$realpath_output" != /tmp/* ]]; then
+        echo -e "${RED}✗${NC} Output path must be within current directory or /tmp"
+        exit 1
+    fi
+
+    python3 << PYTHON
+import json, csv, os
+devices_file = "$DATA_DIR/devices.json"
+if not os.path.exists(devices_file):
+    print("No devices to export")
+    exit(1)
+with open(devices_file) as f:
+    data = json.load(f)
+devices = data.get('devices', {})
+output_path = '''$realpath_output'''
+with open(output_path, 'w', newline='') as f:
+    writer = csv.writer(f)
+    writer.writerow(['IP', 'Hostname', 'MAC', 'Vendor', 'Label', 'Group', 'First Seen', 'Last Seen'])
+    for ip, dev in sorted(devices.items()):
+        writer.writerow([ip, dev.get('hostname',''), dev.get('mac',''), dev.get('vendor',''),
+                         dev.get('label',''), dev.get('group',''), dev.get('first_seen',''), dev.get('last_seen','')])
+print(f"Exported {len(devices)} devices to {output_path}")
+PYTHON
+}
+
+cmd_help() {
+    cat << EOF
+🦧 LAN Orangutan CLI
+
+Usage: orangutan <command> [options]
+
+Commands:
+  scan [network]      Scan network (CIDR) or 'all'
+  list [options]      List devices (--online, --offline, --group=X)
+  status              Show service status
+  logs [n]            Show last n log lines
+  config              Show configuration
+  networks            List detected networks
+  export <file>       Export to CSV
+  help                Show this help
+
+Examples:
+  orangutan scan 192.168.1.0/24
+  orangutan list --online
+  orangutan export devices.csv
+EOF
+}
+
+case "${1:-help}" in
+    scan) shift; cmd_scan "$@" ;;
+    list) shift; cmd_list "$@" ;;
+    status) cmd_status ;;
+    logs) shift; cmd_logs "$@" ;;
+    config) cmd_config ;;
+    networks) cmd_networks ;;
+    export) shift; cmd_export "$@" ;;
+    help|--help|-h) cmd_help ;;
+    *) echo -e "${RED}✗${NC} Unknown command: $1"; cmd_help; exit 1 ;;
+esac

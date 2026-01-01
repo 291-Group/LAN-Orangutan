@@ -1,0 +1,18 @@
+# Binaries
+orangutan
+orangutan-*
+*.exe
+
+# Data
+*.json
+!package.json
+
+# Config with secrets
+config.ini
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store

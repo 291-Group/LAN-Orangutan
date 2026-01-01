@@ -1,0 +1,603 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            suffix: linux-amd64
+          - goos: linux
+            goarch: arm64
+            suffix: linux-arm64
+          - goos: linux
+            goarch: arm
+            goarm: "7"
+            suffix: linux-arm
+          - goos: darwin
+            goarch: amd64
+            suffix: darwin-amd64
+          - goos: darwin
+            goarch: arm64
+            suffix: darwin-arm64
+          - goos: windows
+            goarch: amd64
+            suffix: windows-amd64
+            ext: .exe
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm }}
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          COMMIT=$(git rev-parse --short HEAD)
+          BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          LDFLAGS="-s -w \
+            -X 'github.com/291-Group/LAN-Orangutan/internal/cli.Version=${VERSION}' \
+            -X 'github.com/291-Group/LAN-Orangutan/internal/cli.Commit=${COMMIT}' \
+            -X 'github.com/291-Group/LAN-Orangutan/internal/cli.BuildDate=${BUILD_DATE}'"
+
+          go build -ldflags "${LDFLAGS}" -o orangutan-${{ matrix.suffix }}${{ matrix.ext }} ./cmd/orangutan
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: orangutan-${{ matrix.suffix }}
+          path: orangutan-${{ matrix.suffix }}${{ matrix.ext }}
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare image name
+        id: image
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> $GITHUB_OUTPUT
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ steps.image.outputs.name }}:${{ steps.version.outputs.VERSION }}
+            ${{ steps.image.outputs.name }}:latest
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Debug - Show downloaded artifacts
+        run: |
+          echo "=== Contents of dist/ ==="
+          ls -la dist/
+          echo "=== Contents of each artifact directory ==="
+          for dir in dist/orangutan-*/; do
+            echo "--- $dir ---"
+            ls -la "$dir"
+          done
+
+      - name: Prepare release files
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          cd dist
+
+          # Process each artifact directory
+          for dir in orangutan-*/; do
+            [ -d "$dir" ] || continue
+
+            dir_name="${dir%/}"
+            echo "Processing: $dir_name"
+
+            # Get the binary file (should be only one file in the directory)
+            binary_path=$(find "$dir" -type f | head -1)
+            binary_name=$(basename "$binary_path")
+
+            echo "  Found binary: $binary_name"
+
+            # Move binary to temp location first to avoid path conflicts
+            mv "$binary_path" "../${binary_name}.tmp"
+            rm -rf "$dir"
+            mv "../${binary_name}.tmp" "./$binary_name"
+
+            # Create archive
+            if [[ "$binary_name" == *.exe ]]; then
+              echo "  Creating zip: ${binary_name%.exe}.zip"
+              zip "${binary_name%.exe}.zip" "$binary_name"
+            else
+              echo "  Creating tar.gz: ${binary_name}.tar.gz"
+              tar -czvf "${binary_name}.tar.gz" "$binary_name"
+            fi
+          done
+
+          echo "=== Final dist/ contents ==="
+          ls -la
+
+      - name: Create legacy archive (for install.sh compatibility)
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          ARCHIVE_NAME="lan-orangutan-${VERSION}"
+
+          # Create clean directory for legacy release
+          mkdir -p "dist/${ARCHIVE_NAME}"
+
+          # Copy release files (for backwards compatibility with install.sh)
+          cp -r scanner dist/${ARCHIVE_NAME}/
+          cp -r web dist/${ARCHIVE_NAME}/
+          cp -r cli dist/${ARCHIVE_NAME}/
+          cp -r scripts dist/${ARCHIVE_NAME}/
+          cp -r systemd dist/${ARCHIVE_NAME}/
+          cp install.sh dist/${ARCHIVE_NAME}/
+          cp uninstall.sh dist/${ARCHIVE_NAME}/
+          cp config.example.ini dist/${ARCHIVE_NAME}/
+          cp README.md dist/${ARCHIVE_NAME}/
+          cp LICENSE dist/${ARCHIVE_NAME}/ 2>/dev/null || true
+
+          # Also include the Go binary
+          cp dist/orangutan-linux-amd64 dist/${ARCHIVE_NAME}/ 2>/dev/null || true
+
+          # Create tarball
+          cd dist
+          tar -czvf "${ARCHIVE_NAME}.tar.gz" "${ARCHIVE_NAME}"
+          rm -rf "${ARCHIVE_NAME}"
+
+      - name: Build .deb package
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          PKG_NAME="lan-orangutan"
+
+          # Build for each architecture
+          for arch_info in "amd64:linux-amd64" "arm64:linux-arm64" "armhf:linux-arm"; do
+            DEB_ARCH="${arch_info%%:*}"
+            BIN_SUFFIX="${arch_info##*:}"
+            PKG_DIR="dist/${PKG_NAME}_${VERSION}_${DEB_ARCH}"
+
+            # Create package structure
+            mkdir -p "${PKG_DIR}/DEBIAN"
+            mkdir -p "${PKG_DIR}/usr/local/bin"
+            mkdir -p "${PKG_DIR}/etc/lan-orangutan"
+            mkdir -p "${PKG_DIR}/var/lib/lan-orangutan"
+            mkdir -p "${PKG_DIR}/lib/systemd/system"
+
+            # Copy binary
+            cp "dist/orangutan-${BIN_SUFFIX}" "${PKG_DIR}/usr/local/bin/orangutan"
+            chmod 755 "${PKG_DIR}/usr/local/bin/orangutan"
+
+            # Copy config
+            cp config.example.ini "${PKG_DIR}/etc/lan-orangutan/config.ini"
+
+            # Create systemd service for Go version
+            cat > "${PKG_DIR}/lib/systemd/system/lan-orangutan.service" << EOF
+          [Unit]
+          Description=LAN Orangutan Network Discovery
+          After=network.target
+
+          [Service]
+          Type=simple
+          ExecStart=/usr/local/bin/orangutan serve
+          Restart=on-failure
+          RestartSec=5
+
+          [Install]
+          WantedBy=multi-user.target
+          EOF
+
+            # Create control file
+            cat > "${PKG_DIR}/DEBIAN/control" << EOF
+          Package: lan-orangutan
+          Version: ${VERSION}
+          Section: net
+          Priority: optional
+          Architecture: ${DEB_ARCH}
+          Depends: nmap
+          Maintainer: 291 Group <info@291group.com>
+          Description: LAN Orangutan - Network Discovery Tool
+           A lightweight network discovery and device tracking tool
+           with a web dashboard and CLI. Discover devices on your
+           local network, track online/offline status, and organize
+           with labels and groups.
+          Homepage: https://github.com/291-Group/LAN-Orangutan
+          EOF
+
+            # Create postinst script
+            cat > "${PKG_DIR}/DEBIAN/postinst" << 'POSTINST'
+          #!/bin/bash
+          set -e
+          systemctl daemon-reload
+          systemctl enable lan-orangutan
+          echo ""
+          echo "LAN Orangutan installed successfully!"
+          echo ""
+          echo "Start the service with: sudo systemctl start lan-orangutan"
+          echo "Access the web UI at: http://localhost:291"
+          echo ""
+          POSTINST
+            chmod 755 "${PKG_DIR}/DEBIAN/postinst"
+
+            # Create prerm script
+            cat > "${PKG_DIR}/DEBIAN/prerm" << 'PRERM'
+          #!/bin/bash
+          set -e
+          systemctl stop lan-orangutan 2>/dev/null || true
+          systemctl disable lan-orangutan 2>/dev/null || true
+          PRERM
+            chmod 755 "${PKG_DIR}/DEBIAN/prerm"
+
+            # Create postrm script
+            cat > "${PKG_DIR}/DEBIAN/postrm" << 'POSTRM'
+          #!/bin/bash
+          set -e
+          systemctl daemon-reload
+          POSTRM
+            chmod 755 "${PKG_DIR}/DEBIAN/postrm"
+
+            # Create conffiles
+            echo "/etc/lan-orangutan/config.ini" > "${PKG_DIR}/DEBIAN/conffiles"
+
+            # Build the package
+            dpkg-deb --build "${PKG_DIR}"
+          done
+
+      - name: Build .rpm package
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          sudo apt-get update && sudo apt-get install -y rpm
+
+          # Build for each architecture
+          for arch_info in "x86_64:linux-amd64" "aarch64:linux-arm64"; do
+            RPM_ARCH="${arch_info%%:*}"
+            BIN_SUFFIX="${arch_info##*:}"
+
+            # Create RPM build structure
+            mkdir -p rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+            mkdir -p "rpmbuild/BUILDROOT/lan-orangutan-${VERSION}-1.${RPM_ARCH}"
+
+            BUILDROOT="rpmbuild/BUILDROOT/lan-orangutan-${VERSION}-1.${RPM_ARCH}"
+            mkdir -p "${BUILDROOT}/usr/local/bin"
+            mkdir -p "${BUILDROOT}/etc/lan-orangutan"
+            mkdir -p "${BUILDROOT}/var/lib/lan-orangutan"
+            mkdir -p "${BUILDROOT}/usr/lib/systemd/system"
+
+            # Copy binary
+            cp "dist/orangutan-${BIN_SUFFIX}" "${BUILDROOT}/usr/local/bin/orangutan"
+            chmod 755 "${BUILDROOT}/usr/local/bin/orangutan"
+
+            # Copy config
+            cp config.example.ini "${BUILDROOT}/etc/lan-orangutan/config.ini"
+
+            # Create systemd service
+            cat > "${BUILDROOT}/usr/lib/systemd/system/lan-orangutan.service" << EOF
+          [Unit]
+          Description=LAN Orangutan Network Discovery
+          After=network.target
+
+          [Service]
+          Type=simple
+          ExecStart=/usr/local/bin/orangutan serve
+          Restart=on-failure
+          RestartSec=5
+
+          [Install]
+          WantedBy=multi-user.target
+          EOF
+
+            # Create spec file
+            cat > "rpmbuild/SPECS/lan-orangutan.spec" << EOF
+          Name:           lan-orangutan
+          Version:        ${VERSION}
+          Release:        1
+          Summary:        Network Discovery Tool
+          License:        MIT
+          URL:            https://github.com/291-Group/LAN-Orangutan
+          Requires:       nmap
+
+          %description
+          A lightweight network discovery and device tracking tool
+          with a web dashboard and CLI.
+
+          %files
+          /usr/local/bin/orangutan
+          %config(noreplace) /etc/lan-orangutan/config.ini
+          /usr/lib/systemd/system/lan-orangutan.service
+          %dir /var/lib/lan-orangutan
+          %dir /etc/lan-orangutan
+
+          %post
+          systemctl daemon-reload
+          systemctl enable lan-orangutan
+
+          %preun
+          systemctl stop lan-orangutan 2>/dev/null || true
+          systemctl disable lan-orangutan 2>/dev/null || true
+
+          %postun
+          systemctl daemon-reload
+          EOF
+
+            # Build RPM
+            rpmbuild --define "_topdir $(pwd)/rpmbuild" \
+                     --define "_arch ${RPM_ARCH}" \
+                     --target "${RPM_ARCH}" \
+                     -bb "rpmbuild/SPECS/lan-orangutan.spec"
+
+            # Move to dist
+            cp rpmbuild/RPMS/${RPM_ARCH}/*.rpm dist/ 2>/dev/null || true
+
+            # Clean up for next iteration
+            rm -rf rpmbuild
+          done
+
+      - name: Build Alpine .apk package
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+
+          # Build for x86_64 only (most common Alpine use case)
+          mkdir -p apk-build
+          cd apk-build
+
+          # Create package directory structure
+          mkdir -p pkg/usr/local/bin
+          mkdir -p pkg/etc/lan-orangutan
+          mkdir -p pkg/var/lib/lan-orangutan
+          mkdir -p pkg/etc/init.d
+
+          # Copy binary
+          cp "../dist/orangutan-linux-amd64" "pkg/usr/local/bin/orangutan"
+          chmod 755 "pkg/usr/local/bin/orangutan"
+
+          # Copy config
+          cp ../config.example.ini "pkg/etc/lan-orangutan/config.ini"
+
+          # Create OpenRC init script (Alpine uses OpenRC, not systemd)
+          cat > "pkg/etc/init.d/lan-orangutan" << 'INITSCRIPT'
+          #!/sbin/openrc-run
+
+          name="lan-orangutan"
+          description="LAN Orangutan Network Discovery"
+          command="/usr/local/bin/orangutan"
+          command_args="serve"
+          command_background="yes"
+          pidfile="/run/${RC_SVCNAME}.pid"
+
+          depend() {
+              need net
+              after firewall
+          }
+          INITSCRIPT
+          chmod 755 "pkg/etc/init.d/lan-orangutan"
+
+          # Create APKBUILD info file (note: .PKGINFO is a file, not a directory)
+          cat > "pkg/.PKGINFO" << EOF
+          pkgname = lan-orangutan
+          pkgver = ${VERSION}-r0
+          pkgdesc = Network Discovery Tool
+          url = https://github.com/291-Group/LAN-Orangutan
+          size = $(du -sb pkg | cut -f1)
+          arch = x86_64
+          license = MIT
+          depend = nmap
+          EOF
+
+          # Create the package (simple tar.gz with specific structure)
+          cd pkg
+          tar -czvf "../../dist/lan-orangutan-${VERSION}-r0.apk" .
+          cd ../..
+          rm -rf apk-build
+
+      - name: Create Homebrew formula
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+
+          # Calculate SHA256 for macOS binaries
+          SHA_AMD64=$(sha256sum dist/orangutan-darwin-amd64.tar.gz | cut -d' ' -f1)
+          SHA_ARM64=$(sha256sum dist/orangutan-darwin-arm64.tar.gz | cut -d' ' -f1)
+
+          cat > dist/lan-orangutan.rb << EOF
+          class LanOrangutan < Formula
+            desc "Network discovery and device tracking tool"
+            homepage "https://github.com/291-Group/LAN-Orangutan"
+            version "${VERSION}"
+            license "MIT"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "https://github.com/291-Group/LAN-Orangutan/releases/download/v${VERSION}/orangutan-darwin-arm64.tar.gz"
+                sha256 "${SHA_ARM64}"
+              else
+                url "https://github.com/291-Group/LAN-Orangutan/releases/download/v${VERSION}/orangutan-darwin-amd64.tar.gz"
+                sha256 "${SHA_AMD64}"
+              end
+            end
+
+            depends_on "nmap"
+
+            def install
+              bin.install "orangutan-darwin-arm64" => "orangutan" if Hardware::CPU.arm?
+              bin.install "orangutan-darwin-amd64" => "orangutan" unless Hardware::CPU.arm?
+
+              # Create config directory
+              (etc/"lan-orangutan").mkpath
+              (var/"lib/lan-orangutan").mkpath
+            end
+
+            service do
+              run [opt_bin/"orangutan", "serve"]
+              keep_alive true
+              working_dir var/"lib/lan-orangutan"
+              log_path var/"log/lan-orangutan.log"
+              error_log_path var/"log/lan-orangutan.log"
+            end
+
+            test do
+              system "#{bin}/orangutan", "version"
+            end
+          end
+          EOF
+
+      - name: Create Scoop manifest (Windows)
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          SHA_WIN=$(sha256sum dist/orangutan-windows-amd64.zip | cut -d' ' -f1)
+
+          cat > dist/lan-orangutan.json << EOF
+          {
+              "version": "${VERSION}",
+              "description": "Network discovery and device tracking tool",
+              "homepage": "https://github.com/291-Group/LAN-Orangutan",
+              "license": "MIT",
+              "architecture": {
+                  "64bit": {
+                      "url": "https://github.com/291-Group/LAN-Orangutan/releases/download/v${VERSION}/orangutan-windows-amd64.zip",
+                      "hash": "${SHA_WIN}"
+                  }
+              },
+              "bin": "orangutan-windows-amd64.exe",
+              "checkver": "github",
+              "autoupdate": {
+                  "architecture": {
+                      "64bit": {
+                          "url": "https://github.com/291-Group/LAN-Orangutan/releases/download/v\$version/orangutan-windows-amd64.zip"
+                      }
+                  }
+              }
+          }
+          EOF
+
+      - name: Create AUR PKGBUILD (Arch Linux)
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          SHA_AMD64=$(sha256sum dist/orangutan-linux-amd64.tar.gz | cut -d' ' -f1)
+
+          cat > dist/PKGBUILD << EOF
+          # Maintainer: 291 Group <info@291group.com>
+          pkgname=lan-orangutan
+          pkgver=${VERSION}
+          pkgrel=1
+          pkgdesc="Network discovery and device tracking tool"
+          arch=('x86_64')
+          url="https://github.com/291-Group/LAN-Orangutan"
+          license=('MIT')
+          depends=('nmap')
+          source=("https://github.com/291-Group/LAN-Orangutan/releases/download/v\${pkgver}/orangutan-linux-amd64.tar.gz")
+          sha256sums=('${SHA_AMD64}')
+
+          package() {
+              install -Dm755 orangutan-linux-amd64 "\${pkgdir}/usr/bin/orangutan"
+              install -Dm644 /dev/stdin "\${pkgdir}/usr/lib/systemd/system/lan-orangutan.service" << SYSTEMD
+          [Unit]
+          Description=LAN Orangutan Network Discovery
+          After=network.target
+
+          [Service]
+          Type=simple
+          ExecStart=/usr/bin/orangutan serve
+          Restart=on-failure
+          RestartSec=5
+
+          [Install]
+          WantedBy=multi-user.target
+          SYSTEMD
+              install -dm755 "\${pkgdir}/etc/lan-orangutan"
+              install -dm755 "\${pkgdir}/var/lib/lan-orangutan"
+          }
+          EOF
+
+      - name: Debug - List all release files
+        run: |
+          echo "=== All files in dist/ before release ==="
+          ls -la dist/
+          echo ""
+          echo "=== tar.gz files ==="
+          ls -la dist/*.tar.gz 2>/dev/null || echo "No tar.gz files"
+          echo ""
+          echo "=== zip files ==="
+          ls -la dist/*.zip 2>/dev/null || echo "No zip files"
+          echo ""
+          echo "=== deb files ==="
+          ls -la dist/*.deb 2>/dev/null || echo "No deb files"
+          echo ""
+          echo "=== rpm files ==="
+          ls -la dist/*.rpm 2>/dev/null || echo "No rpm files"
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum *.tar.gz *.zip *.deb *.rpm *.apk 2>/dev/null > SHA256SUMS.txt || true
+          echo "=== SHA256SUMS.txt contents ==="
+          cat SHA256SUMS.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.deb
+            dist/*.rpm
+            dist/*.apk
+            dist/*.rb
+            dist/*.json
+            dist/PKGBUILD
+            dist/SHA256SUMS.txt
+          generate_release_notes: true
+          draft: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
