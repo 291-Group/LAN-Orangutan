@@ -153,9 +153,10 @@ jobs:
 
             echo "  Found binary: $binary_name"
 
-            # Move binary to dist root
-            mv "$binary_path" "./$binary_name"
-            rmdir "$dir" 2>/dev/null || rm -rf "$dir"
+            # Move binary to temp location first to avoid path conflicts
+            mv "$binary_path" "../${binary_name}.tmp"
+            rm -rf "$dir"
+            mv "../${binary_name}.tmp" "./$binary_name"
 
             # Create archive
             if [[ "$binary_name" == *.exe ]]; then
