@@ -95,6 +95,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Prepare image name
+        id: image
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> $GITHUB_OUTPUT
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
@@ -102,8 +106,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/lan-orangutan:${{ steps.version.outputs.VERSION }}
-            ghcr.io/${{ github.repository_owner }}/lan-orangutan:latest
+            ${{ steps.image.outputs.name }}:${{ steps.version.outputs.VERSION }}
+            ${{ steps.image.outputs.name }}:latest
 
   release:
     needs: build
