@@ -134,9 +134,13 @@ jobs:
 
           # Process each artifact directory
           for dir in orangutan-*/; do
+            dir_name="${dir%/}"
             binary=$(ls "${dir}")
-            mv "${dir}${binary}" .
+
+            # Move binary to temp location, remove dir, then rename
+            mv "${dir}${binary}" "${binary}.tmp"
             rmdir "${dir}"
+            mv "${binary}.tmp" "${binary}"
 
             # Create archive
             if [[ "${binary}" == *.exe ]]; then
