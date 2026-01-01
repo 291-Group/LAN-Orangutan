@@ -380,6 +380,56 @@ jobs:
           cd ../..
           rm -rf apk-build
 
+      - name: Create Homebrew formula
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+
+          # Calculate SHA256 for macOS binaries
+          SHA_AMD64=$(sha256sum dist/orangutan-darwin-amd64.tar.gz | cut -d' ' -f1)
+          SHA_ARM64=$(sha256sum dist/orangutan-darwin-arm64.tar.gz | cut -d' ' -f1)
+
+          cat > dist/lan-orangutan.rb << EOF
+          class LanOrangutan < Formula
+            desc "Network discovery and device tracking tool"
+            homepage "https://github.com/291-Group/LAN-Orangutan"
+            version "${VERSION}"
+            license "MIT"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "https://github.com/291-Group/LAN-Orangutan/releases/download/v${VERSION}/orangutan-darwin-arm64.tar.gz"
+                sha256 "${SHA_ARM64}"
+              else
+                url "https://github.com/291-Group/LAN-Orangutan/releases/download/v${VERSION}/orangutan-darwin-amd64.tar.gz"
+                sha256 "${SHA_AMD64}"
+              end
+            end
+
+            depends_on "nmap"
+
+            def install
+              bin.install "orangutan-darwin-arm64" => "orangutan" if Hardware::CPU.arm?
+              bin.install "orangutan-darwin-amd64" => "orangutan" unless Hardware::CPU.arm?
+
+              # Create config directory
+              (etc/"lan-orangutan").mkpath
+              (var/"lib/lan-orangutan").mkpath
+            end
+
+            service do
+              run [opt_bin/"orangutan", "serve"]
+              keep_alive true
+              working_dir var/"lib/lan-orangutan"
+              log_path var/"log/lan-orangutan.log"
+              error_log_path var/"log/lan-orangutan.log"
+            end
+
+            test do
+              system "#{bin}/orangutan", "version"
+            end
+          end
+          EOF
+
       - name: Generate checksums
         run: |
           cd dist
@@ -394,6 +444,7 @@ jobs:
             dist/*.deb
             dist/*.rpm
             dist/*.apk
+            dist/*.rb
             dist/SHA256SUMS.txt
           generate_release_notes: true
           draft: false
