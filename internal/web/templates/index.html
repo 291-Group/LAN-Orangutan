@@ -163,6 +163,7 @@
                             data-vendor="{{lower .Vendor}}"
                             data-label="{{lower .Label}}"
                             data-label-original="{{.Label}}"
+                            data-notes="{{.Notes}}"
                             data-group="{{.Group}}"
                             data-status="{{.Status}}"
                             data-lastseen="{{.LastSeenUnix}}">
@@ -177,7 +178,7 @@
                                 {{if .MAC}}<span class="copyable" onclick="copyToClipboard('{{.MAC}}', event)" title="Click to copy">{{.MAC}}</span>{{else}}<span style="color:var(--text-muted)">-</span>{{end}}
                             </td>
                             <td class="vendor-cell" title="{{.Vendor}}">{{if .Vendor}}{{.Vendor}}{{else}}<span style="color:var(--text-muted)">Unknown</span>{{end}}</td>
-                            <td class="label-cell">{{.Label}}</td>
+                            <td class="label-cell">{{.Label}}{{if .Notes}}<span class="notes-indicator" title="{{.Notes}}">📝</span>{{end}}</td>
                             <td>
                                 <select class="group-select" data-ip="{{.IP}}" onchange="updateDeviceGroup(this)">
                                     <option value="">-</option>

@@ -489,6 +489,16 @@ a:hover { color: var(--accent-hover); }
     color: var(--accent-primary);
 }
 
+.notes-indicator {
+    margin-left: 0.5rem;
+    cursor: help;
+    opacity: 0.7;
+}
+
+.notes-indicator:hover {
+    opacity: 1;
+}
+
 /* Action Buttons */
 .actions-cell {
     white-space: nowrap;

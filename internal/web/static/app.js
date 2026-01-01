@@ -134,7 +134,7 @@ function editDevice(ip) {
     document.getElementById('edit-ip-display').value = ip;
     document.getElementById('edit-label').value = row.dataset.labelOriginal || '';
     document.getElementById('edit-group').value = row.dataset.group || '';
-    document.getElementById('edit-notes').value = '';
+    document.getElementById('edit-notes').value = row.dataset.notes || '';
     modal.style.display = 'flex';
 }
 
