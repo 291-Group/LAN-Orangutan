@@ -20,10 +20,12 @@ function showToast(message, type = 'info') {
 }
 
 async function api(action, params = {}, method = 'GET') {
-    let url = `api.php?action=${action}`;
+    // Use Go API endpoints: /api/{action}
+    let url = `/api/${action}`;
     const options = { method };
     if (method === 'GET') {
-        Object.keys(params).forEach(key => url += `&${key}=${encodeURIComponent(params[key])}`);
+        const queryParams = Object.keys(params).map(key => `${key}=${encodeURIComponent(params[key])}`).join('&');
+        if (queryParams) url += `?${queryParams}`;
     } else {
         options.headers = { 'Content-Type': 'application/json' };
         options.body = JSON.stringify(params);
@@ -137,7 +139,7 @@ async function saveDevice() {
 async function deleteDevice(ip) {
     if (!confirm(`Delete device ${ip}?`)) return;
     try {
-        const response = await fetch(`api.php?action=device&ip=${encodeURIComponent(ip)}`, {
+        const response = await fetch(`/api/device?ip=${encodeURIComponent(ip)}`, {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' }
         });
