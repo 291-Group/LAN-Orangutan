@@ -113,8 +113,41 @@ func runScan(cmd *cobra.Command, args []string) error {
 			fmt.Fprintf(os.Stderr, "Error updating scan state: %v\n", err)
 		}
 
-		fmt.Printf("Found %d devices using %s (%.2fs)\n", result.DeviceCount, result.Scanner, result.Duration)
+		fmt.Printf("Found %d devices using %s (%.2fs)\n\n", result.DeviceCount, result.Scanner, result.Duration)
+
+		// Display found devices
+		if len(result.Devices) > 0 {
+			fmt.Printf("%-16s %-18s %-20s %s\n", "IP", "MAC", "HOSTNAME", "VENDOR")
+			fmt.Printf("%-16s %-18s %-20s %s\n", "──────────────", "─────────────────", "───────────────────", "──────────────────────")
+			for _, d := range result.Devices {
+				hostname := d.Hostname
+				if hostname == "" {
+					hostname = "-"
+				}
+				vendor := d.Vendor
+				if vendor == "" {
+					vendor = "-"
+				}
+				mac := d.MAC
+				if mac == "" {
+					mac = "-"
+				}
+				fmt.Printf("%-16s %-18s %-20s %s\n", d.IP, mac, truncate(hostname, 20), truncate(vendor, 30))
+			}
+			fmt.Println()
+		}
 	}
 
 	return nil
+}
+
+// truncate shortens a string to maxLen, adding "..." if truncated
+func truncate(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	if maxLen <= 3 {
+		return s[:maxLen]
+	}
+	return s[:maxLen-3] + "..."
 }
