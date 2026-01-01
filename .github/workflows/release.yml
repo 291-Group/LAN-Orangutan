@@ -102,8 +102,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}:${{ steps.version.outputs.VERSION }}
-            ghcr.io/${{ github.repository }}:latest
+            ghcr.io/${{ github.repository_owner }}/lan-orangutan:${{ steps.version.outputs.VERSION }}
+            ghcr.io/${{ github.repository_owner }}/lan-orangutan:latest
 
   release:
     needs: build
