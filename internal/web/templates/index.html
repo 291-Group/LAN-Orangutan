@@ -16,23 +16,50 @@
         <nav class="header-nav">
             <a href="/" class="nav-link active">Dashboard</a>
             <a href="/settings" class="nav-link">Settings</a>
-            <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">◐</button>
+            <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme (T)">◐</button>
         </nav>
     </header>
 
     <main class="main">
+        <!-- Stats Section -->
         <section class="section">
-            <h2 class="section-title">Network Status</h2>
+            <div class="stats-bar">
+                <div class="stat-card">
+                    <div class="stat-icon">📊</div>
+                    <span class="stat-value">{{.Stats.Total}}</span>
+                    <span class="stat-label">Total Devices</span>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">🟢</div>
+                    <span class="stat-value online">{{.Stats.Online}}</span>
+                    <span class="stat-label">Online</span>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">⚪</div>
+                    <span class="stat-value">{{.Stats.Offline}}</span>
+                    <span class="stat-label">Offline</span>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">🌐</div>
+                    <span class="stat-value">{{len .Networks}}</span>
+                    <span class="stat-label">Networks</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Networks Section -->
+        <section class="section">
+            <h2 class="section-title">Networks</h2>
             <div class="network-cards">
                 {{range .Networks}}
                 <div class="card network-card {{if .IsTailscale}}tailscale{{end}}">
                     <div class="card-header">
                         <span class="network-name">{{.FriendlyName}}</span>
-                        <span class="status-badge online">●</span>
+                        <span class="status-badge online">Active</span>
                     </div>
                     <div class="card-body">
                         <div class="network-detail">
-                            <span class="label">CIDR</span>
+                            <span class="label">Network</span>
                             <span class="value">{{.CIDR}}</span>
                         </div>
                         <div class="network-detail">
@@ -40,12 +67,12 @@
                             <span class="value">{{.Interface}}</span>
                         </div>
                         <div class="network-detail">
-                            <span class="label">IP</span>
+                            <span class="label">Your IP</span>
                             <span class="value">{{.IP}}</span>
                         </div>
                     </div>
                     <div class="card-footer">
-                        <button class="btn btn-primary btn-sm" onclick="scanNetwork('{{.CIDR}}')">Scan Now</button>
+                        <button class="btn btn-primary btn-sm" onclick="scanNetwork('{{.CIDR}}')">Scan Network</button>
                     </div>
                 </div>
                 {{end}}
@@ -53,23 +80,19 @@
                 {{if and .Tailscale.Installed .Tailscale.Running}}
                 <div class="card network-card tailscale">
                     <div class="card-header">
-                        <span class="network-name">Tailscale</span>
-                        <span class="status-badge online">●</span>
+                        <span class="network-name">Tailscale VPN</span>
+                        <span class="status-badge online">Connected</span>
                     </div>
                     <div class="card-body">
-                        <div class="network-detail">
-                            <span class="label">Status</span>
-                            <span class="value">✓ Connected</span>
-                        </div>
                         {{if .Tailscale.SelfIP}}
                         <div class="network-detail">
-                            <span class="label">IP</span>
+                            <span class="label">Your IP</span>
                             <span class="value">{{.Tailscale.SelfIP}}</span>
                         </div>
                         {{end}}
                         <div class="network-detail">
                             <span class="label">Peers</span>
-                            <span class="value">{{.Tailscale.PeerCount}}</span>
+                            <span class="value">{{.Tailscale.PeerCount}} devices</span>
                         </div>
                     </div>
                 </div>
@@ -77,53 +100,57 @@
             </div>
         </section>
 
-        <section class="section">
-            <div class="stats-bar">
-                <div class="stat">
-                    <span class="stat-value">{{.Stats.Total}}</span>
-                    <span class="stat-label">Total Devices</span>
-                </div>
-                <div class="stat">
-                    <span class="stat-value online">{{.Stats.Online}}</span>
-                    <span class="stat-label">Online Now</span>
-                </div>
-                <div class="stat">
-                    <span class="stat-value">{{.Stats.Offline}}</span>
-                    <span class="stat-label">Offline</span>
-                </div>
-                <div class="stat">
-                    <span class="stat-value">{{len .Networks}}</span>
-                    <span class="stat-label">Networks</span>
-                </div>
-            </div>
-        </section>
-
+        <!-- Devices Section -->
         <section class="section">
             <div class="section-header">
                 <h2 class="section-title">Discovered Devices</h2>
                 <div class="section-actions">
-                    <input type="text" id="device-search" class="input" placeholder="Search..." oninput="filterDevices()">
-                    <select id="device-filter" class="select" onchange="filterDevices()">
-                        <option value="all">All</option>
+                    <div class="auto-refresh">
+                        <span>Auto-refresh</span>
+                        <div class="toggle-switch" id="auto-refresh-toggle" onclick="toggleAutoRefresh()"></div>
+                    </div>
+                    <input type="text" id="device-search" class="input search-input" placeholder="Search devices..." oninput="filterDevices()">
+                    <select id="device-filter" class="select" style="width:auto" onchange="filterDevices()">
+                        <option value="all">All Status</option>
                         <option value="online">Online</option>
                         <option value="offline">Offline</option>
                     </select>
+                    <select id="group-filter" class="select" style="width:auto" onchange="filterDevices()">
+                        <option value="all">All Groups</option>
+                        <option value="Server">Server</option>
+                        <option value="Desktop">Desktop</option>
+                        <option value="Laptop">Laptop</option>
+                        <option value="Mobile">Mobile</option>
+                        <option value="IoT">IoT</option>
+                        <option value="Network">Network</option>
+                        <option value="Pi">Pi</option>
+                    </select>
+                    <div class="dropdown">
+                        <button class="btn" onclick="toggleDropdown('export-menu')">Export</button>
+                        <div id="export-menu" class="dropdown-menu">
+                            <a class="dropdown-item" onclick="exportDevices('csv')">Export as CSV</a>
+                            <a class="dropdown-item" onclick="exportDevices('json')">Export as JSON</a>
+                        </div>
+                    </div>
                     <button class="btn btn-primary" onclick="scanAllNetworks()">Scan All</button>
                 </div>
             </div>
 
             <div class="table-container">
+                <div class="table-toolbar">
+                    <span class="table-info" id="device-count">Showing {{len .Devices}} devices</span>
+                </div>
                 <table class="table" id="devices-table">
                     <thead>
                         <tr>
-                            <th>Status</th>
-                            <th>IP Address</th>
-                            <th>Hostname</th>
-                            <th>MAC Address</th>
-                            <th>Vendor</th>
+                            <th onclick="sortTable('status')">Status <span class="sort-icon">↕</span></th>
+                            <th onclick="sortTable('ip')">IP Address <span class="sort-icon">↕</span></th>
+                            <th onclick="sortTable('hostname')">Hostname <span class="sort-icon">↕</span></th>
+                            <th onclick="sortTable('mac')">MAC Address <span class="sort-icon">↕</span></th>
+                            <th onclick="sortTable('vendor')">Vendor <span class="sort-icon">↕</span></th>
                             <th>Label</th>
                             <th>Group</th>
-                            <th>Last Seen</th>
+                            <th onclick="sortTable('lastseen')">Last Seen <span class="sort-icon">↕</span></th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -136,13 +163,21 @@
                             data-vendor="{{lower .Vendor}}"
                             data-label="{{lower .Label}}"
                             data-label-original="{{.Label}}"
-                            data-status="{{.Status}}">
-                            <td><span class="status-indicator {{.StatusClass}}">●</span></td>
-                            <td class="ip-cell">{{.IP}}</td>
-                            <td>{{if .Hostname}}{{.Hostname}}{{else}}-{{end}}</td>
-                            <td class="mac-cell">{{if .MAC}}{{.MAC}}{{else}}-{{end}}</td>
-                            <td>{{if .Vendor}}{{.Vendor}}{{else}}Unknown{{end}}</td>
-                            <td>{{.Label}}</td>
+                            data-group="{{.Group}}"
+                            data-status="{{.Status}}"
+                            data-lastseen="{{.LastSeenUnix}}">
+                            <td>
+                                <span class="status-indicator {{.StatusClass}}"></span>
+                            </td>
+                            <td class="ip-cell">
+                                <span class="copyable" onclick="copyToClipboard('{{.IP}}', event)" title="Click to copy">{{.IP}}</span>
+                            </td>
+                            <td class="hostname-cell">{{if .Hostname}}{{.Hostname}}{{else}}<span style="color:var(--text-muted)">-</span>{{end}}</td>
+                            <td class="mac-cell">
+                                {{if .MAC}}<span class="copyable" onclick="copyToClipboard('{{.MAC}}', event)" title="Click to copy">{{.MAC}}</span>{{else}}<span style="color:var(--text-muted)">-</span>{{end}}
+                            </td>
+                            <td class="vendor-cell" title="{{.Vendor}}">{{if .Vendor}}{{.Vendor}}{{else}}<span style="color:var(--text-muted)">Unknown</span>{{end}}</td>
+                            <td class="label-cell">{{.Label}}</td>
                             <td>
                                 <select class="group-select" data-ip="{{.IP}}" onchange="updateDeviceGroup(this)">
                                     <option value="">-</option>
@@ -157,8 +192,8 @@
                             </td>
                             <td class="time-cell">{{.TimeAgo}}</td>
                             <td class="actions-cell">
-                                <button class="btn-icon" onclick="editDevice('{{.IP}}')" title="Edit">✎</button>
-                                <button class="btn-icon danger" onclick="deleteDevice('{{.IP}}')" title="Delete">✕</button>
+                                <button class="btn-icon" onclick="editDevice('{{.IP}}')" title="Edit">✏️</button>
+                                <button class="btn-icon danger" onclick="deleteDevice('{{.IP}}')" title="Delete">🗑️</button>
                             </td>
                         </tr>
                         {{end}}
@@ -167,12 +202,15 @@
             </div>
             {{if not .Devices}}
             <div class="empty-state">
-                <p>No devices discovered yet. Click "Scan All" to discover devices.</p>
+                <div class="empty-state-icon">🔍</div>
+                <h3>No devices discovered yet</h3>
+                <p>Click "Scan All" to discover devices on your network.</p>
             </div>
             {{end}}
         </section>
     </main>
 
+    <!-- Edit Modal -->
     <div id="edit-modal" class="modal" style="display:none">
         <div class="modal-content">
             <div class="modal-header">
@@ -205,13 +243,13 @@
                     </div>
                     <div class="form-group">
                         <label>Notes</label>
-                        <textarea id="edit-notes" name="notes" class="input" rows="3"></textarea>
+                        <textarea id="edit-notes" name="notes" class="input" rows="3" placeholder="Add notes about this device..."></textarea>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
                 <button class="btn" onclick="closeModal()">Cancel</button>
-                <button class="btn btn-primary" onclick="saveDevice()">Save</button>
+                <button class="btn btn-primary" onclick="saveDevice()">Save Changes</button>
             </div>
         </div>
     </div>
@@ -219,11 +257,12 @@
     <div id="toast" class="toast"></div>
     <div id="scan-progress" class="scan-progress" style="display:none">
         <div class="scan-spinner"></div>
-        <span>Scanning...</span>
+        <span>Scanning network...</span>
     </div>
 
     <footer class="footer">
-        <p>🦧 LAN Orangutan by <a href="https://291group.com" target="_blank">291 Group</a></p>
+        <p>🦧 LAN Orangutan &bull; <a href="https://github.com/291-Group/LAN-Orangutan" target="_blank">GitHub</a></p>
+        <p style="margin-top:0.5rem;font-size:0.8rem;">Press <kbd class="kbd">/</kbd> to search &bull; <kbd class="kbd">R</kbd> to refresh &bull; <kbd class="kbd">T</kbd> to toggle theme</p>
     </footer>
 
     <script src="/static/app.js"></script>
