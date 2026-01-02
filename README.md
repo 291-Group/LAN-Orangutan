@@ -45,7 +45,7 @@ Open `http://localhost:291` in your browser.
 - **nmap** must be installed:
   - macOS: `brew install nmap`
   - Ubuntu/Debian: `sudo apt install nmap`
-  - Windows: Download from [nmap.org](https://nmap.org/download.html)
+  - Windows: Download from nmap.org
 
 ## CLI Usage
 
