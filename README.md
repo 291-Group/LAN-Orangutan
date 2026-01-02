@@ -26,7 +26,7 @@ By [291 Group](https://291group.com)
 
 ### Download
 
-Grab the latest release for your platform from [GitHub Releases](https://github.com/291-Group/LAN-Orangutan/releases).
+Grab the latest release of LAN Orangutan for your platform from [GitHub Releases](https://github.com/291-Group/LAN-Orangutan/releases).
 
 ### Run
 
