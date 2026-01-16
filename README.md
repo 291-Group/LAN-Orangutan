@@ -1,8 +1,10 @@
 # 🦧 LAN Orangutan
 
-![Go](https://img.shields.io/github/go-mod/go-version/291-Group/LAN-Orangutan)&nbsp;&nbsp;&nbsp;&nbsp;
-![Stars](https://img.shields.io/github/stars/291-Group/LAN-Orangutan)&nbsp;&nbsp;&nbsp;&nbsp;
-![License](https://img.shields.io/github/license/291-Group/LAN-Orangutan)
+<p align="left">
+  <img src="https://img.shields.io/badge/dynamic/json?url=https://api.github.com/repos/291-group/lan-orangutan&query=$.stargazers_count&label=Stars&logo=github&color=027841&labelColor=1a1a2e&cacheSeconds=60" alt="Stars">&nbsp;&nbsp;
+  <img src="https://img.shields.io/badge/dynamic/json?url=https://api.github.com/repos/291-group/lan-orangutan&query=$.forks_count&label=Forks&logo=github&color=027841&labelColor=1a1a2e&cacheSeconds=60" alt="Forks">&nbsp;&nbsp;
+  <img src="https://img.shields.io/github/license/291-group/lan-orangutan?style=flat&label=License&color=027841&labelColor=1a1a2e" alt="License">
+</p>
 
 **Self-hosted network discovery for homelabbers.**
 
