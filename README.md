@@ -1,9 +1,11 @@
 # 🦧 LAN Orangutan
 
 <p align="left">
-  <img src="https://img.shields.io/badge/dynamic/json?url=https://api.github.com/repos/291-group/lan-orangutan&query=$.stargazers_count&label=Stars&logo=github&color=027841&labelColor=1a1a2e&cacheSeconds=60" alt="Stars">&nbsp;&nbsp;
-  <img src="https://img.shields.io/badge/dynamic/json?url=https://api.github.com/repos/291-group/lan-orangutan&query=$.forks_count&label=Forks&logo=github&color=027841&labelColor=1a1a2e&cacheSeconds=60" alt="Forks">&nbsp;&nbsp;
-  <img src="https://img.shields.io/github/license/291-group/lan-orangutan?style=flat&label=License&color=027841&labelColor=1a1a2e" alt="License">
+  <img src="https://img.shields.io/badge/dynamic/json?url=https://api.github.com/repos/291-Group/lan-orangutan&query=$.stargazers_count&label=Stars&logo=github&color=027841&labelColor=1a1a2e&cacheSeconds=60" alt="Stars">&nbsp;&nbsp;
+  <img src="https://img.shields.io/badge/dynamic/json?url=https://api.github.com/repos/291-Group/lan-orangutan&query=$.forks_count&label=Forks&logo=github&color=027841&labelColor=1a1a2e&cacheSeconds=60" alt="Forks">&nbsp;&nbsp;
+  <img src="https://img.shields.io/github/v/release/291-Group/LAN-Orangutan?style=flat&label=Release&color=027841&labelColor=1a1a2e" alt="Release">&nbsp;&nbsp;
+  <img src="https://img.shields.io/github/actions/workflow/status/291-Group/LAN-Orangutan/ci.yml?style=flat&label=Build&color=027841&labelColor=1a1a2e" alt="Build">&nbsp;&nbsp;
+  <img src="https://img.shields.io/github/license/291-Group/lan-orangutan?style=flat&label=License&color=027841&labelColor=1a1a2e" alt="License">
 </p>
 
 **Self-hosted network discovery for homelabbers.**
