@@ -1,5 +1,9 @@
 # 🦧 LAN Orangutan
 
+![Go](https://img.shields.io/github/go-mod/go-version/291-Group/LAN-Orangutan)&nbsp;&nbsp;&nbsp;&nbsp;
+![Stars](https://img.shields.io/github/stars/291-Group/LAN-Orangutan)&nbsp;&nbsp;&nbsp;&nbsp;
+![License](https://img.shields.io/github/license/291-Group/LAN-Orangutan)
+
 **Self-hosted network discovery for homelabbers.**
 
 Scan your networks, discover devices, label and track them - all from a clean web UI or CLI.
