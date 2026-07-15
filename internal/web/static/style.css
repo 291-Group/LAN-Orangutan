@@ -761,10 +761,11 @@ a:hover { color: var(--accent-hover); }
     border-radius: var(--radius-lg);
     box-shadow: 0 10px 40px rgba(0,0,0,0.15);
     display: flex;
-    align-items: center;
-    gap: 1rem;
+    flex-direction: column;
+    gap: 0.75rem;
     z-index: 200;
     border: 1px solid var(--border-color);
+    width: min(420px, calc(100vw - 2rem));
 }
 
 .scan-spinner {
@@ -778,6 +779,71 @@ a:hover { color: var(--accent-hover); }
 
 @keyframes spin {
     to { transform: rotate(360deg); }
+}
+
+.scan-progress-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+}
+
+#scan-title {
+    font-weight: 600;
+}
+
+.scan-cancel {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+}
+
+.scan-cancel:hover {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
+.scan-bar {
+    position: relative;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--border-color);
+    overflow: hidden;
+}
+
+.scan-bar-fill {
+    height: 100%;
+    width: 0;
+    border-radius: 999px;
+    background: var(--accent-primary);
+    transition: width 0.4s ease;
+}
+
+/* A network that has never been scanned has no timing history, so there is no
+   honest percentage to show. Sweep the bar instead of inventing a number. */
+.scan-bar.indeterminate .scan-bar-fill {
+    width: 35%;
+    transition: none;
+    animation: scan-sweep 1.4s ease-in-out infinite;
+}
+
+@keyframes scan-sweep {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(340%); }
+}
+
+.scan-progress-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .scan-bar.indeterminate .scan-bar-fill { animation-duration: 3s; }
+    .scan-spinner { animation-duration: 2s; }
 }
 
 /* Empty State */

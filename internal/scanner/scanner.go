@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/291-Group/LAN-Orangutan/internal/network"
 	"github.com/291-Group/LAN-Orangutan/internal/types"
 )
 
@@ -34,10 +35,10 @@ type nmapRun struct {
 
 // nmapHost represents a host element in nmap XML output
 type nmapHost struct {
-	Status    nmapStatus      `xml:"status"`
-	Addresses []nmapAddress   `xml:"address"`
-	Hostnames nmapHostnames   `xml:"hostnames"`
-	Times     nmapTimes       `xml:"times"`
+	Status    nmapStatus    `xml:"status"`
+	Addresses []nmapAddress `xml:"address"`
+	Hostnames nmapHostnames `xml:"hostnames"`
+	Times     nmapTimes     `xml:"times"`
 }
 
 // nmapStatus represents the host status
@@ -78,6 +79,13 @@ func (s *Scanner) Scan(ctx context.Context, cidr string) (*types.ScanResult, err
 
 	startTime := time.Now()
 
+	// Tailscale gives every node its own /32, so there is no subnet to sweep
+	// and a scan could only ever find this machine. Tailscale already knows the
+	// whole tailnet, so ask it for the peers instead.
+	if network.IsTailscaleNetwork(cidr) {
+		return s.scanTailscale(cidr, startTime), nil
+	}
+
 	// Try nmap first
 	devices, scanner, err := s.scanWithNmap(ctx, cidr)
 	if err != nil {
@@ -104,6 +112,29 @@ func (s *Scanner) Scan(ctx context.Context, cidr string) (*types.ScanResult, err
 		Duration:    duration,
 		Timestamp:   time.Now(),
 	}, nil
+}
+
+// scanTailscale lists the devices reachable over Tailscale.
+func (s *Scanner) scanTailscale(cidr string, startTime time.Time) *types.ScanResult {
+	devices := network.GetTailscaleDevices()
+	if devices == nil {
+		return &types.ScanResult{
+			Success:   false,
+			Error:     "Tailscale is not connected",
+			Network:   cidr,
+			Timestamp: time.Now(),
+		}
+	}
+
+	return &types.ScanResult{
+		Success:     true,
+		Devices:     devices,
+		DeviceCount: len(devices),
+		Network:     cidr,
+		Scanner:     "tailscale",
+		Duration:    time.Since(startTime).Seconds(),
+		Timestamp:   time.Now(),
+	}
 }
 
 // scanWithNmap performs a scan using nmap

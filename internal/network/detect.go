@@ -54,9 +54,9 @@ func DetectNetworks() ([]types.Network, error) {
 			network := types.Network{
 				CIDR:         cidr,
 				Interface:    iface.Name,
-				FriendlyName: getFriendlyName(iface.Name),
+				FriendlyName: getFriendlyName(iface.Name, ipNet.IP),
 				IP:           ipNet.IP.String(),
-				IsTailscale:  isTailscaleInterface(iface.Name),
+				IsTailscale:  isTailscaleInterface(iface.Name, ipNet.IP),
 				IsWireless:   isWirelessInterface(iface.Name),
 			}
 			networks = append(networks, network)
@@ -91,9 +91,9 @@ func calculateCIDR(ip string, prefixLen int) string {
 }
 
 // getFriendlyName returns a user-friendly name for an interface
-func getFriendlyName(ifname string) string {
+func getFriendlyName(ifname string, ip net.IP) string {
 	switch {
-	case strings.HasPrefix(ifname, "tailscale") || ifname == "utun4":
+	case isTailscaleInterface(ifname, ip):
 		return "Tailscale VPN"
 	case strings.HasPrefix(ifname, "wlan") || strings.HasPrefix(ifname, "wlp"):
 		return "Wi-Fi"
@@ -125,9 +125,39 @@ func getFriendlyName(ifname string) string {
 	}
 }
 
-// isTailscaleInterface returns true if the interface is a Tailscale interface
-func isTailscaleInterface(ifname string) bool {
-	return strings.HasPrefix(ifname, "tailscale") || ifname == "utun4"
+// tailscaleCGNAT is the address range Tailscale assigns to every node.
+var tailscaleCGNAT = &net.IPNet{
+	IP:   net.IPv4(100, 64, 0, 0),
+	Mask: net.CIDRMask(10, 32),
+}
+
+// IsTailscaleNetwork reports whether a CIDR belongs to the Tailscale network.
+// Tailscale hands every node a single-address /32, so such a network cannot be
+// swept for devices; its peers have to be read from Tailscale itself.
+func IsTailscaleNetwork(cidr string) bool {
+	ip, _, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return false
+	}
+	return tailscaleCGNAT.Contains(ip.To4())
+}
+
+// isTailscaleInterface returns true if the interface is a Tailscale interface.
+//
+// The interface name alone is not enough to tell: Linux uses "tailscale0", but
+// macOS uses a utun device whose number depends on how many tunnels happen to
+// exist, so it is not always utun4. Fall back to checking whether the address
+// sits in the range Tailscale assigns, which is what actually identifies it.
+// The range is only trusted on a tunnel interface, since it is shared with
+// carrier-grade NAT that an ISP could legitimately hand out on a real NIC.
+func isTailscaleInterface(ifname string, ip net.IP) bool {
+	if strings.HasPrefix(strings.ToLower(ifname), "tailscale") {
+		return true
+	}
+	if !strings.HasPrefix(ifname, "utun") && !strings.HasPrefix(ifname, "tun") {
+		return false
+	}
+	return ip != nil && tailscaleCGNAT.Contains(ip.To4())
 }
 
 // isWirelessInterface returns true if the interface is a wireless interface

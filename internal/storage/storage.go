@@ -28,7 +28,8 @@ func New(devicesFile, stateFile string) (*Storage, error) {
 		stateFile:   stateFile,
 		devices:     make(map[string]*types.Device),
 		state: &types.ScanState{
-			LastScan: make(map[string]time.Time),
+			LastScan:     make(map[string]time.Time),
+			LastDuration: make(map[string]float64),
 		},
 	}
 
@@ -73,7 +74,19 @@ func (s *Storage) loadState() error {
 		return nil
 	}
 
-	return json.Unmarshal(data, &s.state)
+	if err := json.Unmarshal(data, &s.state); err != nil {
+		return err
+	}
+
+	// State files written before durations were tracked have no such map, so
+	// recreate it rather than leave a nil map that cannot be written to.
+	if s.state.LastScan == nil {
+		s.state.LastScan = make(map[string]time.Time)
+	}
+	if s.state.LastDuration == nil {
+		s.state.LastDuration = make(map[string]float64)
+	}
+	return nil
 }
 
 // saveDevices writes devices to the JSON file atomically
@@ -252,6 +265,26 @@ func (s *Storage) SetLastScan(network string, t time.Time) error {
 	defer s.mu.Unlock()
 
 	s.state.LastScan[network] = t
+	return s.saveState()
+}
+
+// GetLastDuration returns how long the previous scan of a network took, in
+// seconds. It returns 0 when the network has not been scanned before.
+func (s *Storage) GetLastDuration(network string) float64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.state.LastDuration[network]
+}
+
+// SetLastDuration records how long a scan of a network took, in seconds.
+func (s *Storage) SetLastDuration(network string, seconds float64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.state.LastDuration == nil {
+		s.state.LastDuration = make(map[string]float64)
+	}
+	s.state.LastDuration[network] = seconds
 	return s.saveState()
 }
 

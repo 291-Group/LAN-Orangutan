@@ -60,42 +60,110 @@ async function api(action, params = {}, method = 'GET') {
 }
 
 // Network scanning
-async function scanNetwork(cidr) {
-    const progress = document.getElementById('scan-progress');
-    if (progress) progress.style.display = 'flex';
-    try {
-        const result = await api('scan', { network: cidr });
-        if (result.success) {
-            showToast(`Found ${result.data?.device_count || 0} devices`, 'success');
-            setTimeout(() => location.reload(), 1000);
-        } else {
-            showToast(result.error || 'Scan failed', 'error');
-        }
-    } catch (e) {
-        const isRateLimit = e.message.toLowerCase().includes('rate limit');
-        showToast(isRateLimit ? e.message : 'Scan failed: ' + e.message, isRateLimit ? 'warning' : 'error');
-    } finally {
-        if (progress) progress.style.display = 'none';
+//
+// Scans run in the background on the server and the page polls for progress.
+// A large network takes minutes, which is far too long to hold a request open.
+const SCAN_POLL_MS = 1000;
+
+function formatSeconds(total) {
+    const s = Math.max(0, Math.round(total));
+    return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
+}
+
+function showScanProgress(p) {
+    const panel = document.getElementById('scan-progress');
+    if (!panel) return;
+    panel.style.display = 'flex';
+
+    const title = document.getElementById('scan-title');
+    if (title) title.textContent = p.current_network ? `Scanning ${p.current_network}` : 'Starting scan...';
+
+    // percent is -1 when the network has never been scanned and there is no
+    // timing history to estimate from. Show a sweeping bar rather than a
+    // made-up number.
+    const bar = document.getElementById('scan-bar');
+    const fill = document.getElementById('scan-bar-fill');
+    const known = p.percent >= 0;
+    if (bar) bar.classList.toggle('indeterminate', !known);
+    if (fill) fill.style.width = known ? `${Math.min(100, p.percent)}%` : '';
+
+    const detail = document.getElementById('scan-detail');
+    if (detail) {
+        const parts = [];
+        if (p.network_count > 1) parts.push(`Network ${p.network_index} of ${p.network_count}`);
+        parts.push(`${p.device_count} device${p.device_count === 1 ? '' : 's'} found`);
+        detail.textContent = parts.join(' · ');
+    }
+
+    const eta = document.getElementById('scan-eta');
+    if (eta) {
+        eta.textContent = known && p.remaining != null
+            ? `~${formatSeconds(p.remaining)} left · ${Math.round(p.percent)}%`
+            : `${formatSeconds(p.elapsed)} elapsed`;
     }
 }
 
-async function scanAllNetworks() {
-    const progress = document.getElementById('scan-progress');
-    if (progress) progress.style.display = 'flex';
+function hideScanProgress() {
+    const panel = document.getElementById('scan-progress');
+    if (panel) panel.style.display = 'none';
+}
+
+async function cancelScan() {
     try {
-        const result = await api('scan', { network: 'all' });
-        if (result.success) {
-            showToast('Scan complete', 'success');
-            setTimeout(() => location.reload(), 1000);
-        } else {
-            showToast(result.error || 'Scan failed', 'error');
+        await api('scan/cancel', {}, 'POST');
+        showToast('Scan cancelled', 'warning');
+    } catch (e) {
+        showToast('Could not cancel: ' + e.message, 'error');
+    }
+}
+
+// Reports the outcome of a finished job. Networks that were rate limited or
+// failed are surfaced rather than being hidden behind a success message.
+function reportScanOutcome(p) {
+    const scanned = (p.networks || []).filter(n => n.status === 'scanned');
+    if (p.status === 'cancelled') {
+        showToast('Scan cancelled', 'warning');
+        if (scanned.length) setTimeout(() => location.reload(), 1000);
+        return;
+    }
+    if (scanned.length === 0) {
+        const reason = (p.networks || []).find(n => n.error)?.error;
+        showToast(reason ? 'Scan failed: ' + reason : 'No networks could be scanned', 'warning');
+        return;
+    }
+    const where = p.network_count > 1 ? ` across ${scanned.length} network${scanned.length === 1 ? '' : 's'}` : '';
+    showToast(`Found ${p.device_count} device${p.device_count === 1 ? '' : 's'}${where}`, 'success');
+    setTimeout(() => location.reload(), 1000);
+}
+
+async function runScan(target) {
+    try {
+        const started = await api(`scan/start?network=${encodeURIComponent(target)}`, {}, 'POST');
+        showScanProgress(started.data);
+
+        while (true) {
+            await new Promise(r => setTimeout(r, SCAN_POLL_MS));
+            const progress = (await api('scan/progress')).data;
+            if (progress.status !== 'running') {
+                hideScanProgress();
+                reportScanOutcome(progress);
+                return;
+            }
+            showScanProgress(progress);
         }
     } catch (e) {
+        hideScanProgress();
         const isRateLimit = e.message.toLowerCase().includes('rate limit');
         showToast(isRateLimit ? e.message : 'Scan failed: ' + e.message, isRateLimit ? 'warning' : 'error');
-    } finally {
-        if (progress) progress.style.display = 'none';
     }
+}
+
+async function scanNetwork(cidr) {
+    await runScan(cidr);
+}
+
+async function scanAllNetworks() {
+    await runScan('all');
 }
 
 // Device filtering

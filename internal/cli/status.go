@@ -79,10 +79,14 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	} else if !ts.Running {
 		fmt.Println("  Installed but not running")
 	} else {
-		fmt.Printf("  Status: %s\n", ts.BackendState)
-		fmt.Printf("  IP: %s\n", ts.SelfIP)
-		fmt.Printf("  Hostname: %s\n", ts.SelfHostname)
-		fmt.Printf("  Peers: %d\n", ts.PeerCount)
+		fmt.Printf("  Status: %s\n", ts.StatusLabel())
+		// The IP and peer count are cached from the last session and go stale
+		// once Tailscale stops, so only report them while connected.
+		if ts.Connected {
+			fmt.Printf("  IP: %s\n", ts.SelfIP)
+			fmt.Printf("  Hostname: %s\n", ts.SelfHostname)
+			fmt.Printf("  Peers: %d\n", ts.PeerCount)
+		}
 	}
 
 	// Server config

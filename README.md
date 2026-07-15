@@ -24,7 +24,8 @@ By [291 Group](https://291group.com)
 - 🔍 Auto-discover devices using nmap
 - 🏷️ Label, group, and add notes to devices
 - 🌐 Multi-network support
-- 🔗 Tailscale integration
+- 🔗 Tailscale integration - tailnet peers discovered automatically
+- 📊 Live scan progress you can cancel
 - 💻 Modern web dashboard with light/dark mode
 - ⌨️ Full CLI with JSON output
 - 🍎 Cross-platform (Linux, macOS, Windows)
@@ -99,6 +100,31 @@ The web dashboard provides:
 - Export to CSV/JSON
 - Auto-refresh option
 - Keyboard shortcuts (/ to search, R to refresh, T to toggle theme)
+
+### Scan progress
+
+Scans run in the background, so the dashboard stays responsive and a long scan
+will not time out. Progress shows which network is being scanned, how many
+devices have been found, and a time estimate based on how long that network took
+to scan last time. Scanning a large network takes a few minutes, and you can
+cancel at any point.
+
+The first scan of a network has no previous timing to estimate from, so it shows
+elapsed time instead of a percentage.
+
+## Tailscale
+
+Tailscale devices are picked up automatically: if Tailscale is connected, its
+peers are added to your device list alongside the machines found on your local
+networks.
+
+Tailscale peers cannot be found by scanning, because Tailscale gives every node
+its own single-address network, leaving no range to sweep. Instead the peers are
+read from Tailscale itself, which is faster and needs no elevated privileges.
+
+Only peers that are currently online are listed, and they are shown with their
+Tailscale hostname and operating system. Peers have no MAC address, so no
+hardware vendor is looked up for them.
 
 ## Configuration
 

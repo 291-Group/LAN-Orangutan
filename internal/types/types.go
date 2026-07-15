@@ -40,6 +40,9 @@ type Network struct {
 // ScanState holds the last scan time for rate limiting
 type ScanState struct {
 	LastScan map[string]time.Time `json:"last_scan"`
+	// LastDuration records how long the previous scan of each network took,
+	// in seconds, so the UI can estimate progress for subsequent scans.
+	LastDuration map[string]float64 `json:"last_duration,omitempty"`
 }
 
 // ScanResult represents the outcome of a network scan
@@ -56,8 +59,13 @@ type ScanResult struct {
 
 // TailscaleStatus represents Tailscale connection status
 type TailscaleStatus struct {
-	Installed    bool   `json:"installed"`
-	Running      bool   `json:"running"`
+	Installed bool `json:"installed"`
+	// Running reports only that the Tailscale daemon answered. It stays true
+	// when the user is logged out or has stopped Tailscale, so it must not be
+	// used to decide whether traffic can flow: use Connected for that.
+	Running bool `json:"running"`
+	// Connected reports whether Tailscale is actually up and usable.
+	Connected    bool   `json:"connected"`
 	BackendState string `json:"backend_state"`
 	Version      string `json:"version"`
 	TailnetName  string `json:"tailnet_name"`
@@ -65,6 +73,33 @@ type TailscaleStatus struct {
 	SelfHostname string `json:"self_hostname"`
 	PeerCount    int    `json:"peer_count"`
 	ExitNode     string `json:"exit_node,omitempty"`
+}
+
+// StatusLabel describes the Tailscale connection in words suitable for display.
+func (t TailscaleStatus) StatusLabel() string {
+	if !t.Installed {
+		return "Not installed"
+	}
+	if !t.Running {
+		return "Not running"
+	}
+
+	switch t.BackendState {
+	case "Running":
+		return "Connected"
+	case "Stopped":
+		return "Stopped"
+	case "NeedsLogin":
+		return "Logged out"
+	case "NeedsMachineAuth":
+		return "Awaiting approval"
+	case "Starting":
+		return "Starting"
+	case "NoState", "":
+		return "Unknown"
+	default:
+		return t.BackendState
+	}
 }
 
 // APIResponse is the standard API response wrapper

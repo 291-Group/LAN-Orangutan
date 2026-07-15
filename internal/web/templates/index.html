@@ -51,8 +51,11 @@
         <section class="section">
             <h2 class="section-title">Networks</h2>
             <div class="network-cards">
-                {{range .Networks}}
-                <div class="card network-card {{if .IsTailscale}}tailscale{{end}}">
+                {{/* Tailscale gets its own card below, and its interface is a
+                     single-address /32 that there is no point sweeping, so it is
+                     skipped here rather than shown twice. */}}
+                {{range .Networks}}{{if not .IsTailscale}}
+                <div class="card network-card">
                     <div class="card-header">
                         <span class="network-name">{{.FriendlyName}}</span>
                         <span class="status-badge online">Active</span>
@@ -75,15 +78,18 @@
                         <button class="btn btn-primary btn-sm" onclick="scanNetwork('{{.CIDR}}')">Scan Network</button>
                     </div>
                 </div>
-                {{end}}
+                {{end}}{{end}}
 
                 {{if and .Tailscale.Installed .Tailscale.Running}}
                 <div class="card network-card tailscale">
                     <div class="card-header">
                         <span class="network-name">Tailscale VPN</span>
-                        <span class="status-badge online">Connected</span>
+                        <span class="status-badge {{if .Tailscale.Connected}}online{{else}}offline{{end}}">{{.Tailscale.StatusLabel}}</span>
                     </div>
                     <div class="card-body">
+                        {{/* The IP and peer list linger from the last session after
+                             Tailscale is stopped, so only show them while connected. */}}
+                        {{if .Tailscale.Connected}}
                         {{if .Tailscale.SelfIP}}
                         <div class="network-detail">
                             <span class="label">Your IP</span>
@@ -94,6 +100,11 @@
                             <span class="label">Peers</span>
                             <span class="value">{{.Tailscale.PeerCount}} devices</span>
                         </div>
+                        {{else}}
+                        <div class="network-detail">
+                            <span class="label">Not connected</span>
+                        </div>
+                        {{end}}
                     </div>
                 </div>
                 {{end}}
@@ -257,8 +268,17 @@
 
     <div id="toast" class="toast"></div>
     <div id="scan-progress" class="scan-progress" style="display:none">
-        <div class="scan-spinner"></div>
-        <span>Scanning network...</span>
+        <div class="scan-progress-head">
+            <span id="scan-title">Scanning network...</span>
+            <button type="button" class="btn btn-sm scan-cancel" id="scan-cancel" onclick="cancelScan()">Cancel</button>
+        </div>
+        <div class="scan-bar" id="scan-bar">
+            <div class="scan-bar-fill" id="scan-bar-fill"></div>
+        </div>
+        <div class="scan-progress-meta">
+            <span id="scan-detail"></span>
+            <span id="scan-eta"></span>
+        </div>
     </div>
 
     <footer class="footer">

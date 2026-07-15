@@ -52,14 +52,17 @@
             <div class="card">
                 <div class="status-row">
                     <span class="status-label">Status:</span>
-                    {{if .Tailscale.Running}}
-                    <span class="status-value online">✓ Connected</span>
+                    {{if .Tailscale.Connected}}
+                    <span class="status-value online">✓ {{.Tailscale.StatusLabel}}</span>
                     {{else if .Tailscale.Installed}}
-                    <span class="status-value offline">✗ Disconnected</span>
+                    <span class="status-value offline">✗ {{.Tailscale.StatusLabel}}</span>
                     {{else}}
                     <span class="status-value warning">Not Installed</span>
                     {{end}}
                 </div>
+                {{/* These details are cached from the last session and go stale
+                     once Tailscale stops, so only show them while connected. */}}
+                {{if .Tailscale.Connected}}
                 {{if .Tailscale.SelfIP}}
                 <div class="status-row">
                     <span class="status-label">IP:</span>
@@ -72,7 +75,6 @@
                     <span class="status-value">{{.Tailscale.SelfHostname}}</span>
                 </div>
                 {{end}}
-                {{if .Tailscale.Running}}
                 <div class="status-row">
                     <span class="status-label">Peers:</span>
                     <span class="status-value">{{.Tailscale.PeerCount}}</span>

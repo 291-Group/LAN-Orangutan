@@ -4,8 +4,10 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/291-Group/LAN-Orangutan/internal/config"
@@ -20,6 +22,11 @@ type Handler struct {
 	store   *storage.Storage
 	cfg     *config.Config
 	scanner *scanner.Scanner
+
+	// jobMu guards job, which holds the most recent background scan. Only one
+	// scan runs at a time.
+	jobMu sync.Mutex
+	job   *scanJob
 }
 
 // NewHandler creates a new API handler
@@ -60,6 +67,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleNetworks(w, r)
 	case path == "scan":
 		h.handleScan(w, r)
+	case path == "scan/start":
+		h.handleScanStart(w, r)
+	case path == "scan/progress":
+		h.handleScanProgress(w, r)
+	case path == "scan/cancel":
+		h.handleScanCancel(w, r)
 	case path == "tailscale":
 		h.handleTailscale(w, r)
 	case path == "stats":
@@ -173,6 +186,12 @@ func (h *Handler) handleScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// "all" scans every detected network, matching the CLI's behaviour
+	if strings.EqualFold(cidr, "all") {
+		h.scanAllNetworks(w, r)
+		return
+	}
+
 	// Validate CIDR
 	if !network.ValidateCIDR(cidr) {
 		h.error(w, http.StatusBadRequest, "invalid CIDR format")
@@ -213,6 +232,199 @@ func (h *Handler) handleScan(w http.ResponseWriter, r *http.Request) {
 	h.store.SetLastScan(cidr, time.Now())
 
 	h.success(w, result)
+}
+
+// networkScanSummary reports the outcome of scanning a single network as part
+// of a scan-all request.
+type networkScanSummary struct {
+	Network     string  `json:"network"`
+	Status      string  `json:"status"` // scanned, skipped or failed
+	DeviceCount int     `json:"device_count"`
+	Duration    float64 `json:"duration"`
+	Error       string  `json:"error,omitempty"`
+}
+
+// scanAllResult aggregates the per-network outcomes of a scan-all request.
+type scanAllResult struct {
+	Success      bool                 `json:"success"`
+	Networks     []networkScanSummary `json:"networks"`
+	NetworkCount int                  `json:"network_count"`
+	ScannedCount int                  `json:"scanned_count"`
+	DeviceCount  int                  `json:"device_count"`
+	Timestamp    time.Time            `json:"timestamp"`
+}
+
+// scanAllNetworks scans every detected network. A network that is rate limited
+// or fails is reported in the response rather than failing the whole request,
+// so one bad interface cannot mask results from the others.
+func (h *Handler) scanAllNetworks(w http.ResponseWriter, r *http.Request) {
+	detected, err := network.DetectNetworks()
+	if err != nil {
+		h.error(w, http.StatusInternalServerError, "failed to detect networks: "+err.Error())
+		return
+	}
+	if len(detected) == 0 {
+		h.error(w, http.StatusNotFound, "no networks detected")
+		return
+	}
+
+	result := scanAllResult{
+		Networks:     make([]networkScanSummary, 0, len(detected)),
+		NetworkCount: len(detected),
+		Timestamp:    time.Now(),
+	}
+
+	for _, n := range detected {
+		summary := networkScanSummary{Network: n.CIDR}
+
+		lastScan := h.store.GetLastScan(n.CIDR)
+		if canScan, waitTime := h.scanner.CheckRateLimit(lastScan); !canScan {
+			summary.Status = "skipped"
+			summary.Error = "rate limited, wait " + waitTime.Round(time.Second).String()
+			result.Networks = append(result.Networks, summary)
+			continue
+		}
+
+		scan, err := h.scanNetwork(r.Context(), n.CIDR)
+		if err != nil {
+			summary.Status = "failed"
+			summary.Error = err.Error()
+			result.Networks = append(result.Networks, summary)
+			continue
+		}
+
+		summary.Status = "scanned"
+		summary.DeviceCount = scan.DeviceCount
+		summary.Duration = scan.Duration
+		result.Networks = append(result.Networks, summary)
+		result.ScannedCount++
+		result.DeviceCount += scan.DeviceCount
+	}
+
+	// Only a request where nothing at all could be scanned counts as a failure.
+	result.Success = result.ScannedCount > 0
+	h.success(w, result)
+}
+
+// resolveScanTargets turns the network parameter into the list of networks to
+// scan. "all" expands to every detected network, matching the CLI.
+func (h *Handler) resolveScanTargets(cidr string) ([]string, error) {
+	if !strings.EqualFold(cidr, "all") {
+		if !network.ValidateCIDR(cidr) {
+			return nil, errors.New("invalid CIDR format")
+		}
+		return []string{cidr}, nil
+	}
+
+	detected, err := network.DetectNetworks()
+	if err != nil {
+		return nil, errors.New("failed to detect networks: " + err.Error())
+	}
+	if len(detected) == 0 {
+		return nil, errors.New("no networks detected")
+	}
+
+	networks := make([]string, 0, len(detected))
+	for _, n := range detected {
+		networks = append(networks, n.CIDR)
+	}
+	return networks, nil
+}
+
+// handleScanStart handles POST /api/scan/start, which begins a scan in the
+// background and returns immediately. Scanning a large network takes minutes,
+// so the UI starts a job and polls /api/scan/progress rather than holding a
+// request open for the duration.
+func (h *Handler) handleScanStart(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		h.error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	cidr := r.URL.Query().Get("network")
+	if cidr == "" {
+		h.error(w, http.StatusBadRequest, "network parameter required")
+		return
+	}
+
+	networks, err := h.resolveScanTargets(cidr)
+	if err != nil {
+		h.error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	h.jobMu.Lock()
+	defer h.jobMu.Unlock()
+
+	if h.job != nil && h.job.isRunning() {
+		h.error(w, http.StatusConflict, "a scan is already running")
+		return
+	}
+
+	h.job = h.startScanJob(networks)
+	h.success(w, h.job.snapshot())
+}
+
+// handleScanProgress handles GET /api/scan/progress.
+func (h *Handler) handleScanProgress(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		h.error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	h.jobMu.Lock()
+	job := h.job
+	h.jobMu.Unlock()
+
+	if job == nil {
+		h.success(w, scanProgress{Status: "idle", Percent: percentUnknown})
+		return
+	}
+	h.success(w, job.snapshot())
+}
+
+// handleScanCancel handles POST /api/scan/cancel.
+func (h *Handler) handleScanCancel(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		h.error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	h.jobMu.Lock()
+	job := h.job
+	h.jobMu.Unlock()
+
+	if job == nil || !job.isRunning() {
+		h.error(w, http.StatusConflict, "no scan is running")
+		return
+	}
+
+	job.cancel()
+	h.success(w, map[string]string{"message": "scan cancelled"})
+}
+
+// scanNetwork scans a single network and merges the results into storage.
+func (h *Handler) scanNetwork(ctx context.Context, cidr string) (*types.ScanResult, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+
+	result, err := h.scanner.Scan(ctx, cidr)
+	if err != nil {
+		return nil, err
+	}
+	if !result.Success {
+		return nil, errors.New(result.Error)
+	}
+
+	if err := h.store.MergeDevices(result.Devices); err != nil {
+		return nil, errors.New("failed to save devices")
+	}
+	h.store.SetLastScan(cidr, time.Now())
+	// Remember how long this took so the next scan of the same network can show
+	// a progress estimate based on real measured time.
+	h.store.SetLastDuration(cidr, result.Duration)
+
+	return result, nil
 }
 
 // handleTailscale handles GET /api/tailscale
