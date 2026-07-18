@@ -8,6 +8,8 @@
   <img src="https://img.shields.io/github/license/291-Group/lan-orangutan?style=flat&label=License&color=027841&labelColor=1a1a2e" alt="License">
 </p>
 
+<a href="https://trendshift.io/repositories/17888?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-17888" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/17888/daily?language=Go" alt="291-Group%2FLAN-Orangutan | Trendshift" width="250" height="55"/></a>
+
 **Self-hosted network discovery for homelabbers.**
 
 Scan your networks, discover devices, label and track them - all from a clean web UI or CLI.
