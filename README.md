@@ -21,15 +21,15 @@ By [291 Group](https://291group.com)
 
 ## Features
 
-🔍 Auto-discover devices using nmap
-🏷️ Label, group, and add notes to devices
-🌐 Multi-network support
-🔗 Tailscale integration - tailnet peers discovered automatically
-📊 Live scan progress you can cancel
-💻 Modern web dashboard with light/dark mode
-⌨️ Full CLI with JSON output
-🍎 Cross-platform (Linux, macOS, Windows)
-📦 Single binary, no dependencies
+🔍 Auto-discover devices using nmap<br>
+🏷️ Label, group, and add notes to devices<br>
+🌐 Multi-network support<br>
+🔗 Tailscale integration - tailnet peers discovered automatically<br>
+📊 Live scan progress you can cancel<br>
+💻 Modern web dashboard with light/dark mode<br>
+⌨️ Full CLI with JSON output<br>
+🍎 Cross-platform (Linux, macOS, Windows)<br>
+📦 Single binary, no dependencies<br>
 
 ## Quick Start
 
