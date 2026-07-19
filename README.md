@@ -1,11 +1,11 @@
 # 🦧 LAN Orangutan
 
 <p align="left">
-  <img src="https://img.shields.io/github/stars/291-Group/LAN-Orangutan?style=flat&label=Stars&logo=github&color=027841&labelColor=1a1a2e&cacheSeconds=3600" alt="Stars">&nbsp;&nbsp;
-  <img src="https://img.shields.io/github/forks/291-Group/LAN-Orangutan?style=flat&label=Forks&logo=github&color=027841&labelColor=1a1a2e&cacheSeconds=3600" alt="Forks">&nbsp;&nbsp;
-  <img src="https://img.shields.io/github/v/release/291-Group/LAN-Orangutan?style=flat&label=Release&color=027841&labelColor=1a1a2e&cacheSeconds=3600" alt="Release">&nbsp;&nbsp;
-  <img src="https://github.com/291-Group/LAN-Orangutan/actions/workflows/ci.yml/badge.svg" alt="Build">&nbsp;&nbsp;
-  <img src="https://img.shields.io/github/license/291-Group/LAN-Orangutan?style=flat&label=License&color=027841&labelColor=1a1a2e&cacheSeconds=3600" alt="License">
+ <img src="https://291grp.com/assets/badges/stars.svg" alt="Stars" height="20">
+    <img src="https://291grp.com/assets/badges/forks.svg" alt="Forks" height="20">
+    <img src="https://291grp.com/assets/badges/release.svg" alt="Release" height="20">
+    <img src="https://291grp.com/assets/badges/build.svg" alt="Build" height="20">
+    <img src="https://291grp.com/assets/badges/license.svg" alt="License" height="20">
 </p>
 
 <a href="https://trendshift.io/repositories/17888?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-17888" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/17888/daily?language=Go" alt="291-Group%2FLAN-Orangutan | Trendshift" width="250" height="55"/></a>
