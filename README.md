@@ -1,11 +1,11 @@
 # 🦧 LAN Orangutan
 
 <p align="left">
-  <img src="https://img.shields.io/github/stars/291-Group/LAN-Orangutan?style=flat&label=Stars&logo=github&color=027841&labelColor=1a1a2e" alt="Stars">&nbsp;&nbsp;
-    <img src="https://img.shields.io/github/forks/291-Group/LAN-Orangutan?style=flat&label=Forks&logo=github&color=027841&labelColor=1a1a2e" alt="Forks">&nbsp;&nbsp;
-  <img src="https://img.shields.io/github/v/release/291-Group/LAN-Orangutan?style=flat&label=Release&color=027841&labelColor=1a1a2e" alt="Release">&nbsp;&nbsp;
-  <img src="https://img.shields.io/github/actions/workflow/status/291-Group/LAN-Orangutan/ci.yml?style=flat&label=Build&color=027841&labelColor=1a1a2e" alt="Build">&nbsp;&nbsp;
-  <img src="https://img.shields.io/github/license/291-Group/lan-orangutan?style=flat&label=License&color=027841&labelColor=1a1a2e" alt="License">
+  <img src="https://img.shields.io/github/stars/291-Group/LAN-Orangutan?style=flat&label=Stars&logo=github&color=027841&labelColor=1a1a2e&cacheSeconds=3600" alt="Stars">&nbsp;&nbsp;
+  <img src="https://img.shields.io/github/forks/291-Group/LAN-Orangutan?style=flat&label=Forks&logo=github&color=027841&labelColor=1a1a2e&cacheSeconds=3600" alt="Forks">&nbsp;&nbsp;
+  <img src="https://img.shields.io/github/v/release/291-Group/LAN-Orangutan?style=flat&label=Release&color=027841&labelColor=1a1a2e&cacheSeconds=3600" alt="Release">&nbsp;&nbsp;
+  <img src="https://github.com/291-Group/LAN-Orangutan/actions/workflows/ci.yml/badge.svg" alt="Build">&nbsp;&nbsp;
+  <img src="https://img.shields.io/github/license/291-Group/LAN-Orangutan?style=flat&label=License&color=027841&labelColor=1a1a2e&cacheSeconds=3600" alt="License">
 </p>
 
 <a href="https://trendshift.io/repositories/17888?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-17888" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/17888/daily?language=Go" alt="291-Group%2FLAN-Orangutan | Trendshift" width="250" height="55"/></a>
