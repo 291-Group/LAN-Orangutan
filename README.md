@@ -143,7 +143,7 @@ If you don't need the extra features, and the extra friction that comes with the
 ## Feedback & Contributing
 Found a bug, hit a problem, or have an idea? Open an [issue](https://github.com/291-Group/LAN-Orangutan/issues) and let us know.
 
-Feature requests are welcome too, with one caveat that follows from the philosophy above: if something would add real complexity or setup, it's probably not a fit for LAN Orangutan. But we'd still rather hear the idea and talk it through, so don't hold back.
+Feature requests are welcome too, with one caveat that follows from the philosophy above: if something would add real complexity or setup, it's probably not a fit for LAN Orangutan. But we'd still rather hear the idea, so don't hold back.
 
 ## License
 
