@@ -1,9 +1,22 @@
 name: Release
 
 on:
+  # A pushed tag builds and publishes automatically.
   push:
     tags:
       - 'v*'
+  # Publishing a release from an existing tag (the GitHub Releases UI) also
+  # builds, so a release created from a tag that was already pushed is not
+  # silently left without its binaries.
+  release:
+    types: [published]
+  # Manual rebuild for an existing tag, from the Actions tab, without deleting
+  # or recreating the release.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to build and attach (e.g. v3.1.3)'
+        required: true
 
 permissions:
   contents: write
@@ -39,6 +52,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # For a manual run, check out the tag that was entered; otherwise the
+          # tag that triggered the workflow.
+          ref: ${{ github.event.inputs.tag || github.ref }}
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -47,7 +64,10 @@ jobs:
 
       - name: Get version from tag
         id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+          if [ -z "$TAG" ]; then TAG="${GITHUB_REF#refs/tags/}"; fi
+          echo "VERSION=${TAG#v}" >> "$GITHUB_OUTPUT"
 
       - name: Build binary
         env:
@@ -77,10 +97,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # For a manual run, check out the tag that was entered; otherwise the
+          # tag that triggered the workflow.
+          ref: ${{ github.event.inputs.tag || github.ref }}
 
       - name: Get version from tag
         id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+          if [ -z "$TAG" ]; then TAG="${GITHUB_REF#refs/tags/}"; fi
+          echo "VERSION=${TAG#v}" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -119,10 +146,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # For a manual run, check out the tag that was entered; otherwise the
+          # tag that triggered the workflow.
+          ref: ${{ github.event.inputs.tag || github.ref }}
 
       - name: Get version from tag
         id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+          if [ -z "$TAG" ]; then TAG="${GITHUB_REF#refs/tags/}"; fi
+          echo "VERSION=${TAG#v}" >> "$GITHUB_OUTPUT"
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -592,6 +626,9 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
+          # Attach to the right release whether triggered by a tag, a release,
+          # or a manual run.
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
           files: |
             dist/*.tar.gz
             dist/*.zip
