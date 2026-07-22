@@ -1,10 +1,10 @@
 module github.com/291-Group/LAN-Orangutan
 
-go 1.22
+go 1.25.0
 
 require (
 	github.com/spf13/cobra v1.10.2
-	golang.org/x/crypto v0.31.0
+	golang.org/x/crypto v0.54.0
 )
 
 require (
