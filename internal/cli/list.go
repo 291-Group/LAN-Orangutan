@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/291-Group/LAN-Orangutan/internal/scanner"
 	"github.com/291-Group/LAN-Orangutan/internal/storage"
 	"github.com/291-Group/LAN-Orangutan/internal/types"
 )
@@ -100,7 +101,7 @@ func outputTable(devices []*types.Device) error {
 			hostname = hostname[:22] + "..."
 		}
 
-		vendor := d.Vendor
+		vendor := scanner.ResolveVendor(d.Vendor, d.MAC)
 		if len(vendor) > 20 {
 			vendor = vendor[:17] + "..."
 		}
@@ -126,7 +127,7 @@ func outputCSV(devices []*types.Device) error {
 			d.IP,
 			d.MAC,
 			d.Hostname,
-			d.Vendor,
+			scanner.ResolveVendor(d.Vendor, d.MAC),
 			d.Label,
 			d.Notes,
 			d.Group,
@@ -149,7 +150,7 @@ func outputJSON(devices []*types.Device) error {
 			comma = ""
 		}
 		fmt.Printf("  {\"ip\": %q, \"mac\": %q, \"hostname\": %q, \"vendor\": %q, \"label\": %q, \"group\": %q}%s\n",
-			d.IP, d.MAC, d.Hostname, d.Vendor, d.Label, d.Group, comma)
+			d.IP, d.MAC, d.Hostname, scanner.ResolveVendor(d.Vendor, d.MAC), d.Label, d.Group, comma)
 	}
 	fmt.Println("]")
 	return nil

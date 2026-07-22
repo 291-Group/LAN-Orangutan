@@ -87,6 +87,9 @@ Or change the port in your config file.
    ```bash
    # Allow external access
    orangutan serve --bind 0.0.0.0
+
+   This is the default. The first visit asks you to create a password, so the
+   dashboard is not left open on your network.
    ```
 
 ## Tailscale not detected

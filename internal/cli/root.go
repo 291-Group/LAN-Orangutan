@@ -22,6 +22,18 @@ var rootCmd = &cobra.Command{
 	Long: `LAN Orangutan is a network discovery and monitoring tool.
 It scans your local network to find devices and provides
 a web interface for viewing and managing discovered devices.`,
+
+	// Execute prints errors itself; without this cobra prints them a second
+	// time.
+	SilenceErrors: true,
+
+	// Flags have parsed by the time this runs, so anything that fails from here
+	// is a runtime problem rather than a usage mistake. Silencing usage now
+	// keeps a real error visible instead of burying it under the flag listing,
+	// while a genuine flag mistake still gets the full help.
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		cmd.SilenceUsage = true
+	},
 }
 
 // Execute adds all child commands and runs the CLI
@@ -55,4 +67,8 @@ func initConfig() {
 		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		os.Exit(1)
 	}
+
+	// Environment variables override the file, so containers can be configured
+	// without mounting one.
+	cfg.ApplyEnv()
 }

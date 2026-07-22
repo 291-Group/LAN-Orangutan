@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{.Theme}}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome - LAN Orangutan</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="icon" type="image/svg+xml" href="/static/orangutan.svg">
+</head>
+<body class="login-body">
+    <main class="login-main">
+        <div class="login-card">
+            <div class="login-brand">
+                <img src="/static/orangutan.svg" alt="" class="login-logo" width="72" height="72">
+                <h1>LAN Orangutan</h1>
+            </div>
+
+            <p class="setup-welcome">Welcome</p>
+            <p class="setup-intro">Create a password to secure your dashboard.</p>
+
+            {{if .Error}}
+            <div class="alert alert-error">{{.Error}}</div>
+            {{end}}
+
+            <form method="POST" action="/setup" class="login-form">
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input
+                        type="password"
+                        id="password"
+                        name="password"
+                        class="input"
+                        autocomplete="new-password"
+                        minlength="{{.MinPasswordLength}}"
+                        autofocus
+                        required>
+                    <p class="form-help">At least {{.MinPasswordLength}} characters.</p>
+                </div>
+
+                <div class="form-group">
+                    <label for="confirm">Confirm password</label>
+                    <input
+                        type="password"
+                        id="confirm"
+                        name="confirm"
+                        class="input"
+                        autocomplete="new-password"
+                        minlength="{{.MinPasswordLength}}"
+                        required>
+                </div>
+
+                <button type="submit" class="btn btn-primary login-submit">Get started</button>
+            </form>
+
+            <p class="setup-note">
+                This dashboard can be reached by other machines on your network,
+                which is why it needs a password.
+            </p>
+        </div>
+    </main>
+
+    <script>
+        // Apply the saved theme before anything is shown, matching the rest of
+        // the app so the page does not flash the wrong colours.
+        (function () {
+            var saved = localStorage.getItem('theme');
+            if (saved) {
+                document.documentElement.setAttribute('data-theme', saved);
+            }
+        })();
+    </script>
+</body>
+</html>

@@ -105,6 +105,10 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
+          build-args: |
+            VERSION=${{ steps.version.outputs.VERSION }}
+            COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ github.event.repository.updated_at }}
           tags: |
             ${{ steps.image.outputs.name }}:${{ steps.version.outputs.VERSION }}
             ${{ steps.image.outputs.name }}:latest
@@ -171,32 +175,33 @@ jobs:
           echo "=== Final dist/ contents ==="
           ls -la
 
-      - name: Create legacy archive (for install.sh compatibility)
+      # Bundle for the install.sh route: the binaries for each Linux
+      # architecture, the service unit and the installer. Previous releases also
+      # shipped a separate Python and PHP implementation here; that has been
+      # removed, and install.sh now installs the binary.
+      - name: Create install archive
         run: |
           VERSION=${{ steps.version.outputs.VERSION }}
           ARCHIVE_NAME="lan-orangutan-${VERSION}"
 
-          # Create clean directory for legacy release
           mkdir -p "dist/${ARCHIVE_NAME}"
 
-          # Copy release files (for backwards compatibility with install.sh)
-          cp -r scanner dist/${ARCHIVE_NAME}/
-          cp -r web dist/${ARCHIVE_NAME}/
-          cp -r cli dist/${ARCHIVE_NAME}/
-          cp -r scripts dist/${ARCHIVE_NAME}/
-          cp -r systemd dist/${ARCHIVE_NAME}/
-          cp install.sh dist/${ARCHIVE_NAME}/
-          cp uninstall.sh dist/${ARCHIVE_NAME}/
-          cp config.example.ini dist/${ARCHIVE_NAME}/
-          cp README.md dist/${ARCHIVE_NAME}/
-          cp LICENSE dist/${ARCHIVE_NAME}/ 2>/dev/null || true
+          cp -r systemd "dist/${ARCHIVE_NAME}/"
+          cp install.sh "dist/${ARCHIVE_NAME}/"
+          cp uninstall.sh "dist/${ARCHIVE_NAME}/"
+          cp config.example.ini "dist/${ARCHIVE_NAME}/"
+          cp README.md "dist/${ARCHIVE_NAME}/"
+          cp SECURITY.md "dist/${ARCHIVE_NAME}/"
+          cp LICENSE "dist/${ARCHIVE_NAME}/" 2>/dev/null || true
+          chmod +x "dist/${ARCHIVE_NAME}/install.sh" "dist/${ARCHIVE_NAME}/uninstall.sh"
 
-          # Also include the Go binary
-          cp dist/orangutan-linux-amd64 dist/${ARCHIVE_NAME}/ 2>/dev/null || true
+          # install.sh picks the one matching the machine it runs on.
+          for arch in amd64 arm64 arm; do
+            cp "dist/orangutan-linux-${arch}" "dist/${ARCHIVE_NAME}/"
+          done
 
-          # Create tarball
           cd dist
-          tar -czvf "${ARCHIVE_NAME}.tar.gz" "${ARCHIVE_NAME}"
+          tar -czf "${ARCHIVE_NAME}.tar.gz" "${ARCHIVE_NAME}"
           rm -rf "${ARCHIVE_NAME}"
 
       - name: Build .deb package

@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/291-Group/LAN-Orangutan/internal/scanner"
 	"github.com/291-Group/LAN-Orangutan/internal/storage"
 	"github.com/291-Group/LAN-Orangutan/internal/types"
 )
@@ -90,7 +91,7 @@ func runExport(cmd *cobra.Command, args []string) error {
 			d.IP,
 			d.MAC,
 			d.Hostname,
-			d.Vendor,
+			scanner.ResolveVendor(d.Vendor, d.MAC),
 			d.Label,
 			d.Notes,
 			d.Group,

@@ -1,23 +1,59 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
-  <ellipse cx="100" cy="100" rx="60" ry="65" fill="#FF6B35"/>
-  <ellipse cx="48" cy="105" rx="26" ry="32" fill="#C94C27"/>
-  <ellipse cx="152" cy="105" rx="26" ry="32" fill="#C94C27"/>
-  <ellipse cx="100" cy="108" rx="38" ry="44" fill="#8B5A3C"/>
-  <ellipse cx="85" cy="98" rx="9" ry="12" fill="#1A1A1A"/>
-  <ellipse cx="87" cy="94" rx="3" ry="4" fill="white"/>
-  <ellipse cx="115" cy="98" rx="9" ry="12" fill="#1A1A1A"/>
-  <ellipse cx="117" cy="94" rx="3" ry="4" fill="white"/>
-  <ellipse cx="100" cy="118" rx="12" ry="10" fill="#6B4423"/>
-  <ellipse cx="95" cy="115" rx="4" ry="5" fill="#1A1A1A"/>
-  <ellipse cx="105" cy="115" rx="4" ry="5" fill="#1A1A1A"/>
-  <path d="M 82 132 Q 100 140 118 132" stroke="#4A2D16" stroke-width="3" fill="none" stroke-linecap="round"/>
-  <ellipse cx="56" cy="80" rx="14" ry="18" fill="#C94C27"/>
-  <ellipse cx="144" cy="80" rx="14" ry="18" fill="#C94C27"/>
-  <g opacity="0.8">
-    <circle cx="80" cy="60" r="4" fill="#4ECDC4"/>
-    <circle cx="120" cy="60" r="4" fill="#4ECDC4"/>
-    <circle cx="100" cy="52" r="4" fill="#4ECDC4"/>
-    <line x1="80" y1="60" x2="100" y2="52" stroke="#4ECDC4" stroke-width="2"/>
-    <line x1="120" y1="60" x2="100" y2="52" stroke="#4ECDC4" stroke-width="2"/>
-  </g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="LAN Orangutan">
+  <title>LAN Orangutan</title>
+
+  <defs>
+    <radialGradient id="loFur" cx="50%" cy="38%" r="68%">
+      <stop offset="0%" stop-color="#A9541F"/>
+      <stop offset="62%" stop-color="#8C4318"/>
+      <stop offset="100%" stop-color="#6E3411"/>
+    </radialGradient>
+
+    <radialGradient id="loFace" cx="50%" cy="42%" r="62%">
+      <stop offset="0%" stop-color="#F7B27A"/>
+      <stop offset="58%" stop-color="#EE9455"/>
+      <stop offset="100%" stop-color="#DD7A3C"/>
+    </radialGradient>
+
+    <radialGradient id="loMuzzle" cx="50%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#FBD3AE"/>
+      <stop offset="100%" stop-color="#F0AF7E"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Cheek flanges: the wide side pads of an adult male orangutan, and the
+       feature that keeps the silhouette recognisable at favicon size. -->
+  <ellipse cx="41" cy="132" rx="30" ry="46" fill="#8C4318"/>
+  <ellipse cx="215" cy="132" rx="30" ry="46" fill="#8C4318"/>
+  <ellipse cx="39" cy="132" rx="21" ry="37" fill="#A9541F"/>
+  <ellipse cx="217" cy="132" rx="21" ry="37" fill="#A9541F"/>
+
+  <!-- Head -->
+  <path d="M128 44c50 0 84 22 84 74s-34 94-84 94-84-42-84-94 34-74 84-74Z" fill="url(#loFur)"/>
+
+  <!-- Crown tuft -->
+  <path d="M96 52c8-14 20-22 32-22s24 8 32 22c-10-6-21-9-32-9s-22 3-32 9Z" fill="#6E3411"/>
+
+  <!-- Face disc -->
+  <ellipse cx="128" cy="130" rx="62" ry="70" fill="url(#loFace)"/>
+
+  <!-- Brow ridge -->
+  <path d="M86 106c10-9 22-13 34-12M136 94c12-1 24 3 34 12"
+        stroke="#C4682F" stroke-width="7" stroke-linecap="round" fill="none" opacity="0.55"/>
+
+  <!-- Eyes -->
+  <ellipse cx="104" cy="120" rx="10.5" ry="12" fill="#2B1A10"/>
+  <ellipse cx="152" cy="120" rx="10.5" ry="12" fill="#2B1A10"/>
+  <circle cx="107.5" cy="115.5" r="3.6" fill="#FFFFFF" opacity="0.92"/>
+  <circle cx="155.5" cy="115.5" r="3.6" fill="#FFFFFF" opacity="0.92"/>
+
+  <!-- Muzzle -->
+  <ellipse cx="128" cy="164" rx="35" ry="27" fill="url(#loMuzzle)"/>
+
+  <!-- Nostrils -->
+  <ellipse cx="119" cy="155" rx="4.6" ry="3.4" fill="#8A4A24" opacity="0.85"/>
+  <ellipse cx="137" cy="155" rx="4.6" ry="3.4" fill="#8A4A24" opacity="0.85"/>
+
+  <!-- Mouth -->
+  <path d="M110 173c6 7 12 10 18 10s12-3 18-10"
+        stroke="#8A4A24" stroke-width="5.5" stroke-linecap="round" fill="none"/>
 </svg>

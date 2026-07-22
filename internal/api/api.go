@@ -3,9 +3,11 @@ package api
 
 import (
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -94,7 +96,50 @@ func (h *Handler) handleDevices(w http.ResponseWriter, r *http.Request) {
 	}
 
 	devices := h.store.GetDevices()
+
+	if r.URL.Query().Get("format") == "csv" {
+		h.writeDevicesCSV(w, devices)
+		return
+	}
+
 	h.success(w, devices)
+}
+
+// writeDevicesCSV sends the device list as a downloadable CSV file.
+//
+// The columns match `orangutan export`, so a file saved from the browser and
+// one saved from the command line are interchangeable.
+func (h *Handler) writeDevicesCSV(w http.ResponseWriter, devices map[string]*types.Device) {
+	sorted := make([]*types.Device, 0, len(devices))
+	for _, d := range devices {
+		sorted = append(sorted, d)
+	}
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].IP < sorted[j].IP })
+
+	// Set before writing: headers are ignored once the body has started.
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", `attachment; filename="devices.csv"`)
+
+	cw := csv.NewWriter(w)
+	defer cw.Flush()
+
+	_ = cw.Write([]string{
+		"IP Address", "MAC Address", "Hostname", "Vendor", "Label",
+		"Notes", "Group", "First Seen", "Last Seen", "Status",
+	})
+
+	for _, d := range sorted {
+		status := "offline"
+		if d.IsOnline() {
+			status = "online"
+		}
+		_ = cw.Write([]string{
+			d.IP, d.MAC, d.Hostname, scanner.ResolveVendor(d.Vendor, d.MAC), d.Label, d.Notes, d.Group,
+			d.FirstSeen.Format("2006-01-02 15:04:05"),
+			d.LastSeen.Format("2006-01-02 15:04:05"),
+			status,
+		})
+	}
 }
 
 // handleDevice handles GET/POST/DELETE /api/device
@@ -170,7 +215,7 @@ func (h *Handler) handleNetworks(w http.ResponseWriter, r *http.Request) {
 		h.error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	h.success(w, networks)
+	h.success(w, network.WithConfigured(networks, h.cfg.Scanning.Networks))
 }
 
 // handleScan handles GET /api/scan
@@ -259,6 +304,7 @@ type scanAllResult struct {
 // so one bad interface cannot mask results from the others.
 func (h *Handler) scanAllNetworks(w http.ResponseWriter, r *http.Request) {
 	detected, err := network.DetectNetworks()
+	detected = network.WithConfigured(detected, h.cfg.Scanning.Networks)
 	if err != nil {
 		h.error(w, http.StatusInternalServerError, "failed to detect networks: "+err.Error())
 		return
@@ -317,6 +363,7 @@ func (h *Handler) resolveScanTargets(cidr string) ([]string, error) {
 	}
 
 	detected, err := network.DetectNetworks()
+	detected = network.WithConfigured(detected, h.cfg.Scanning.Networks)
 	if err != nil {
 		return nil, errors.New("failed to detect networks: " + err.Error())
 	}

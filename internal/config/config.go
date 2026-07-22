@@ -4,11 +4,15 @@ package config
 import (
 	"bufio"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/291-Group/LAN-Orangutan/internal/network"
 )
 
 // GetDefaultDataDir returns the appropriate default data directory for the current OS
@@ -92,6 +96,18 @@ type ServerConfig struct {
 	Port        int
 	BindAddress string
 	EnableAPI   bool
+
+	// Password protects the dashboard and API. Empty means no login is
+	// required. May be given as plaintext or as a bcrypt hash.
+	Password string
+
+	// SessionHours is how long a login stays valid.
+	SessionHours int
+
+	// AllowInsecure permits binding to a non-loopback address without a
+	// password. Off by default: doing so exposes the API, which can modify
+	// stored data, to everyone on the network.
+	AllowInsecure bool
 }
 
 // ScanningConfig holds scanner settings
@@ -100,6 +116,11 @@ type ScanningConfig struct {
 	MinScanInterval int
 	EnablePortScan  bool
 	PortScanRange   string
+
+	// Networks are CIDRs the user has declared explicitly, for cases where
+	// automatic detection cannot see the right network. A container only sees
+	// Docker's private network, so without this it can never scan the LAN.
+	Networks []string
 }
 
 // StorageConfig holds data storage settings
@@ -124,9 +145,14 @@ type UIConfig struct {
 func Default() *Config {
 	return &Config{
 		Server: ServerConfig{
-			Port:        291,
-			BindAddress: "0.0.0.0",
-			EnableAPI:   true,
+			Port: 291,
+			// Reachable from the network, because this is usually installed on
+			// a server or a Pi and opened from another machine. Safety comes
+			// from RequiresSetup: with no password set, the only thing a
+			// visitor can reach is the page that creates one.
+			BindAddress:  "0.0.0.0",
+			EnableAPI:    true,
+			SessionHours: 24 * 7,
 		},
 		Scanning: ScanningConfig{
 			ScanInterval:    300,
@@ -211,6 +237,14 @@ func (c *Config) setValue(section, key, value string) {
 			c.Server.BindAddress = value
 		case "enable_api":
 			c.Server.EnableAPI = parseBool(value)
+		case "password":
+			c.Server.Password = value
+		case "session_hours":
+			if v, err := strconv.Atoi(value); err == nil {
+				c.Server.SessionHours = v
+			}
+		case "allow_insecure":
+			c.Server.AllowInsecure = parseBool(value)
 		}
 	case "scanning":
 		switch key {
@@ -226,6 +260,8 @@ func (c *Config) setValue(section, key, value string) {
 			c.Scanning.EnablePortScan = parseBool(value)
 		case "port_scan_range":
 			c.Scanning.PortScanRange = value
+		case "networks":
+			c.Scanning.Networks = network.ParseNetworkList(value)
 		}
 	case "storage":
 		switch key {
@@ -253,6 +289,116 @@ func (c *Config) setValue(section, key, value string) {
 			c.UI.Theme = value
 		}
 	}
+}
+
+// ApplyEnv overlays settings from environment variables onto c.
+//
+// Environment variables take precedence over the config file, which makes the
+// app configurable in a container without mounting a config file. Command line
+// flags still win over both.
+func (c *Config) ApplyEnv() {
+	if v := os.Getenv("ORANGUTAN_PORT"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			c.Server.Port = n
+		}
+	}
+	if v := os.Getenv("ORANGUTAN_BIND_ADDRESS"); v != "" {
+		c.Server.BindAddress = v
+	}
+	if v := os.Getenv("ORANGUTAN_PASSWORD"); v != "" {
+		c.Server.Password = v
+	}
+	// A password file keeps the secret out of the process environment, which
+	// is how container secrets are normally delivered.
+	if v := os.Getenv("ORANGUTAN_PASSWORD_FILE"); v != "" {
+		if data, err := os.ReadFile(v); err == nil {
+			if pw := strings.TrimSpace(string(data)); pw != "" {
+				c.Server.Password = pw
+			}
+		}
+	}
+	if v := os.Getenv("ORANGUTAN_SESSION_HOURS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			c.Server.SessionHours = n
+		}
+	}
+	if v := os.Getenv("ORANGUTAN_ALLOW_INSECURE"); v != "" {
+		c.Server.AllowInsecure = parseBool(v)
+	}
+	if v := os.Getenv("ORANGUTAN_DATA_DIR"); v != "" {
+		c.Storage.DataDir = v
+	}
+	if v := os.Getenv("ORANGUTAN_NETWORKS"); v != "" {
+		c.Scanning.Networks = network.ParseNetworkList(v)
+	}
+	if v := os.Getenv("ORANGUTAN_SCAN_INTERVAL"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			c.Scanning.ScanInterval = n
+		}
+	}
+	if v := os.Getenv("ORANGUTAN_THEME"); v != "" {
+		c.UI.Theme = v
+	}
+}
+
+// IsLoopbackBind reports whether the configured bind address only accepts
+// connections from the machine the app is running on.
+//
+// An empty bind address means every interface, which is not loopback.
+func (c *Config) IsLoopbackBind() bool {
+	return isLoopbackAddress(c.Server.BindAddress)
+}
+
+func isLoopbackAddress(addr string) bool {
+	addr = strings.TrimSpace(addr)
+	if addr == "" {
+		return false
+	}
+	if strings.EqualFold(addr, "localhost") {
+		return true
+	}
+	// Strip brackets from IPv6 literals such as [::1].
+	addr = strings.TrimPrefix(strings.TrimSuffix(addr, "]"), "[")
+
+	ip := net.ParseIP(addr)
+	if ip == nil {
+		return false
+	}
+	return ip.IsLoopback()
+}
+
+// RequiresSetup reports whether the user must create a password before the
+// dashboard becomes usable.
+//
+// Setup is required whenever the server can be reached from the network and no
+// password exists yet. Bound to loopback the dashboard is already private, so
+// a password would be friction with no benefit, and an operator who has some
+// other protection in front can opt out entirely.
+func (c *Config) RequiresSetup() bool {
+	if c.Server.AllowInsecure {
+		return false
+	}
+	if c.IsLoopbackBind() {
+		return false
+	}
+	return c.Server.Password == ""
+}
+
+// PasswordFile returns the path where a password created through the setup page
+// is stored.
+//
+// It lives beside the data rather than in the config file, so that completing
+// setup does not rewrite a file the user maintains by hand.
+func (c *Config) PasswordFile() string {
+	return filepath.Join(c.Storage.DataDir, "auth")
+}
+
+// SessionTTL returns how long a login should remain valid.
+func (c *Config) SessionTTL() time.Duration {
+	if c.Server.SessionHours <= 0 {
+		return 24 * 7 * time.Hour
+	}
+	return time.Duration(c.Server.SessionHours) * time.Hour
 }
 
 // DevicesFile returns the full path to the devices JSON file

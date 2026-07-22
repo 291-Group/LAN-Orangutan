@@ -88,7 +88,7 @@ func GetTailscaleDevices() []types.Device {
 		return nil
 	}
 
-	output, err := exec.Command(tailscaleBin, "status", "--json").Output()
+	output, err := runCommand(tailscaleBin, "status", "--json")
 	if err != nil {
 		return nil
 	}
@@ -176,10 +176,9 @@ func GetTailscaleStatus() types.TailscaleStatus {
 	status.Installed = true
 
 	// Get tailscale status
-	cmd := exec.Command(tailscaleBin, "status", "--json")
-	output, err := cmd.Output()
+	output, err := runCommand(tailscaleBin, "status", "--json")
 	if err != nil {
-		// Tailscale is installed but not running or not connected
+		// Tailscale is installed but not running, not connected, or wedged.
 		status.Running = false
 		return status
 	}

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"os/exec"
 	"runtime"
 	"strings"
 
@@ -175,21 +174,24 @@ func isWirelessInterface(ifname string) bool {
 
 // GetDefaultGateway returns the default gateway IP
 func GetDefaultGateway() (string, error) {
-	var cmd *exec.Cmd
+	var (
+		name string
+		args []string
+	)
 
 	switch runtime.GOOS {
 	case "darwin":
 		// macOS: use netstat
-		cmd = exec.Command("netstat", "-rn")
+		name, args = "netstat", []string{"-rn"}
 	case "linux":
 		// Linux: try ip command first
-		cmd = exec.Command("ip", "-j", "route", "show", "default")
+		name, args = "ip", []string{"-j", "route", "show", "default"}
 	default:
 		// Fallback for other systems
-		cmd = exec.Command("netstat", "-rn")
+		name, args = "netstat", []string{"-rn"}
 	}
 
-	output, err := cmd.Output()
+	output, err := runCommand(name, args...)
 	if err != nil {
 		return "", fmt.Errorf("failed to get default route: %w", err)
 	}
@@ -222,8 +224,7 @@ func GetDefaultGateway() (string, error) {
 // GetDNSServers returns configured DNS servers
 func GetDNSServers() []string {
 	// Try systemd-resolved first
-	cmd := exec.Command("resolvectl", "status")
-	output, err := cmd.Output()
+	output, err := runCommand("resolvectl", "status")
 	if err == nil {
 		return parseDNSFromResolvectl(string(output))
 	}
@@ -251,8 +252,7 @@ func parseDNSFromResolvectl(output string) []string {
 }
 
 func parseDNSFromResolvConf() []string {
-	cmd := exec.Command("grep", "nameserver", "/etc/resolv.conf")
-	output, err := cmd.Output()
+	output, err := runCommand("grep", "nameserver", "/etc/resolv.conf")
 	if err != nil {
 		return nil
 	}

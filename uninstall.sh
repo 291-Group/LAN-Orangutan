@@ -11,7 +11,7 @@ RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[0;33m'; NC='\033[0m'
 [[ $EUID -ne 0 ]] && { echo -e "${RED}✗${NC} Run as root (sudo)"; exit 1; }
 
 echo ""
-echo -e "${YELLOW}🦧 LAN Orangutan Uninstaller${NC}"
+echo -e "${YELLOW}LAN Orangutan Uninstaller${NC}"
 echo "================================"
 echo ""
 
@@ -21,7 +21,16 @@ if [[ -f "$CONFIG_DIR/config.ini" ]]; then
     CONFIGURED_PORT=$(grep "^port" "$CONFIG_DIR/config.ini" 2>/dev/null | cut -d= -f2 | tr -d ' ' || true)
 fi
 
-read -p "Remove LAN Orangutan completely? [y/N]: " confirm
+INSTALLED_VERSION=""
+if [[ -x /usr/local/bin/orangutan ]]; then
+    INSTALLED_VERSION="$(/usr/local/bin/orangutan version 2>/dev/null | head -1 | sed 's/^LAN Orangutan //')"
+fi
+if [[ -n "$INSTALLED_VERSION" ]]; then
+    echo "Installed version: $INSTALLED_VERSION"
+    echo ""
+fi
+
+read -r -p "Uninstall LAN Orangutan? [y/N]: " confirm
 [[ ! "$confirm" =~ ^[Yy]$ ]] && { echo "Aborted."; exit 0; }
 
 # Stop service
@@ -38,7 +47,7 @@ rm -rf "$CONFIG_DIR"
 echo -e "${GREEN}✓${NC} Files removed"
 
 # Data
-read -p "Remove device data ($DATA_DIR)? [y/N]: " data
+read -r -p "Also remove your device list and password ($DATA_DIR)? [y/N]: " data
 [[ "$data" =~ ^[Yy]$ ]] && { rm -rf "$DATA_DIR"; echo -e "${GREEN}✓${NC} Data removed"; }
 
 # Firewall - clean up configured port and common alternatives
@@ -53,5 +62,5 @@ if command -v ufw &>/dev/null; then
 fi
 
 echo ""
-echo -e "${GREEN}🦧 LAN Orangutan uninstalled${NC}"
+echo -e "${GREEN}LAN Orangutan ${INSTALLED_VERSION:-} uninstalled${NC}"
 echo ""

@@ -51,6 +51,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 	fmt.Println("Networks:")
 	networks, err := network.DetectNetworks()
+	networks = network.WithConfigured(networks, cfg.Scanning.Networks)
 	if err != nil {
 		fmt.Printf("  Error detecting: %v\n", err)
 	} else {

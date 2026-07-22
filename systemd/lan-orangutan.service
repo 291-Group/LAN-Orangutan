@@ -6,10 +6,11 @@ Wants=network-online.target
 
 [Service]
 Type=simple
+# Runs as root so nmap can read the ARP table, which is what supplies MAC
+# addresses and manufacturer names. Without it you get IP addresses only.
 User=root
 Group=root
-WorkingDirectory=/opt/lan-orangutan
-ExecStart=/opt/lan-orangutan/scripts/start-server.sh
+ExecStart=/usr/local/bin/orangutan serve
 Restart=on-failure
 RestartSec=10
 StandardOutput=journal

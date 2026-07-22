@@ -1,0 +1,24 @@
+# Keep the build context small and reproducible.
+.git
+.github
+.gitignore
+.DS_Store
+
+# Build output
+bin/
+orangutan
+*.exe
+
+# Local data and editor state
+data/
+*.log
+.claude/
+.vscode/
+.idea/
+
+# Docs and packaging that the image does not need
+docs/
+snap/
+systemd/
+*.md
+!README.md

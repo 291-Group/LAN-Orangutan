@@ -50,6 +50,10 @@ build-windows: build-windows-amd64
 build-windows-amd64:
 	GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY)-windows-amd64.exe ./cmd/orangutan
 
+# Refresh the embedded MAC vendor database from the IEEE registry
+oui:
+	./scripts/gen-oui.sh
+
 # Run tests
 test:
 	go test -v ./...
@@ -110,6 +114,7 @@ help:
 	@echo "  build-windows  - Build for Windows (amd64)"
 	@echo ""
 	@echo "  test           - Run tests"
+	@echo "  oui            - Refresh the MAC vendor database"
 	@echo "  lint           - Run linter"
 	@echo "  fmt            - Format code"
 	@echo "  tidy           - Tidy dependencies"

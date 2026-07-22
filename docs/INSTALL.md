@@ -133,5 +133,5 @@ sudo firewall-cmd --reload
 ```bash
 orangutan version
 orangutan status
-curl http://localhost:291/
+curl http://localhost:291/setup
 ```

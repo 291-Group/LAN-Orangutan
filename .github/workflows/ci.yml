@@ -10,7 +10,7 @@ on:
     branches: [main, master]
 
 jobs:
-  go-lint:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -27,33 +27,14 @@ jobs:
       - name: Vet
         run: go vet ./...
 
-      - name: Test
-        run: go test -v ./...
-
-  legacy-lint:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Lint Python
+      - name: Check formatting
         run: |
-          pip install flake8
-          flake8 scanner/*.py --max-line-length=120 --ignore=E501,W503
-
-      - name: Check shell scripts
-        run: |
-          sudo apt-get install -y shellcheck
-          shellcheck install.sh uninstall.sh scripts/*.sh || true
-
-      - name: Validate PHP syntax
-        run: |
-          php -l web/*.php || true
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
 
   test:
     runs-on: ubuntu-latest
@@ -66,28 +47,30 @@ jobs:
         with:
           go-version: '1.22'
 
-      - name: Go tests
-        run: go test -v ./...
+      - name: Test
+        run: go test -v -race ./...
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Test Python imports
+      - name: Check shell scripts
         run: |
-          cd scanner
-          python3 -c "import scan; import utils"
+          sudo apt-get update && sudo apt-get install -y shellcheck
+          shellcheck install.sh uninstall.sh scripts/*.sh
 
-      - name: Test CIDR validation
-        run: |
-          cd scanner
-          python3 -c "
-          from scan import is_valid_cidr
-          assert is_valid_cidr('192.168.1.0/24') == True
-          assert is_valid_cidr('10.0.0.0/8') == True
-          assert is_valid_cidr('256.0.0.0/24') == False
-          assert is_valid_cidr('192.168.1.0/33') == False
-          assert is_valid_cidr('invalid') == False
-          print('All CIDR validation tests passed')
-          "
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # The Docker image is the primary install route, so a broken Dockerfile
+      # should fail the build rather than be discovered at release time.
+      - name: Build image
+        run: docker build -t lan-orangutan:ci .
+
+      - name: Check the binary runs in the image
+        run: docker run --rm lan-orangutan:ci version

@@ -1,10 +1,32 @@
-// Theme toggle
+// Theme
+
+// applyTheme switches the theme with transitions turned off for the switch, so
+// every element changes at the same instant. Left on, some elements fade over
+// their own transition while others (the page background) snap immediately,
+// which reads as the page changing in pieces.
+function applyTheme(theme) {
+    const root = document.documentElement;
+    // Do this synchronously with forced reflows rather than on an animation
+    // frame: requestAnimationFrame does not fire in a background tab, which
+    // would leave transitions disabled if the tab lost focus mid-switch.
+    root.classList.add('theme-switching');
+    void root.offsetWidth;                 // commit "transitions off"
+    root.setAttribute('data-theme', theme);
+    void root.offsetWidth;                 // commit the new theme instantly
+    root.classList.remove('theme-switching'); // restore transitions for hover
+    localStorage.setItem('theme', theme);
+}
+
+// The header button is a plain light/dark switch. It used to cycle
+// light -> dark -> auto, but "auto" looks identical to whichever mode the
+// system is already in, so every third click appeared to do nothing. "Auto"
+// (follow the system) still lives on the settings page for anyone who wants it.
 function toggleTheme() {
-    const html = document.documentElement;
-    const current = html.getAttribute('data-theme');
-    let next = current === 'light' ? 'dark' : current === 'dark' ? 'auto' : 'light';
-    html.setAttribute('data-theme', next);
-    localStorage.setItem('theme', next);
+    let current = document.documentElement.getAttribute('data-theme');
+    if (!current || current === 'auto') {
+        current = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    applyTheme(current === 'dark' ? 'light' : 'dark');
 }
 
 // Initialize theme
@@ -91,8 +113,22 @@ function showScanProgress(p) {
     if (detail) {
         const parts = [];
         if (p.network_count > 1) parts.push(`Network ${p.network_index} of ${p.network_count}`);
-        parts.push(`${p.device_count} device${p.device_count === 1 ? '' : 's'} found`);
+        if (p.current_network) parts.push(p.current_network);
+
         detail.textContent = parts.join(' · ');
+    }
+
+    // The running total gets its own line. Appended to the line above it wrapped
+    // mid-sentence once more than one network was involved.
+    //
+    // Only claim a count once there is one: nmap reports nothing until its
+    // sweep finishes, so a permanent "0 devices found" reads as a failed scan
+    // rather than an unfinished one.
+    const count = document.getElementById('scan-count');
+    if (count) {
+        count.textContent = p.device_count > 0
+            ? `${p.device_count} device${p.device_count === 1 ? '' : 's'} found`
+            : '';
     }
 
     const eta = document.getElementById('scan-eta');
@@ -100,6 +136,14 @@ function showScanProgress(p) {
         eta.textContent = known && p.remaining != null
             ? `~${formatSeconds(p.remaining)} left · ${Math.round(p.percent)}%`
             : `${formatSeconds(p.elapsed)} elapsed`;
+    }
+
+    // Set expectations explicitly while there is nothing to report yet.
+    const hint = document.getElementById('scan-hint');
+    if (hint) {
+        hint.textContent = p.device_count > 0
+            ? ''
+            : 'Checking every address on the network. Devices are listed once the sweep finishes.';
     }
 }
 
@@ -123,7 +167,7 @@ function reportScanOutcome(p) {
     const scanned = (p.networks || []).filter(n => n.status === 'scanned');
     if (p.status === 'cancelled') {
         showToast('Scan cancelled', 'warning');
-        if (scanned.length) setTimeout(() => location.reload(), 1000);
+        if (scanned.length) setTimeout(refreshAfterScan, 1000);
         return;
     }
     if (scanned.length === 0) {
@@ -133,30 +177,59 @@ function reportScanOutcome(p) {
     }
     const where = p.network_count > 1 ? ` across ${scanned.length} network${scanned.length === 1 ? '' : 's'}` : '';
     showToast(`Found ${p.device_count} device${p.device_count === 1 ? '' : 's'}${where}`, 'success');
-    setTimeout(() => location.reload(), 1000);
+    setTimeout(refreshAfterScan, 1000);
+}
+
+// refreshAfterScan brings in the newly discovered devices without throwing away
+// the user's scroll position, search text or filters.
+async function refreshAfterScan() {
+    if (!(await refreshInPlace())) location.reload();
+}
+
+// Follows a scan that is already running until it stops. Scans live on the
+// server, not in the page, so this is used both by the page that starts one and
+// by any page loaded while one is already in progress.
+async function followScan() {
+    while (true) {
+        await new Promise(r => setTimeout(r, SCAN_POLL_MS));
+        const progress = (await api('scan/progress')).data;
+        if (progress.status !== 'running') {
+            hideScanProgress();
+            reportScanOutcome(progress);
+            return;
+        }
+        showScanProgress(progress);
+    }
 }
 
 async function runScan(target) {
     try {
         const started = await api(`scan/start?network=${encodeURIComponent(target)}`, {}, 'POST');
         showScanProgress(started.data);
-
-        while (true) {
-            await new Promise(r => setTimeout(r, SCAN_POLL_MS));
-            const progress = (await api('scan/progress')).data;
-            if (progress.status !== 'running') {
-                hideScanProgress();
-                reportScanOutcome(progress);
-                return;
-            }
-            showScanProgress(progress);
-        }
+        await followScan();
     } catch (e) {
         hideScanProgress();
         const isRateLimit = e.message.toLowerCase().includes('rate limit');
         showToast(isRateLimit ? e.message : 'Scan failed: ' + e.message, isRateLimit ? 'warning' : 'error');
     }
 }
+
+// Picks up a scan that was started before this page was loaded, for instance
+// when the user starts a scan and then moves to the settings page. Without
+// this, the scan carries on invisibly and the page never notices it finish.
+async function resumeScanIfRunning() {
+    try {
+        const progress = (await api('scan/progress')).data;
+        if (progress && progress.status === 'running') {
+            showScanProgress(progress);
+            await followScan();
+        }
+    } catch (e) {
+        // No scan has ever run, or this page cannot ask. Nothing to show.
+    }
+}
+
+resumeScanIfRunning();
 
 async function scanNetwork(cidr) {
     await runScan(cidr);
@@ -190,7 +263,7 @@ function filterDevices() {
     });
 
     const countEl = document.getElementById('device-count');
-    if (countEl) countEl.textContent = `Showing ${visible} devices`;
+    if (countEl) countEl.textContent = `Showing ${visible} device${visible === 1 ? '' : 's'}`;
 }
 
 // Device editing
@@ -221,7 +294,9 @@ async function saveDevice() {
         if (result.success) {
             showToast('Device updated', 'success');
             closeModal();
-            location.reload();
+            // Keep the user where they were; editing a device halfway down a
+            // long list should not jump back to the top.
+            if (!(await refreshInPlace())) location.reload();
         } else {
             showToast(result.error || 'Failed to update device', 'error');
         }
@@ -417,7 +492,59 @@ function sortTable(column) {
 }
 
 // Auto-refresh
+//
+// Refreshing must never disturb what the user is doing. Reloading the page
+// would reset the scroll position, empty the search box, drop the status and
+// group filters and undo any sorting, every thirty seconds. Instead the page is
+// fetched in the background and only the parts that carry data are swapped in.
+const AUTO_REFRESH_MS = 30000;
 let autoRefreshInterval = null;
+
+// refreshInPlace replaces the device table, the summary cards and the scan
+// footer with fresh copies from the server.
+//
+// The markup comes from the server rather than being rebuilt here, so there is
+// only ever one definition of how a device row looks.
+//
+// Returns false if the refresh could not be applied, which usually means the
+// session has ended and the response was the login page.
+async function refreshInPlace() {
+    let doc;
+    try {
+        const response = await fetch(location.href, { credentials: 'same-origin' });
+        if (!response.ok) return false;
+        doc = new DOMParser().parseFromString(await response.text(), 'text/html');
+    } catch (e) {
+        return false;
+    }
+
+    const freshRows = doc.getElementById('devices-tbody');
+    if (!freshRows) return false;
+
+    document.getElementById('devices-tbody')?.replaceWith(freshRows);
+
+    for (const selector of ['.stats-bar', '.table-footer', '#device-count']) {
+        const current = document.querySelector(selector);
+        const replacement = doc.querySelector(selector);
+        if (current && replacement) current.replaceWith(replacement);
+    }
+
+    // The search box and filter dropdowns are deliberately left alone, so
+    // re-apply what they currently say to the rows that just arrived.
+    updateRelativeTimes();
+    filterDevices();
+    return true;
+}
+
+function startAutoRefresh() {
+    if (autoRefreshInterval) return;
+    autoRefreshInterval = setInterval(async () => {
+        // If the refresh could not be applied the session has probably ended.
+        // Reload so the user is taken to the login page rather than left
+        // looking at a table that has quietly stopped updating.
+        if (!(await refreshInPlace())) location.reload();
+    }, AUTO_REFRESH_MS);
+}
 
 function toggleAutoRefresh() {
     const toggle = document.getElementById('auto-refresh-toggle');
@@ -429,7 +556,7 @@ function toggleAutoRefresh() {
         toggle.classList.remove('active');
         localStorage.setItem('autoRefresh', 'false');
     } else {
-        autoRefreshInterval = setInterval(() => location.reload(), 30000);
+        startAutoRefresh();
         toggle.classList.add('active');
         localStorage.setItem('autoRefresh', 'true');
         showToast('Auto-refresh enabled (30s)', 'info');
@@ -442,7 +569,7 @@ function toggleAutoRefresh() {
         const toggle = document.getElementById('auto-refresh-toggle');
         if (toggle) {
             toggle.classList.add('active');
-            autoRefreshInterval = setInterval(() => location.reload(), 30000);
+            startAutoRefresh();
         }
     }
 })();
@@ -458,7 +585,7 @@ document.addEventListener('keydown', e => {
             document.getElementById('device-search')?.focus();
             break;
         case 'r':
-            location.reload();
+            refreshAfterScan();
             break;
         case 't':
             toggleTheme();
@@ -478,3 +605,43 @@ document.addEventListener('click', e => {
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape') closeModal();
 });
+
+// --- Relative times ---------------------------------------------------
+//
+// "3 min ago" is rendered once by the server. Left alone it freezes, so a page
+// open for an hour still claims three minutes, which is exactly the false
+// impression these timestamps exist to prevent. Anything carrying a
+// data-relative-time attribute (a unix timestamp) is rewritten periodically.
+
+function relativeTime(unixSeconds) {
+    const diff = Math.floor(Date.now() / 1000) - unixSeconds;
+
+    if (diff < 0) return 'just now';
+    if (diff < 60) return 'just now';
+
+    const minutes = Math.floor(diff / 60);
+    if (minutes < 60) return minutes === 1 ? '1 min ago' : `${minutes} min ago`;
+
+    const hours = Math.floor(diff / 3600);
+    if (hours < 24) return hours === 1 ? '1 hr ago' : `${hours} hr ago`;
+
+    const days = Math.floor(diff / 86400);
+    if (days < 7) return days === 1 ? '1 day ago' : `${days} days ago`;
+
+    // Older than a week, show the date instead, matching the server format.
+    return new Date(unixSeconds * 1000).toLocaleDateString('en-US', {
+        month: 'short', day: 'numeric', year: 'numeric'
+    });
+}
+
+function updateRelativeTimes() {
+    document.querySelectorAll('[data-relative-time]').forEach(el => {
+        const ts = parseInt(el.dataset.relativeTime, 10);
+        if (!isNaN(ts) && ts > 0) {
+            el.textContent = relativeTime(ts);
+        }
+    });
+}
+
+updateRelativeTimes();
+setInterval(updateRelativeTimes, 30000);

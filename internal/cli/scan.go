@@ -40,6 +40,7 @@ func runScan(cmd *cobra.Command, args []string) error {
 	if len(args) == 0 || args[0] == "" {
 		// Scan first detected network
 		detected, err := network.DetectNetworks()
+		detected = network.WithConfigured(detected, cfg.Scanning.Networks)
 		if err != nil {
 			return fmt.Errorf("failed to detect networks: %w", err)
 		}
@@ -59,6 +60,7 @@ func runScan(cmd *cobra.Command, args []string) error {
 	} else if args[0] == "all" {
 		// Scan all detected networks
 		detected, err := network.DetectNetworks()
+		detected = network.WithConfigured(detected, cfg.Scanning.Networks)
 		if err != nil {
 			return fmt.Errorf("failed to detect networks: %w", err)
 		}

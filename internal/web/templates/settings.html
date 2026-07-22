@@ -5,17 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Settings - LAN Orangutan</title>
     <link rel="stylesheet" href="/static/style.css">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦧</text></svg>">
+    <link rel="icon" type="image/svg+xml" href="/static/orangutan.svg">
 </head>
 <body>
     <header class="header">
         <a href="/" class="header-brand">
-            <span class="logo">🦧</span>
+            <img src="/static/orangutan.svg" alt="" class="logo" width="32" height="32">
             <h1>LAN Orangutan</h1>
         </a>
         <nav class="header-nav">
             <a href="/" class="nav-link">Dashboard</a>
             <a href="/settings" class="nav-link active">Settings</a>
+            {{if .AuthEnabled}}<a href="/logout" class="nav-link">Sign out</a>{{end}}
             <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">◐</button>
         </nav>
     </header>
@@ -103,6 +104,22 @@
             </div>
         </section>
 
+        {{if .AuthEnabled}}
+        <section class="section">
+            <h2 class="section-title">Security</h2>
+            <div class="card">
+                <div class="status-row">
+                    <span class="status-label">Password:</span>
+                    <span class="status-value online">✓ Enabled</span>
+                </div>
+                <div class="form-group" style="margin-top: 1rem;">
+                    <a href="/logout" class="btn btn-primary">Sign out</a>
+                    <p class="form-help">Ends this session on this browser.</p>
+                </div>
+            </div>
+        </section>
+        {{end}}
+
         <section class="section">
             <h2 class="section-title">Data Management</h2>
             <div class="card">
@@ -125,15 +142,37 @@
         </section>
     </main>
 
+    {{/* A scan runs on the server, not in the page, so it can still be going
+         while the user is on this page. Without somewhere to show it, the scan
+         would carry on invisibly and this page would never notice it finish. */}}
+    <div id="scan-progress" class="scan-progress" style="display:none">
+        <div class="scan-progress-head">
+            <span id="scan-title">Scanning network...</span>
+            <button type="button" class="btn btn-sm scan-cancel" id="scan-cancel" onclick="cancelScan()">Cancel</button>
+        </div>
+        <div class="scan-bar" id="scan-bar">
+            <div class="scan-bar-fill" id="scan-bar-fill"></div>
+        </div>
+        <div class="scan-progress-meta">
+            <span id="scan-detail"></span>
+            <span id="scan-eta"></span>
+        </div>
+        <div class="scan-progress-count" id="scan-count"></div>
+        <div class="scan-progress-hint" id="scan-hint"></div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
     <footer class="footer">
-        <p>🦧 LAN Orangutan by <a href="https://291group.com" target="_blank">291 Group</a></p>
+        <p>LAN Orangutan by <a href="https://291group.com" target="_blank">291 Group</a></p>
     </footer>
 
     <script src="/static/app.js"></script>
     <script>
         function setTheme(theme) {
-            document.documentElement.setAttribute('data-theme', theme);
-            localStorage.setItem('theme', theme);
+            // Shared with the header toggle so the radios also switch without the
+            // staggered transition. applyTheme is defined in app.js.
+            applyTheme(theme);
         }
 
         function exportDevices() {

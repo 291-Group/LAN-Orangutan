@@ -1,0 +1,62 @@
+# LAN Orangutan - Docker Compose
+#
+# SUPPORTED ON LINUX ONLY.
+#
+# Docker Desktop on macOS and Windows runs Linux inside a virtual machine. The
+# container never reaches your real network, and the virtual machine's gateway
+# answers probes for addresses that do not exist, so a scan looks successful
+# while reporting devices that were never there. No setting changes this.
+# On macOS and Windows, download the binary and run it directly instead.
+#
+# LAN Orangutan detects this and warns at startup and on the dashboard, but it
+# is better not to get there in the first place.
+
+services:
+  lan-orangutan:
+    image: ghcr.io/291-group/lan-orangutan:latest
+    container_name: lan-orangutan
+    restart: unless-stopped
+
+    # Scanning needs to see your real network, not Docker's private one. On a
+    # bridge network the container only ever discovers other containers
+    # (172.17.0.0/16), never the devices on your LAN. Host networking is what
+    # makes discovery work, and it means the port below is taken directly from
+    # the host.
+    #
+    # This requires Linux. Docker Desktop on macOS and Windows runs Linux inside
+    # a virtual machine, so "host" is that VM rather than your computer: the
+    # dashboard is unreachable and scanning sees only the VM's network. Run
+    # LAN Orangutan natively on those platforms instead.
+    network_mode: host
+
+    # nmap needs raw sockets to read the ARP table, which is what supplies MAC
+    # addresses and manufacturer names. NET_RAW is granted to a root container
+    # by default, but Docker's default set is easy to restrict, so it is listed
+    # explicitly. NET_ADMIN is not in the default set and helps some scan modes;
+    # NET_BIND_SERVICE covers the privileged port 291 under host networking.
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+      - NET_BIND_SERVICE
+
+    environment:
+      # Leave the password unset and you will be asked to create one the first
+      # time you open the dashboard. Set it here instead if you would rather
+      # decide up front.
+      # - ORANGUTAN_PASSWORD=change-me
+      - ORANGUTAN_PORT=291
+      - TZ=UTC
+
+    volumes:
+      # Your device list, labels and password live here. Without this, they are
+      # lost every time the container is recreated.
+      - ./data:/var/lib/lan-orangutan
+
+    healthcheck:
+      # A static asset over 127.0.0.1: public, always 200, and IPv4 (the server
+      # binds IPv4, and localhost can resolve to IPv6 ::1).
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:291/static/orangutan.svg"]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3

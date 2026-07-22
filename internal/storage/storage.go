@@ -38,12 +38,14 @@ func New(devicesFile, stateFile string) (*Storage, error) {
 		return nil, fmt.Errorf("failed to create data directory: %w", err)
 	}
 
-	// Load existing data
+	// Load existing data. Name the file in the error: a damaged file is
+	// something the user has to go and look at, and "invalid character 'h'"
+	// on its own does not say where to look.
 	if err := s.loadDevices(); err != nil && !os.IsNotExist(err) {
-		return nil, fmt.Errorf("failed to load devices: %w", err)
+		return nil, fmt.Errorf("could not read the device list at %s: %w", devicesFile, err)
 	}
 	if err := s.loadState(); err != nil && !os.IsNotExist(err) {
-		return nil, fmt.Errorf("failed to load state: %w", err)
+		return nil, fmt.Errorf("could not read the scan history at %s: %w", stateFile, err)
 	}
 
 	return s, nil
@@ -257,6 +259,26 @@ func (s *Storage) GetLastScan(network string) time.Time {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.state.LastScan[network]
+}
+
+// GetMostRecentScan returns the time of the most recent scan of any network.
+//
+// The device list is only as current as the last scan, so the dashboard shows
+// this alongside the per-device "last seen" times. Without it, a device last
+// seen during a scan hours ago still reads as though it were just checked.
+//
+// The zero time means nothing has ever been scanned.
+func (s *Storage) GetMostRecentScan() time.Time {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var latest time.Time
+	for _, t := range s.state.LastScan {
+		if t.After(latest) {
+			latest = t
+		}
+	}
+	return latest
 }
 
 // SetLastScan updates the last scan time for a network
