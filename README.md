@@ -12,7 +12,7 @@
 
 <a href="https://trendshift.io/repositories/17888?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-17888" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/17888/daily?language=Go" alt="291-Group%2FLAN-Orangutan | Trendshift" width="250" height="55"/></a>&nbsp;&nbsp;<a href="https://www.producthunt.com/products/lan-orangutan?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-lan-orangutan" target="_blank" rel="noopener noreferrer"><img alt="LAN Orangutan - Try LAN Orangutan, our all new lightweight network scanner. | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1203757&amp;theme=dark&amp;t=1784746217551"></a>
 
-**Self-hosted network discovery for homelabbers.**
+**Self-hosted network discovery for homelabbers with Tailscale support.**
 
 Scan your networks, discover devices, label and track them - all from a clean web UI or CLI.
 
