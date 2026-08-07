@@ -6,7 +6,8 @@
   <img src="https://291grp.com/assets/badges/release.svg?v=1" alt="Release" height="20">
   <img src="https://291grp.com/assets/badges/build.svg?v=1" alt="Build" height="20">
   <img src="https://291grp.com/assets/badges/license.svg?v=1" alt="License" height="20">&nbsp;
-  <a href="https://github.com/avelino/awesome-go#utilities"><img src="https://awesome.re/mentioned-badge-flat.svg" alt="Mentioned in Awesome" height="20"></a>
+  <a href="https://github.com/avelino/awesome-go#utilities"><img src="https://awesome.re/mentioned-badge-flat.svg" alt="Mentioned in Awesome" height="20"></a>&nbsp;
+  <a href="https://devhunt.org/tool/lan-orangutan"><img src="https://img.shields.io/badge/DevHunt-2nd_Product_of_the_Week-FF6154" alt="DevHunt - 2nd Product of the Week" height="20"></a>
 </p>
 
 
