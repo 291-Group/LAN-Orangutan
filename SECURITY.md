@@ -44,6 +44,8 @@ Worth understanding before you deploy it.
 
 **One shared password.** There are no user accounts, roles, or per-user permissions. Anyone with the password has full control.
 
+**The app can control Tailscale.** An authenticated user can connect or disconnect this machine's tailnet from the dashboard, which runs `tailscale up` or `tailscale down` on the host. This is behind the same password and CSRF checks as everything else, but it is worth knowing that the shared password grants control over the machine's Tailscale connection, not just the device list.
+
 **`allow_insecure` disables authentication completely.** It exists for people running behind a proxy that already handles access control. Setting it on an otherwise open network leaves your device list readable and writable by anyone.
 
 **Scanning needs elevated privileges to be useful.** Without `sudo` or Administrator, nmap cannot read the ARP table, so you get IP addresses without MAC addresses or vendor names. Running as root is a trade-off you are choosing; it is not required for the app to run.

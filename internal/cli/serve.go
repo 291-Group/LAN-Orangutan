@@ -106,8 +106,9 @@ func runServe(cmd *cobra.Command, args []string) error {
 	// contains colons of its own and has to be bracketed.
 	addr := net.JoinHostPort(bind, strconv.Itoa(port))
 	server := &http.Server{
-		Addr:         addr,
-		Handler:      mux,
+		Addr: addr,
+		// guardHost wraps the mux to reject DNS rebinding when bound to loopback.
+		Handler:      guardHost(cfg.IsLoopbackBind(), mux),
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
@@ -211,6 +212,49 @@ func runServe(cmd *cobra.Command, args []string) error {
 // because something else already holds it.
 func isAddrInUse(err error) bool {
 	return errors.Is(err, syscall.EADDRINUSE)
+}
+
+// guardHost rejects requests whose Host header is not a loopback identifier,
+// but only when the server is bound to loopback.
+//
+// This closes a DNS rebinding vector. A malicious website can point its own
+// hostname at 127.0.0.1 and, from the victim's browser, reach a dashboard bound
+// to loopback that requires no password because it believed it was private.
+// Such a request arrives with the attacker's hostname in the Host header, never
+// a loopback address, so checking the Host turns it away.
+//
+// It applies to loopback binds only. On a network bind the Host is legitimately
+// the server's LAN address or hostname, which cannot be enumerated here; that
+// mode is protected instead by the password and the SameSite=Lax cookie, which
+// a rebound cross-site request does not carry.
+func guardHost(loopbackBind bool, next http.Handler) http.Handler {
+	if !loopbackBind {
+		return next
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !hostIsLoopback(r.Host) {
+			http.Error(w, "forbidden: unexpected Host header", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// hostIsLoopback reports whether an HTTP Host header names the local machine.
+// The Host may carry a port and an IPv6 literal may be bracketed, both of which
+// are stripped before the address is examined.
+func hostIsLoopback(host string) bool {
+	hostname := host
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		hostname = h
+	}
+	hostname = strings.TrimPrefix(strings.TrimSuffix(hostname, "]"), "[")
+
+	if strings.EqualFold(hostname, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(hostname)
+	return ip != nil && ip.IsLoopback()
 }
 
 // listenNetwork picks the address family to listen on.

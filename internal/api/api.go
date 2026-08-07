@@ -77,6 +77,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleScanCancel(w, r)
 	case path == "tailscale":
 		h.handleTailscale(w, r)
+	case path == "tailscale/connect":
+		h.handleTailscaleConnect(w, r)
+	case path == "tailscale/disconnect":
+		h.handleTailscaleDisconnect(w, r)
 	case path == "stats":
 		h.handleStats(w, r)
 	case path == "status":
@@ -483,6 +487,39 @@ func (h *Handler) handleTailscale(w http.ResponseWriter, r *http.Request) {
 
 	status := network.GetTailscaleStatus()
 	h.success(w, status)
+}
+
+// handleTailscaleConnect handles POST /api/tailscale/connect.
+//
+// It is behind the same authentication and CSRF checks as every other mutating
+// endpoint. A successful call may still report that the machine needs to sign
+// in, in which case the response carries a login URL.
+func (h *Handler) handleTailscaleConnect(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		h.error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	result, err := network.ConnectTailscale()
+	if err != nil {
+		h.error(w, http.StatusServiceUnavailable, err.Error())
+		return
+	}
+	h.success(w, result)
+}
+
+// handleTailscaleDisconnect handles POST /api/tailscale/disconnect.
+func (h *Handler) handleTailscaleDisconnect(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		h.error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	if err := network.DisconnectTailscale(); err != nil {
+		h.error(w, http.StatusServiceUnavailable, err.Error())
+		return
+	}
+	h.success(w, map[string]string{"message": "disconnected"})
 }
 
 // handleStats handles GET /api/stats

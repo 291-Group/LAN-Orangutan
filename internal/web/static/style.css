@@ -1311,3 +1311,22 @@ img.login-logo {
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+
+/* Tailscale connect/disconnect */
+.tailscale-actions {
+    margin-top: 1rem;
+    display: flex;
+    gap: 0.5rem;
+}
+
+/* Feedback line under the Tailscale buttons: the sign-in link, or an error. */
+.tailscale-message {
+    margin-top: 0.75rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+.tailscale-message:empty {
+    display: none;
+}

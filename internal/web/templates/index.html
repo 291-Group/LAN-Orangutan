@@ -115,6 +115,17 @@
                             <span class="label">Not connected</span>
                         </div>
                         {{end}}
+
+                        {{if .Tailscale.Installed}}
+                        <div class="tailscale-actions">
+                            {{if .Tailscale.Connected}}
+                            <button class="btn btn-sm" onclick="disconnectTailscale()">Disconnect</button>
+                            {{else}}
+                            <button class="btn btn-sm btn-primary" onclick="connectTailscale()">Connect</button>
+                            {{end}}
+                        </div>
+                        <div id="tailscale-message" class="tailscale-message"></div>
+                        {{end}}
                     </div>
                 </div>
                 {{end}}

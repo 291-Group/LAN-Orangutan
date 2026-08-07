@@ -645,3 +645,59 @@ function updateRelativeTimes() {
 
 updateRelativeTimes();
 setInterval(updateRelativeTimes, 30000);
+
+// --- Tailscale control ------------------------------------------------
+
+// connectTailscale brings the machine up on its tailnet.
+//
+// If the machine still needs to sign in, the server returns a login URL
+// instead of connecting, which is shown as a link rather than trying to
+// automate the browser sign-in.
+async function connectTailscale() {
+    const msg = document.getElementById('tailscale-message');
+    if (msg) msg.textContent = 'Connecting...';
+    try {
+        const result = await api('tailscale/connect', {}, 'POST');
+        const data = result.data || {};
+
+        if (data.login_url) {
+            if (msg) {
+                // Build the link with the DOM rather than innerHTML so the URL
+                // cannot inject markup.
+                msg.textContent = 'Tailscale needs you to sign in: ';
+                const a = document.createElement('a');
+                a.href = data.login_url;
+                a.target = '_blank';
+                a.rel = 'noopener';
+                a.textContent = 'open sign in';
+                msg.appendChild(a);
+                msg.appendChild(document.createTextNode('. Finish it, then refresh this page.'));
+            }
+            return;
+        }
+
+        showToast('Tailscale connected', 'success');
+        setTimeout(() => location.reload(), 1000);
+    } catch (e) {
+        if (msg) msg.textContent = '';
+        showToast('Could not connect: ' + e.message, 'error');
+    }
+}
+
+// disconnectTailscale takes the machine off its tailnet, after warning that
+// this can cut the connection the user is reaching the dashboard through.
+async function disconnectTailscale() {
+    const warning =
+        'Disconnect Tailscale?\n\n' +
+        'If you are reaching this dashboard over Tailscale, disconnecting will ' +
+        'cut your connection and you will need local access to reconnect.';
+    if (!confirm(warning)) return;
+
+    try {
+        await api('tailscale/disconnect', {}, 'POST');
+        showToast('Tailscale disconnected', 'warning');
+        setTimeout(() => location.reload(), 1000);
+    } catch (e) {
+        showToast('Could not disconnect: ' + e.message, 'error');
+    }
+}

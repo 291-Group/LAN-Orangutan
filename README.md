@@ -29,7 +29,7 @@ By [291 Group](https://291group.com)
 - Password protected, with a password you set the first time you open it<br>
 - Label, group, and add notes to devices<br>
 - Multi-network support<br>
-- Tailscale integration - tailnet peers discovered automatically<br>
+- Tailscale integration - connect, disconnect, and discover tailnet peers from inside the app<br>
 - Live scan progress you can cancel<br>
 - Modern web dashboard with light/dark mode<br>
 - Full CLI with JSON output<br>
@@ -44,12 +44,22 @@ Grab the latest release of LAN Orangutan for your platform from [GitHub Releases
 
 ### Docker
 
+Pull the image from Docker Hub:
+
+```bash
+docker pull 291group/lan-orangutan
+```
+
+Or use the compose file for the full setup with host networking and a persistent data folder:
+
 ```bash
 curl -O https://raw.githubusercontent.com/291-Group/LAN-Orangutan/main/docker-compose.yml
 docker compose up -d
 ```
 
 Then open `http://<that-machine>:291` and create a password. Your data is kept in a `data/` folder next to the compose file.
+
+The image is published to both [Docker Hub](https://hub.docker.com/r/291group/lan-orangutan) (`291group/lan-orangutan`) and [GitHub Container Registry](https://github.com/291-Group/LAN-Orangutan/pkgs/container/lan-orangutan) (`ghcr.io/291-group/lan-orangutan`). The compose file uses GHCR; pull from whichever you prefer.
 
 **Docker requires Linux.** The container uses host networking, because on Docker's own private network it would only ever see other containers (`172.17.0.0/16`) rather than the devices on your LAN. Docker Desktop on macOS and Windows runs Linux inside a virtual machine, so host networking attaches to that VM instead of your computer: the dashboard is unreachable and a scan finds nothing but the VM. On macOS and Windows, download the binary and run it directly, as described below.
 
@@ -168,6 +178,8 @@ Tailscale devices are picked up automatically: if Tailscale is connected, its pe
 Tailscale peers cannot be found by scanning, because Tailscale gives every node its own single-address network, leaving no range to sweep. Instead the peers are read from Tailscale itself, which is faster and needs no elevated privileges.
 
 Only peers that are currently online are listed, and they are shown with their Tailscale hostname and operating system. Peers have no MAC address, so no hardware vendor is looked up for them.
+
+You can also control Tailscale from the app. The dashboard and settings pages show whether Tailscale is connected, with a button to connect or disconnect. If the machine still needs to sign in, the app shows you the sign-in link to open. Disconnecting warns you first, since you might be reaching the dashboard over Tailscale itself. This needs the Tailscale CLI on the machine running LAN Orangutan.
 
 ## Security
 

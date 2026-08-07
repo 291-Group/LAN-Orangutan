@@ -105,6 +105,21 @@ Or change the port in your config file.
    /Applications/Tailscale.app/Contents/MacOS/Tailscale status
    ```
 
+## Connect or disconnect button does nothing
+
+The connect and disconnect buttons run the Tailscale CLI on the machine hosting
+LAN Orangutan, so they need that CLI reachable, the same requirement as detection
+above.
+
+1. **Confirm the CLI works from that machine:** `tailscale status`. If it is not
+   found, the buttons cannot work either.
+2. **Connecting shows a sign-in link instead of connecting.** That is expected
+   when the machine is not signed in yet. Open the link, finish signing in, then
+   refresh the page.
+3. **The disconnect warning is deliberate.** If you reach the dashboard over
+   Tailscale, disconnecting cuts your own connection and you will need local
+   access to bring it back.
+
 ## Rate limiting errors
 
 If you see "Rate limited" errors when scanning, wait 30 seconds between scans. This prevents overloading your network.

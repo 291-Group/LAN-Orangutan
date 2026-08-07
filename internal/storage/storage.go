@@ -149,23 +149,37 @@ func atomicWrite(path string, data []byte) error {
 	return nil
 }
 
-// GetDevices returns all devices
+// GetDevices returns all devices.
+//
+// Each device is copied, not shared. A later scan merges results by mutating
+// the stored structs in place, so handing out the live pointers would let a
+// caller read a field while it is being written. The copies are snapshots the
+// caller can read freely.
 func (s *Storage) GetDevices() map[string]*types.Device {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	result := make(map[string]*types.Device, len(s.devices))
 	for k, v := range s.devices {
-		result[k] = v
+		cp := *v
+		result[k] = &cp
 	}
 	return result
 }
 
-// GetDevice returns a single device by IP
+// GetDevice returns a single device by IP, or nil if there is none.
+//
+// The returned device is a copy, for the same reason as GetDevices: the stored
+// struct is mutated in place by later scans.
 func (s *Storage) GetDevice(ip string) *types.Device {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.devices[ip]
+	d, ok := s.devices[ip]
+	if !ok {
+		return nil
+	}
+	cp := *d
+	return &cp
 }
 
 // UpdateDevice updates or creates a device
