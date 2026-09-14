@@ -18,7 +18,7 @@ func TestDeviceMovingIPIsTrackedByMAC(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.UpdateDeviceFields("192.168.1.10", strptr("File Server"), strptr("rack 1"), strptr("Infra")); err != nil {
+	if err := s.UpdateDeviceFields("192.168.1.10", strptr("File Server"), strptr("rack 1"), strptr("Infra"), nil); err != nil {
 		t.Fatal(err)
 	}
 

@@ -35,6 +35,17 @@ type Handler struct {
 	staticFS  http.Handler
 }
 
+// networkFilter builds the effective scan-target filter, preferring the UI
+// overrides over the configured defaults, so the dashboard shows the same
+// networks a scan will actually use.
+func (h *Handler) networkFilter() network.Filter {
+	return network.Filter{
+		Configured:     h.store.NetworksOrDefault(h.cfg.Scanning.Networks),
+		Excluded:       h.store.ExcludeNetworksOrDefault(h.cfg.Scanning.ExcludeNetworks),
+		OnlyConfigured: h.store.OnlyConfiguredOrDefault(h.cfg.Scanning.OnlyConfiguredNetworks),
+	}
+}
+
 // PageData holds data passed to templates
 type PageData struct {
 	Title        string
@@ -75,6 +86,11 @@ type PageData struct {
 	// worth glancing at rather than empty space.
 	Flagged int
 	Moved   int
+	// Unexpected is how many devices are online but not marked expected, and
+	// Missing how many expected devices are currently offline. Both are zero until
+	// the user baselines their network by marking devices as expected.
+	Unexpected int
+	Missing    int
 
 	// ContinuousScan reports whether the server re-scans on its own. When true
 	// the dashboard shows a "live" cue so the last-scan time does not read as
@@ -317,7 +333,7 @@ func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 	// Convert to view models
 	var deviceViews []*DeviceView
 	groupSet := make(map[string]bool)
-	var flagged, moved int
+	var flagged, moved, unexpected, missing int
 
 	for _, d := range devices {
 		if len(d.Risks) > 0 {
@@ -325,6 +341,12 @@ func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 		}
 		if len(d.AddressHistory) > 0 {
 			moved++
+		}
+		if d.IsOnline() && !d.Expected {
+			unexpected++
+		}
+		if d.Expected && !d.IsOnline() {
+			missing++
 		}
 		// Devices recorded by an older version have no vendor stored, so look it
 		// up now rather than showing "Unknown" until a rescan.
@@ -376,7 +398,7 @@ func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 
 	// Get networks
 	networks, _ := network.DetectNetworks()
-	networks = network.WithConfigured(networks, network.Filter{Configured: h.cfg.Scanning.Networks, Excluded: h.cfg.Scanning.ExcludeNetworks, OnlyConfigured: h.cfg.Scanning.OnlyConfiguredNetworks})
+	networks = network.WithConfigured(networks, h.networkFilter())
 
 	// Get Tailscale status
 	tailscale := network.GetTailscaleStatus()
@@ -395,6 +417,8 @@ func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 		AuthEnabled:    h.auth.Enabled(),
 		Flagged:        flagged,
 		Moved:          moved,
+		Unexpected:     unexpected,
+		Missing:        missing,
 		Version:        h.version,
 		ContinuousScan: h.store.ContinuousScanEnabled(h.cfg.Scanning.ContinuousScan),
 	}

@@ -18,7 +18,7 @@ all: build
 
 # Build for current platform
 build:
-	go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY) ./cmd/orangutan
+	go build -trimpath $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY) ./cmd/orangutan
 
 # Build for all platforms
 build-all: build-linux build-darwin build-windows
@@ -27,28 +27,28 @@ build-all: build-linux build-darwin build-windows
 build-linux: build-linux-amd64 build-linux-arm64 build-linux-arm
 
 build-linux-amd64:
-	GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY)-linux-amd64 ./cmd/orangutan
+	GOOS=linux GOARCH=amd64 go build -trimpath $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY)-linux-amd64 ./cmd/orangutan
 
 build-linux-arm64:
-	GOOS=linux GOARCH=arm64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY)-linux-arm64 ./cmd/orangutan
+	GOOS=linux GOARCH=arm64 go build -trimpath $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY)-linux-arm64 ./cmd/orangutan
 
 build-linux-arm:
-	GOOS=linux GOARCH=arm GOARM=7 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY)-linux-arm ./cmd/orangutan
+	GOOS=linux GOARCH=arm GOARM=7 go build -trimpath $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY)-linux-arm ./cmd/orangutan
 
 # macOS builds
 build-darwin: build-darwin-amd64 build-darwin-arm64
 
 build-darwin-amd64:
-	GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY)-darwin-amd64 ./cmd/orangutan
+	GOOS=darwin GOARCH=amd64 go build -trimpath $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY)-darwin-amd64 ./cmd/orangutan
 
 build-darwin-arm64:
-	GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY)-darwin-arm64 ./cmd/orangutan
+	GOOS=darwin GOARCH=arm64 go build -trimpath $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY)-darwin-arm64 ./cmd/orangutan
 
 # Windows builds
 build-windows: build-windows-amd64
 
 build-windows-amd64:
-	GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY)-windows-amd64.exe ./cmd/orangutan
+	GOOS=windows GOARCH=amd64 go build -trimpath $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY)-windows-amd64.exe ./cmd/orangutan
 
 # Refresh the embedded MAC vendor database from the IEEE registry
 oui:

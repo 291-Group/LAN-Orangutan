@@ -12,7 +12,6 @@ orangutan
 # Local data and editor state
 data/
 *.log
-.claude/
 .vscode/
 .idea/
 

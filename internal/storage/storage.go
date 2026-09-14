@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 	"time"
 
@@ -20,6 +21,13 @@ type Storage struct {
 	mu          sync.RWMutex
 	devices     map[string]*types.Device
 	state       *types.ScanState
+
+	// retentionDays and maxDevices bound the stored device list, set from config
+	// via SetLimits. Zero means the corresponding limit is off. See
+	// enforceLimitsLocked for the exact rules (curated and online devices are
+	// never dropped).
+	retentionDays int
+	maxDevices    int
 }
 
 // New creates a new Storage instance
@@ -217,7 +225,7 @@ func (s *Storage) UpdateDevice(device *types.Device) error {
 }
 
 // UpdateDeviceFields updates specific fields of a device
-func (s *Storage) UpdateDeviceFields(ip string, label, notes, group *string) error {
+func (s *Storage) UpdateDeviceFields(ip string, label, notes, group *string, expected *bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -235,7 +243,22 @@ func (s *Storage) UpdateDeviceFields(ip string, label, notes, group *string) err
 	if group != nil {
 		device.Group = *group
 	}
+	if expected != nil {
+		device.Expected = *expected
+	}
 
+	return s.saveDevices()
+}
+
+// MarkAllExpected sets (or clears) the Expected flag on every stored device, so a
+// user can baseline their whole network in one action and then be flagged only on
+// what changes afterwards.
+func (s *Storage) MarkAllExpected(expected bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, d := range s.devices {
+		d.Expected = expected
+	}
 	return s.saveDevices()
 }
 
@@ -289,6 +312,7 @@ func (s *Storage) MergeDevices(discovered []types.Device) error {
 		}
 	}
 
+	s.enforceLimitsLocked(now)
 	return s.saveDevices()
 }
 
@@ -329,6 +353,7 @@ func (s *Storage) MergeSupplemental(discovered []types.Device) error {
 		}
 	}
 
+	s.enforceLimitsLocked(now)
 	return s.saveDevices()
 }
 
@@ -366,6 +391,12 @@ func (s *Storage) MergeIPv6Neighbors(discovered []types.Device) error {
 			if existing.Type == "" && d.Type != "" {
 				existing.Type = d.Type
 			}
+			// Record the routable IPv6 address on the IPv4-primary device so a
+			// dual-stack device can show both. Skipped when the device we matched
+			// is itself keyed by an IPv6 address, since its IP already shows it.
+			if isIPv4(existing.IP) {
+				existing.IPv6 = d.IP
+			}
 			existing.LastSeen = now
 			changed = true
 			continue
@@ -382,6 +413,7 @@ func (s *Storage) MergeIPv6Neighbors(discovered []types.Device) error {
 	}
 
 	if changed {
+		s.enforceLimitsLocked(now)
 		return s.saveDevices()
 	}
 	return nil
@@ -396,6 +428,7 @@ func (s *Storage) addNewDeviceLocked(d *types.Device, now time.Time) {
 			d.Label = old.Label
 			d.Notes = old.Notes
 			d.Group = old.Group
+			d.Expected = old.Expected
 			d.FirstSeen = old.FirstSeen
 			if d.Type == "" {
 				d.Type = old.Type
@@ -478,7 +511,7 @@ func (s *Storage) pruneEphemeralIPv6Locked() bool {
 		if parsed == nil || parsed.To4() != nil {
 			continue // not IPv6
 		}
-		if dev.Label != "" || dev.Notes != "" || dev.Group != "" {
+		if isCurated(dev) {
 			continue // curated by the user: never auto-delete
 		}
 		if parsed.IsLinkLocalUnicast() || (dev.MAC != "" && isRandomizedMAC(dev.MAC)) {
@@ -486,6 +519,83 @@ func (s *Storage) pruneEphemeralIPv6Locked() bool {
 			removed = true
 		}
 	}
+	return removed
+}
+
+// isCurated reports whether the user has personalised a device with a label,
+// notes, or a group. Curated devices are never removed by any automatic cleanup:
+// the user told us this one matters, so retention, the device cap, and the IPv6
+// phantom prune all leave it alone.
+func isCurated(d *types.Device) bool {
+	return d.Label != "" || d.Notes != "" || d.Group != "" || d.Expected
+}
+
+// SetLimits records the retention window (in days) and the maximum device count,
+// normally from config, and applies them once immediately so an existing install
+// heals on startup rather than only on the next scan. A zero value turns that
+// limit off. Call it once after New, before the store is shared with request
+// handlers.
+func (s *Storage) SetLimits(retentionDays, maxDevices int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.retentionDays = retentionDays
+	s.maxDevices = maxDevices
+	if s.enforceLimitsLocked(time.Now()) {
+		return s.saveDevices()
+	}
+	return nil
+}
+
+// enforceLimitsLocked applies the storage limits and reports whether it removed
+// anything. First retention: drop devices last seen longer ago than
+// retentionDays. Then the cap: if the list still exceeds maxDevices, evict the
+// devices with the oldest LastSeen until it fits.
+//
+// Two kinds of device are never removed by either step: ones the user has
+// curated (isCurated), and ones that are currently online. So the cleanup only
+// ever reclaims stale, untouched entries, and the count can legitimately sit
+// above maxDevices when that many devices are pinned by those rules -- keeping
+// real, in-use data matters more than honouring a number. A zero limit is off.
+// Callers hold s.mu.
+func (s *Storage) enforceLimitsLocked(now time.Time) bool {
+	removed := false
+
+	if s.retentionDays > 0 {
+		cutoff := now.Add(-time.Duration(s.retentionDays) * 24 * time.Hour)
+		for ip, dev := range s.devices {
+			if isCurated(dev) || now.Sub(dev.LastSeen) < time.Hour {
+				continue
+			}
+			if dev.LastSeen.Before(cutoff) {
+				delete(s.devices, ip)
+				removed = true
+			}
+		}
+	}
+
+	if s.maxDevices > 0 && len(s.devices) > s.maxDevices {
+		// Collect the devices eligible for eviction (not curated, not online),
+		// oldest LastSeen first, and drop from the front until we are within the
+		// cap or run out of eligible devices.
+		evictable := make([]string, 0, len(s.devices))
+		for ip, dev := range s.devices {
+			if isCurated(dev) || now.Sub(dev.LastSeen) < time.Hour {
+				continue
+			}
+			evictable = append(evictable, ip)
+		}
+		sort.Slice(evictable, func(i, j int) bool {
+			return s.devices[evictable[i]].LastSeen.Before(s.devices[evictable[j]].LastSeen)
+		})
+		for _, ip := range evictable {
+			if len(s.devices) <= s.maxDevices {
+				break
+			}
+			delete(s.devices, ip)
+			removed = true
+		}
+	}
+
 	return removed
 }
 
@@ -575,6 +685,162 @@ func (s *Storage) SetContinuousScan(enabled bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.state.ContinuousScan = &enabled
+	return s.saveState()
+}
+
+// RetentionDaysOrDefault resolves the retention window: the UI override if one
+// has been saved, otherwise the configured default.
+func (s *Storage) RetentionDaysOrDefault(configDefault int) int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.state.RetentionDays != nil {
+		return *s.state.RetentionDays
+	}
+	return configDefault
+}
+
+// MaxDevicesOrDefault resolves the device cap: the UI override if one has been
+// saved, otherwise the configured default.
+func (s *Storage) MaxDevicesOrDefault(configDefault int) int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.state.MaxDevices != nil {
+		return *s.state.MaxDevices
+	}
+	return configDefault
+}
+
+// GetLimitOverrides returns the saved UI overrides for the storage limits, or nil
+// for a limit that is following the config default. The returned pointers are
+// copies, so the caller can read them without holding the lock.
+func (s *Storage) GetLimitOverrides() (retentionDays, maxDevices *int) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.state.RetentionDays != nil {
+		v := *s.state.RetentionDays
+		retentionDays = &v
+	}
+	if s.state.MaxDevices != nil {
+		v := *s.state.MaxDevices
+		maxDevices = &v
+	}
+	return
+}
+
+// SetLimitOverrides saves the UI overrides for the storage limits so they survive
+// a restart. A nil pointer clears that override, falling back to the config
+// default. It only persists the choice; the caller applies it with SetLimits.
+func (s *Storage) SetLimitOverrides(retentionDays, maxDevices *int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.state.RetentionDays = retentionDays
+	s.state.MaxDevices = maxDevices
+	return s.saveState()
+}
+
+// ServiceDetectionEnabled reports whether the opt-in port probe should run,
+// honouring a UI override and falling back to the configured default.
+func (s *Storage) ServiceDetectionEnabled(configDefault bool) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.state.EnableServiceDetection != nil {
+		return *s.state.EnableServiceDetection
+	}
+	return configDefault
+}
+
+// SetServiceDetection saves the user's runtime override for the port probe so it
+// survives a restart.
+func (s *Storage) SetServiceDetection(enabled bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.state.EnableServiceDetection = &enabled
+	return s.saveState()
+}
+
+// ScanIntervalOrDefault resolves how often the background scanner runs, in
+// seconds: the UI override if one has been saved, otherwise the config default.
+func (s *Storage) ScanIntervalOrDefault(configDefault int) int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.state.ScanInterval != nil {
+		return *s.state.ScanInterval
+	}
+	return configDefault
+}
+
+// SetScanInterval saves the user's runtime override for the background scan
+// interval (in seconds) so it survives a restart.
+func (s *Storage) SetScanInterval(seconds int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.state.ScanInterval = &seconds
+	return s.saveState()
+}
+
+// NetworksOrDefault resolves the include list (extra CIDRs to scan): the UI
+// override if one has been saved, otherwise the configured default. The returned
+// slice is a copy.
+func (s *Storage) NetworksOrDefault(configDefault []string) []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.state.Networks != nil {
+		return append([]string(nil), *s.state.Networks...)
+	}
+	return configDefault
+}
+
+// ExcludeNetworksOrDefault resolves the exclude list (CIDRs to hide) the same
+// way as NetworksOrDefault.
+func (s *Storage) ExcludeNetworksOrDefault(configDefault []string) []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.state.ExcludeNetworks != nil {
+		return append([]string(nil), *s.state.ExcludeNetworks...)
+	}
+	return configDefault
+}
+
+// OnlyConfiguredOrDefault resolves whether to scan only the configured networks:
+// the UI override if set, otherwise the configured default.
+func (s *Storage) OnlyConfiguredOrDefault(configDefault bool) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.state.OnlyConfiguredNetworks != nil {
+		return *s.state.OnlyConfiguredNetworks
+	}
+	return configDefault
+}
+
+// GetNetworkOverrides returns the saved UI overrides for the scan-target lists,
+// or nil for a setting that is following the config default. Slices are copied.
+func (s *Storage) GetNetworkOverrides() (networks, exclude *[]string, onlyConfigured *bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.state.Networks != nil {
+		v := append([]string(nil), *s.state.Networks...)
+		networks = &v
+	}
+	if s.state.ExcludeNetworks != nil {
+		v := append([]string(nil), *s.state.ExcludeNetworks...)
+		exclude = &v
+	}
+	if s.state.OnlyConfiguredNetworks != nil {
+		v := *s.state.OnlyConfiguredNetworks
+		onlyConfigured = &v
+	}
+	return
+}
+
+// SetNetworkOverrides saves the UI overrides for the scan-target lists so they
+// survive a restart. A nil pointer clears that override, falling back to the
+// config default.
+func (s *Storage) SetNetworkOverrides(networks, exclude *[]string, onlyConfigured *bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.state.Networks = networks
+	s.state.ExcludeNetworks = exclude
+	s.state.OnlyConfiguredNetworks = onlyConfigured
 	return s.saveState()
 }
 

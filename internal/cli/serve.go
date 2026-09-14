@@ -74,6 +74,15 @@ func runServe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize storage: %w", err)
 	}
+	// Apply the retention window and device cap, preferring a UI override over
+	// the config default. This heals an existing install on startup and then
+	// bounds the list on every scan.
+	if err := store.SetLimits(
+		store.RetentionDaysOrDefault(cfg.Storage.RetentionDays),
+		store.MaxDevicesOrDefault(cfg.Storage.MaxDevices),
+	); err != nil {
+		return fmt.Errorf("failed to apply storage limits: %w", err)
+	}
 
 	// A password from the config file or environment wins. Otherwise fall back
 	// to one created earlier through the setup page.
@@ -105,7 +114,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	scanCtx, scanCancel := context.WithCancel(context.Background())
 	defer scanCancel()
 	apiHandler.SetScanContext(scanCtx)
-	apiHandler.StartBackgroundScanner(scanCtx, time.Duration(cfg.Scanning.ScanInterval)*time.Second)
+	apiHandler.StartBackgroundScanner(scanCtx)
 
 	// Protected routes.
 	mux.Handle("/api/", authn.Middleware(apiHandler))
@@ -213,7 +222,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	// virtual gateway answers probes for addresses that do not exist. Say so
 	// before the user runs a scan and trusts the results.
 	if detected, err := network.DetectNetworks(); err == nil {
-		detected = network.WithConfigured(detected, network.Filter{Configured: cfg.Scanning.Networks, Excluded: cfg.Scanning.ExcludeNetworks, OnlyConfigured: cfg.Scanning.OnlyConfiguredNetworks})
+		detected = network.WithConfigured(detected, networkFilter(store, cfg))
 		if warning := network.IsolationWarning(detected); warning != "" {
 			fmt.Println()
 			fmt.Println("  ┌─────────────────────────────────────────────────────────────┐")

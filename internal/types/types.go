@@ -5,7 +5,13 @@ import "time"
 
 // Device represents a discovered network device
 type Device struct {
-	IP       string `json:"ip"`
+	IP string `json:"ip"`
+	// IPv6 is a routable IPv6 address the same device was also seen at, recorded
+	// when IPv6 neighbour discovery matches this device by MAC alongside its IPv4
+	// address. It is shown next to the IPv4 address so a dual-stack device
+	// displays both. Empty when no routable IPv6 sighting has been attributed to
+	// the device (the common case on an IPv4-only home network).
+	IPv6     string `json:"ipv6,omitempty"`
 	MAC      string `json:"mac"`
 	Hostname string `json:"hostname"`
 	Vendor   string `json:"vendor"`
@@ -20,10 +26,16 @@ type Device struct {
 	// Risks lists security concerns found during an opt-in service probe, such as
 	// an exposed unencrypted service. Empty when nothing notable was found or the
 	// probe is off.
-	Risks        []string  `json:"risks,omitempty"`
-	Label        string    `json:"label"`
-	Notes        string    `json:"notes"`
-	Group        string    `json:"group"`
+	Risks []string `json:"risks,omitempty"`
+	Label string   `json:"label"`
+	Notes string   `json:"notes"`
+	Group string   `json:"group"`
+	// Expected marks a device the user has confirmed belongs on the network. It
+	// is set from the UI (individually or by baselining the whole list). An
+	// online device that is not expected is "unexpected"; an expected device that
+	// has gone offline is "missing". Like the other curated fields, it is
+	// preserved across scans and protects the device from automatic cleanup.
+	Expected     bool      `json:"expected,omitempty"`
 	FirstSeen    time.Time `json:"first_seen"`
 	LastSeen     time.Time `json:"last_seen"`
 	ResponseTime *float64  `json:"response_time,omitempty"`
@@ -50,6 +62,35 @@ func (d *Device) IsRecent() bool {
 	return time.Since(d.LastSeen) < 5*time.Minute
 }
 
+// Snapshot is a saved copy of the device list at a point in time, so the network
+// can be compared against it later to see what has changed.
+type Snapshot struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"created_at"`
+	Devices   []Device  `json:"devices"`
+}
+
+// SnapshotMeta is a snapshot without its device list, for listings.
+type SnapshotMeta struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	CreatedAt   time.Time `json:"created_at"`
+	DeviceCount int       `json:"device_count"`
+}
+
+// Backup is a portable copy of everything a user would not want to lose: the
+// device list (with labels, notes and groups), the runtime settings overrides
+// (the scan state), and the saved snapshots. It deliberately does NOT include the
+// password, which lives in a separate file and is not the user's data to carry
+// between machines.
+type Backup struct {
+	CreatedAt time.Time          `json:"created_at"`
+	Devices   map[string]*Device `json:"devices"`
+	State     *ScanState         `json:"state,omitempty"`
+	Snapshots []Snapshot         `json:"snapshots"`
+}
+
 // Network represents a detected network interface
 type Network struct {
 	CIDR         string `json:"cidr"`
@@ -70,6 +111,29 @@ type ScanState struct {
 	// UI. nil means "use the configured default"; a set value wins over config
 	// so the user's choice survives a restart.
 	ContinuousScan *bool `json:"continuous_scan,omitempty"`
+	// RetentionDays and MaxDevices are runtime overrides for the storage limits,
+	// set from the Settings page. As with ContinuousScan, nil means "use the
+	// configured default" and a set value survives a restart, so a user who never
+	// edits config.ini can still change these. 0 means the limit is off (keep
+	// devices forever / no cap).
+	RetentionDays *int `json:"retention_days,omitempty"`
+	MaxDevices    *int `json:"max_devices,omitempty"`
+	// EnableServiceDetection is a runtime override for the opt-in port probe, set
+	// from the Settings page. nil means "use the configured default".
+	EnableServiceDetection *bool `json:"enable_service_detection,omitempty"`
+	// ScanInterval is a runtime override for how often the background scanner
+	// re-scans, in seconds, set from the Settings page. nil means "use the
+	// configured default". The scanner reads it fresh before each wait, so a
+	// change takes effect on the next cycle.
+	ScanInterval *int `json:"scan_interval,omitempty"`
+	// Networks, ExcludeNetworks and OnlyConfiguredNetworks are runtime overrides
+	// for the scan-target lists, set from the Settings page. A nil pointer means
+	// "use the configured default"; a non-nil slice (even empty) is an explicit
+	// override. They are read fresh when scan targets are resolved, so a change
+	// takes effect on the next scan.
+	Networks               *[]string `json:"networks,omitempty"`
+	ExcludeNetworks        *[]string `json:"exclude_networks,omitempty"`
+	OnlyConfiguredNetworks *bool     `json:"only_configured_networks,omitempty"`
 }
 
 // ScanResult represents the outcome of a network scan

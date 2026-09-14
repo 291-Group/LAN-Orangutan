@@ -12,18 +12,18 @@ func TestLoginURLPattern(t *testing.T) {
 	https://login.tailscale.com/a/1234567890abcdef
 
 Success.`
-	got := loginURLPattern.FindString(sample)
+	m := loginURLPattern.FindStringSubmatch(sample)
 	want := "https://login.tailscale.com/a/1234567890abcdef"
-	if got != want {
-		t.Errorf("extracted %q, want %q", got, want)
+	if m == nil || m[1] != want {
+		t.Errorf("extracted %v, want %q", m, want)
 	}
 }
 
 func TestLoginURLPatternAbsentWhenConnected(t *testing.T) {
 	// A normal reconnect prints no login URL.
 	for _, s := range []string{"", "Success.", "some other output"} {
-		if url := loginURLPattern.FindString(s); url != "" {
-			t.Errorf("found a login URL in %q where there is none: %q", s, url)
+		if m := loginURLPattern.FindStringSubmatch(s); m != nil {
+			t.Errorf("found a login URL in %q where there is none: %q", s, m[1])
 		}
 	}
 }
@@ -111,8 +111,17 @@ func TestExtractLoginURL(t *testing.T) {
 		t.Errorf("a bare hostname is not a login URL, got %q", got)
 	}
 
-	// A valid URL with a query is accepted; the host parse pins it to Tailscale.
+	// A valid URL at the start of a line is accepted; the host parse pins it to
+	// Tailscale and \S+ stops the capture at the trailing space.
 	if got := extractLoginURL("https://login.tailscale.com/path?q=1 rest"); got != "https://login.tailscale.com/path?q=1" {
 		t.Errorf("valid URL rejected, got %q", got)
+	}
+
+	// A genuine Tailscale URL embedded mid-line, not at the start of a line, is
+	// not extracted. Anchoring the pattern to the line start is what guarantees
+	// this, so a URL cannot be picked up from an unexpected position in the
+	// output.
+	if got := extractLoginURL("visit https://login.tailscale.com/a/deadbeef now"); got != "" {
+		t.Errorf("a mid-line URL should not be extracted, got %q", got)
 	}
 }

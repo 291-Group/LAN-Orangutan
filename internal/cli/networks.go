@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/291-Group/LAN-Orangutan/internal/network"
+	"github.com/291-Group/LAN-Orangutan/internal/storage"
 )
 
 var networksCmd = &cobra.Command{
@@ -16,10 +17,21 @@ var networksCmd = &cobra.Command{
 
 func runNetworks(cmd *cobra.Command, args []string) error {
 	networks, err := network.DetectNetworks()
-	networks = network.WithConfigured(networks, network.Filter{Configured: cfg.Scanning.Networks, Excluded: cfg.Scanning.ExcludeNetworks, OnlyConfigured: cfg.Scanning.OnlyConfiguredNetworks})
 	if err != nil {
 		return fmt.Errorf("failed to detect networks: %w", err)
 	}
+
+	// Resolve the effective filter, honouring any UI override saved in the data
+	// directory; fall back to the config values if the store cannot be opened.
+	filter := network.Filter{
+		Configured:     cfg.Scanning.Networks,
+		Excluded:       cfg.Scanning.ExcludeNetworks,
+		OnlyConfigured: cfg.Scanning.OnlyConfiguredNetworks,
+	}
+	if store, serr := storage.New(cfg.DevicesFile(), cfg.StateFile()); serr == nil {
+		filter = networkFilter(store, cfg)
+	}
+	networks = network.WithConfigured(networks, filter)
 
 	if len(networks) == 0 {
 		fmt.Println("No networks detected")

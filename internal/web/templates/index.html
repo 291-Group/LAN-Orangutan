@@ -129,6 +129,18 @@ orangutan export out.csv</code></pre>
                         {{.Moved}} moved
                     </span>
                     {{end}}
+                    {{if .Unexpected}}
+                    <span class="stat-chip stat-chip-warn stat-chip-filter" data-filter="unexpected" role="button" tabindex="0" title="Show the {{.Unexpected}} online device{{if ne .Unexpected 1}}s{{end}} not marked as expected">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+                        {{.Unexpected}} unexpected
+                    </span>
+                    {{end}}
+                    {{if .Missing}}
+                    <span class="stat-chip stat-chip-danger stat-chip-filter" data-filter="missing" role="button" tabindex="0" title="Show the {{.Missing}} expected device{{if ne .Missing 1}}s{{end}} that {{if ne .Missing 1}}are{{else}}is{{end}} currently offline">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2h8M12 2v6M5 13a7 7 0 1 0 14 0 7 7 0 0 0-14 0z"/></svg>
+                        {{.Missing}} missing
+                    </span>
+                    {{end}}
                     {{if or .ContinuousScan .LastScanAt}}
                     <span class="stat-scan">
                         <span class="live-indicator"><span class="live-dot"></span>Live</span>{{if .LastScanAt}}<span class="live-sep">&middot;</span><span class="scan-when">scanned <span data-relative-time="{{.LastScanUnix}}">{{.LastScanAgo}}</span></span>{{end}}
@@ -220,6 +232,8 @@ orangutan export out.csv</code></pre>
                         <option value="Network">Network</option>
                         <option value="Pi">Pi</option>
                     </select>
+                    <button class="btn" onclick="markAllExpected()" title="Mark every current device as expected, so you are flagged only when something new appears or a known device goes missing">Mark all expected</button>
+                    <button class="btn" onclick="openSnapshots()">Snapshots</button>
                     <div class="dropdown">
                         <button class="btn" onclick="toggleDropdown('export-menu')">Export</button>
                         <div id="export-menu" class="dropdown-menu">
@@ -266,12 +280,15 @@ orangutan export out.csv</code></pre>
                             data-status="{{.Status}}"
                             data-moved="{{if .AddressHistory}}1{{end}}"
                             data-flagged="{{if .Risks}}1{{end}}"
+                            data-expected="{{if .Expected}}1{{end}}"
+                            data-unexpected="{{if and .IsOnline (not .Expected)}}1{{end}}"
+                            data-missing="{{if and .Expected (not .IsOnline)}}1{{end}}"
                             data-lastseen="{{.LastSeenUnix}}">
                             <td data-label="Status">
                                 <span class="status-indicator {{.StatusClass}}"></span>
                             </td>
                             <td class="ip-cell" data-label="IP Address" data-copy="{{.IP}}">
-                                {{.IP}}{{if .AddressHistory}}<span class="moved-indicator" data-tip="Changed address{{range .AddressHistory}}, was {{.IP}}{{end}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg></span>{{end}}
+                                {{.IP}}{{if .AddressHistory}}<span class="moved-indicator" data-tip="Changed address{{range .AddressHistory}}, was {{.IP}}{{end}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg></span>{{end}}{{if .IPv6}}<span class="ipv6-addr" data-copy="{{.IPv6}}" data-tip="IPv6: {{.IPv6}} (click to copy)">{{.IPv6}}</span>{{end}}
                             </td>
                             <td class="hostname-cell" data-label="Hostname" data-copy="{{.Hostname}}">{{if .Hostname}}{{.Hostname}}{{else}}<span style="color:var(--text-muted)">-</span>{{end}}</td>
                             <td class="type-cell" data-label="Type">
@@ -369,11 +386,46 @@ orangutan export out.csv</code></pre>
                         <label>Notes</label>
                         <textarea id="edit-notes" name="notes" class="input" rows="3" placeholder="Add notes about this device..."></textarea>
                     </div>
+                    <div class="form-group">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                            <input type="checkbox" id="edit-expected">
+                            <span>Expected device &mdash; part of my known network</span>
+                        </label>
+                    </div>
                 </form>
             </div>
             <div class="modal-footer">
                 <button class="btn" onclick="closeModal()">Cancel</button>
                 <button class="btn btn-primary" onclick="saveDevice()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="snapshots-modal" class="modal" style="display:none">
+        <div class="modal-content modal-wide">
+            <div class="modal-header">
+                <h3>Snapshots</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="form-help" style="margin-top:0;">Save a snapshot of the network now, then compare it later to see what is new, gone, or changed.</p>
+                <div class="form-group" style="display:flex; gap:0.5rem; align-items:center; margin-bottom:0.35rem;">
+                    <input type="text" id="snapshot-name" class="input" placeholder="Snapshot name (optional)" style="flex:1;">
+                    <button class="btn btn-primary" onclick="saveSnapshot()">Save current</button>
+                </div>
+                <span id="snapshot-status" class="form-help" style="margin:0;"></span>
+
+                <h4 style="margin:1.25rem 0 0.5rem;">Saved snapshots</h4>
+                <div id="snapshot-list"></div>
+
+                <h4 style="margin:1.5rem 0 0.5rem;">Compare</h4>
+                <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+                    <select id="compare-from" class="select" style="width:auto;"></select>
+                    <span class="form-help" style="margin:0;">&rarr;</span>
+                    <select id="compare-to" class="select" style="width:auto;"></select>
+                    <button class="btn" onclick="runCompare()">Compare</button>
+                </div>
+                <div id="compare-result" style="margin-top:1rem;"></div>
             </div>
         </div>
     </div>

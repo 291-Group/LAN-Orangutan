@@ -256,11 +256,7 @@ func (j *scanJob) adopt() {
 // cancelled. A non-positive interval disables it. The ticker always runs so the
 // user can switch continuous scanning on and off at runtime; runBackgroundScan
 // skips the actual scan while the setting is off.
-func (h *Handler) StartBackgroundScanner(ctx context.Context, interval time.Duration) {
-	if interval <= 0 {
-		return
-	}
-
+func (h *Handler) StartBackgroundScanner(ctx context.Context) {
 	go func() {
 		// Scan shortly after startup so a freshly started server does not sit
 		// empty until the first interval elapses.
@@ -273,17 +269,35 @@ func (h *Handler) StartBackgroundScanner(ctx context.Context, interval time.Dura
 		}
 		h.runBackgroundScan()
 
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
+		// The interval is read fresh before each wait, so a change from the
+		// Settings page takes effect on the next cycle without a restart. A
+		// per-cycle timer rather than a fixed ticker is what makes that possible.
 		for {
+			timer := time.NewTimer(h.backgroundScanInterval())
 			select {
 			case <-ctx.Done():
+				timer.Stop()
 				return
-			case <-ticker.C:
+			case <-timer.C:
 				h.runBackgroundScan()
 			}
 		}
 	}()
+}
+
+// minBackgroundScanSeconds floors the automatic scan interval so a stray small
+// override cannot spin the loop; the per-network rate limit already prevents any
+// one network from being scanned more often than min_scan_interval.
+const minBackgroundScanSeconds = 10
+
+// backgroundScanInterval is how long to wait between automatic scans: the UI
+// override if set, otherwise the configured interval, floored for safety.
+func (h *Handler) backgroundScanInterval() time.Duration {
+	secs := h.store.ScanIntervalOrDefault(h.cfg.Scanning.ScanInterval)
+	if secs < minBackgroundScanSeconds {
+		secs = minBackgroundScanSeconds
+	}
+	return time.Duration(secs) * time.Second
 }
 
 // runBackgroundScan starts one scan of all detected networks, unless a scan is

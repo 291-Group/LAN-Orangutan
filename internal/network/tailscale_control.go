@@ -20,20 +20,26 @@ import (
 // detected and returned as soon as it appears, well before this fires.
 const tailscaleUpTimeout = 20 * time.Second
 
-// loginURLPattern finds a candidate sign-in URL in the output that `tailscale
-// up` prints when the machine is not yet authenticated to a tailnet.
-var loginURLPattern = regexp.MustCompile(`https://login\.tailscale\.com/\S+`)
+// loginURLPattern captures the sign-in URL that `tailscale up` prints on its own
+// (indented) line when the machine is not yet authenticated to a tailnet. It is
+// anchored to the start of a line in multi-line mode (?m) and captures the URL,
+// so it can only match a URL that begins a line, never one embedded mid-line
+// inside some larger string. That anchoring is what the CodeQL
+// go/regex/missing-regexp-anchor rule asks for; the host is still re-checked
+// below with a real URL parse, which remains the actual security boundary.
+var loginURLPattern = regexp.MustCompile(`(?m)^[ \t]*(https://login\.tailscale\.com/\S+)`)
 
 // extractLoginURL pulls the Tailscale sign-in URL out of `tailscale up` output.
-// The regex locates a candidate in the multi-line output, and its host is then
+// The regex locates a candidate at the start of a line, and its host is then
 // confirmed with a real URL parse rather than trusted from the pattern, so only
 // a genuine https://login.tailscale.com URL is ever returned. It returns "" when
 // there is no such URL.
 func extractLoginURL(text string) string {
-	candidate := loginURLPattern.FindString(text)
-	if candidate == "" {
+	m := loginURLPattern.FindStringSubmatch(text)
+	if m == nil {
 		return ""
 	}
+	candidate := m[1]
 	u, err := url.Parse(candidate)
 	if err != nil || u.Scheme != "https" || u.Hostname() != "login.tailscale.com" {
 		return ""

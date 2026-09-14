@@ -30,6 +30,15 @@ func runScan(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize storage: %w", err)
 	}
+	// Apply the retention window and device cap (a UI override wins over the
+	// config default), so a CLI scan bounds the stored list the same way the
+	// server does.
+	if err := store.SetLimits(
+		store.RetentionDaysOrDefault(cfg.Storage.RetentionDays),
+		store.MaxDevicesOrDefault(cfg.Storage.MaxDevices),
+	); err != nil {
+		return fmt.Errorf("failed to apply storage limits: %w", err)
+	}
 
 	// Create scanner
 	s := scanner.New(cfg.Scanning.MinScanInterval, cfg.Scanning.EnableServiceDetection)
@@ -40,7 +49,7 @@ func runScan(cmd *cobra.Command, args []string) error {
 	if len(args) == 0 || args[0] == "" {
 		// Scan first detected network
 		detected, err := network.DetectNetworks()
-		detected = network.WithConfigured(detected, network.Filter{Configured: cfg.Scanning.Networks, Excluded: cfg.Scanning.ExcludeNetworks, OnlyConfigured: cfg.Scanning.OnlyConfiguredNetworks})
+		detected = network.WithConfigured(detected, networkFilter(store, cfg))
 		if err != nil {
 			return fmt.Errorf("failed to detect networks: %w", err)
 		}
@@ -60,7 +69,7 @@ func runScan(cmd *cobra.Command, args []string) error {
 	} else if args[0] == "all" {
 		// Scan all detected networks
 		detected, err := network.DetectNetworks()
-		detected = network.WithConfigured(detected, network.Filter{Configured: cfg.Scanning.Networks, Excluded: cfg.Scanning.ExcludeNetworks, OnlyConfigured: cfg.Scanning.OnlyConfiguredNetworks})
+		detected = network.WithConfigured(detected, networkFilter(store, cfg))
 		if err != nil {
 			return fmt.Errorf("failed to detect networks: %w", err)
 		}

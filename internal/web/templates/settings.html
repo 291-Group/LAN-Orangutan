@@ -175,6 +175,86 @@ orangutan export out.csv</code></pre>
             </div>
         </section>
 
+        <section class="section">
+            <h2 class="section-title">Scanning</h2>
+            <div class="card">
+                <div class="form-group" style="display: flex; align-items: flex-start; justify-content: space-between; gap: 1.5rem;">
+                    <div>
+                        <label style="margin-bottom: 0.35rem;">Service detection</label>
+                        <p class="form-help" style="margin: 0;">Also check each device on a short list of well-known ports (web, printer, NAS, and so on) to identify it more precisely and flag a web interface. Sends a little more traffic and takes a little longer, so it is off by default. Applies on the next scan.</p>
+                    </div>
+                    <div class="toggle-switch" id="service-detection-toggle" role="switch" aria-checked="false" tabindex="0" onclick="toggleServiceDetection()" data-tip="Deeper device identification via a light port probe"></div>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="set-scan-interval">Automatic scan interval (seconds)</label>
+                    <div style="display: flex; align-items: center; gap: 0.6rem;">
+                        <input type="number" id="set-scan-interval" class="input" min="10" max="86400" style="width: 160px;">
+                        <button class="btn btn-primary" onclick="saveScanInterval()">Save</button>
+                        <span id="scan-interval-status" class="form-help" style="margin: 0;"></span>
+                    </div>
+                    <p class="form-help">How often the background scanner re-scans while continuous scan is on. Takes effect on the next cycle. Default: <span id="def-scan-interval">300</span> seconds.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2 class="section-title">Networks</h2>
+            <div class="card">
+                <div class="form-group" style="display: flex; align-items: flex-start; justify-content: space-between; gap: 1.5rem;">
+                    <div>
+                        <label style="margin-bottom: 0.35rem;">Scan only the networks I list</label>
+                        <p class="form-help" style="margin: 0;">Ignore the auto-detected interfaces and scan only the "Networks to scan" list below. Useful on a host with many Docker bridges, VLANs, or routed interfaces.</p>
+                    </div>
+                    <div class="toggle-switch" id="only-configured-toggle" role="switch" aria-checked="false" tabindex="0" onclick="toggleOnlyConfigured()" data-tip="Scan only the networks you list, not the detected ones"></div>
+                </div>
+                <div class="form-group">
+                    <label>Networks to scan</label>
+                    <div id="include-list" class="cidr-list"></div>
+                    <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                        <input type="text" id="include-input" class="input" placeholder="e.g. 192.168.10.0/24" style="width: 220px;" onkeydown="if(event.key==='Enter'){event.preventDefault();addCidr('include');}">
+                        <button class="btn" onclick="addCidr('include')">Add</button>
+                    </div>
+                    <p class="form-help" id="detected-suggestions" style="margin-top: 0.5rem;"></p>
+                </div>
+                <div class="form-group">
+                    <label>Networks to hide</label>
+                    <div id="exclude-list" class="cidr-list"></div>
+                    <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                        <input type="text" id="exclude-input" class="input" placeholder="e.g. 10.99.0.0/16" style="width: 220px;" onkeydown="if(event.key==='Enter'){event.preventDefault();addCidr('exclude');}">
+                        <button class="btn" onclick="addCidr('exclude')">Add</button>
+                    </div>
+                </div>
+                <div class="form-group" style="display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0;">
+                    <button class="btn btn-primary" onclick="saveNetworks()">Save</button>
+                    <button class="btn" onclick="resetNetworks()">Reset to defaults</button>
+                    <span id="networks-status" class="form-help" style="margin: 0;"></span>
+                </div>
+                <p class="form-help">A routed network (reached through a router, not on a local interface) is scanned but has no MAC addresses. Applies on the next scan. Saved to this instance, not your config file.</p>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2 class="section-title">Storage</h2>
+            <div class="card">
+                <div class="form-group">
+                    <label for="set-retention">Days to keep offline devices</label>
+                    <input type="number" id="set-retention" class="input" min="0" max="36500" style="width: 160px;">
+                    <p class="form-help">A device not seen for this many days is removed. Devices you have labelled, grouped, or added notes to, and devices currently online, are always kept. 0 keeps them forever. Default: <span id="def-retention">90</span>.</p>
+                </div>
+                <div class="form-group">
+                    <label for="set-maxdevices">Maximum devices to track</label>
+                    <input type="number" id="set-maxdevices" class="input" min="0" max="1000000" style="width: 160px;">
+                    <p class="form-help">When the list grows past this, the devices seen longest ago are dropped first (labelled, grouped, noted, and online devices are kept). 0 means no cap. Default: <span id="def-maxdevices">1000</span>.</p>
+                </div>
+                <div class="form-group" style="display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0;">
+                    <button class="btn btn-primary" onclick="saveStorageSettings()">Save</button>
+                    <button class="btn" onclick="resetStorageSettings()">Reset to defaults</button>
+                    <span id="storage-status" class="form-help" style="margin: 0;"></span>
+                </div>
+                <p class="form-help">Changes apply immediately: lowering these can remove stale devices right away. Saved to this instance, not your config file.</p>
+            </div>
+        </section>
+
         {{if .AuthEnabled}}
         <section class="section">
             <h2 class="section-title">Security</h2>
@@ -196,7 +276,23 @@ orangutan export out.csv</code></pre>
             <div class="card">
                 <div class="form-group">
                     <button class="btn btn-primary" onclick="exportDevices()">Export Devices (CSV)</button>
-                    <p class="form-help">Download all device data as a CSV file.</p>
+                    <a class="btn" href="/api/report">Download report (HTML)</a>
+                    <p class="form-help">A CSV of the device list, or a shareable, self-contained HTML report of the whole network.</p>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label>Backup</label>
+                    <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                        <a class="btn btn-primary" href="/api/backup">Back up everything</a>
+                        <input type="file" id="restore-file" accept="application/json,.json" style="display:none" onchange="onRestoreFile()">
+                        <button class="btn" onclick="document.getElementById('restore-file').click()">Restore from backup…</button>
+                        <span id="restore-status" class="form-help" style="margin: 0;"></span>
+                    </div>
+                    <div id="restore-confirm" style="display: none; margin-top: 0.6rem;">
+                        <p class="form-help" style="margin: 0 0 0.4rem;">Restore <strong id="restore-filename"></strong>? This <strong>replaces</strong> the current devices, settings, and snapshots on this instance.</p>
+                        <button class="btn btn-primary" onclick="doRestore()">Confirm restore</button>
+                        <button class="btn" onclick="cancelRestore()">Cancel</button>
+                    </div>
+                    <p class="form-help">Download a copy of your devices, settings, and snapshots (not your password) as a single file, or restore from one.</p>
                 </div>
             </div>
         </section>
@@ -248,6 +344,322 @@ orangutan export out.csv</code></pre>
 
         function exportDevices() {
             window.location.href = '/api/devices?format=csv';
+        }
+
+        // Storage settings (retention window + device cap). These are stored as
+        // overrides on this instance, not written to config.ini, and applied
+        // immediately by the server.
+        async function loadStorageSettings() {
+            try {
+                const res = await fetch('/api/settings').then(r => r.json());
+                if (!res.success) return;
+                const d = res.data;
+                document.getElementById('set-retention').value = d.retention_days.value;
+                document.getElementById('set-maxdevices').value = d.max_devices.value;
+                document.getElementById('def-retention').textContent = d.retention_days.default;
+                document.getElementById('def-maxdevices').textContent = d.max_devices.default;
+            } catch (e) { /* leave the fields blank if the API is unreachable */ }
+        }
+
+        function saveStorageSettings() {
+            // A blank field clears that override (falls back to the default).
+            const r = document.getElementById('set-retention').value.trim();
+            const m = document.getElementById('set-maxdevices').value.trim();
+            postStorageSettings({
+                retention_days: r === '' ? null : parseInt(r, 10),
+                max_devices: m === '' ? null : parseInt(m, 10)
+            });
+        }
+
+        function resetStorageSettings() {
+            postStorageSettings({ retention_days: null, max_devices: null });
+        }
+
+        async function postStorageSettings(body) {
+            const status = document.getElementById('storage-status');
+            try {
+                const res = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                }).then(r => r.json());
+                if (res.success) {
+                    // Reflect what the server actually applied (it clamps out-of-range
+                    // values), so the fields never disagree with the stored setting.
+                    document.getElementById('set-retention').value = res.data.retention_days.value;
+                    document.getElementById('set-maxdevices').value = res.data.max_devices.value;
+                    status.textContent = 'Saved';
+                    status.style.color = 'var(--success)';
+                } else {
+                    status.textContent = res.error || 'Could not save';
+                    status.style.color = 'var(--danger)';
+                }
+            } catch (e) {
+                status.textContent = 'Could not save';
+                status.style.color = 'var(--danger)';
+            }
+            setTimeout(() => { status.textContent = ''; }, 2500);
+        }
+
+        loadStorageSettings();
+
+        // Scanning: service-detection toggle. Its own endpoint (like continuous
+        // scan), saved as an override on this instance and applied on the next
+        // scan.
+        function setServiceDetectionToggle(on) {
+            const t = document.getElementById('service-detection-toggle');
+            t.classList.toggle('active', on);
+            t.setAttribute('aria-checked', on ? 'true' : 'false');
+        }
+
+        async function loadScanningSettings() {
+            try {
+                const res = await fetch('/api/scan/service-detection').then(r => r.json());
+                if (res.success) setServiceDetectionToggle(res.data.enabled);
+            } catch (e) { /* leave it off if unreachable */ }
+        }
+
+        async function toggleServiceDetection() {
+            const t = document.getElementById('service-detection-toggle');
+            const next = t.getAttribute('aria-checked') !== 'true';
+            setServiceDetectionToggle(next); // optimistic
+            try {
+                const res = await fetch('/api/scan/service-detection', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: next })
+                }).then(r => r.json());
+                setServiceDetectionToggle(res.success ? res.data.enabled : !next);
+            } catch (e) {
+                setServiceDetectionToggle(!next); // revert on failure
+            }
+        }
+
+        loadScanningSettings();
+
+        // Scanning: automatic scan interval (seconds). Its own endpoint; the
+        // background scanner re-reads it before each cycle.
+        async function loadScanInterval() {
+            try {
+                const res = await fetch('/api/scan/interval').then(r => r.json());
+                if (!res.success) return;
+                document.getElementById('set-scan-interval').value = res.data.seconds;
+                document.getElementById('def-scan-interval').textContent = res.data.default;
+            } catch (e) { /* leave blank if unreachable */ }
+        }
+
+        async function saveScanInterval() {
+            const status = document.getElementById('scan-interval-status');
+            const secs = parseInt(document.getElementById('set-scan-interval').value, 10);
+            if (isNaN(secs)) {
+                status.textContent = 'Enter a number';
+                status.style.color = 'var(--danger)';
+                setTimeout(() => { status.textContent = ''; }, 2500);
+                return;
+            }
+            try {
+                const res = await fetch('/api/scan/interval', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ seconds: secs })
+                }).then(r => r.json());
+                if (res.success) {
+                    // Reflect the clamped value the server actually applied.
+                    document.getElementById('set-scan-interval').value = res.data.seconds;
+                    status.textContent = 'Saved';
+                    status.style.color = 'var(--success)';
+                } else {
+                    status.textContent = res.error || 'Could not save';
+                    status.style.color = 'var(--danger)';
+                }
+            } catch (e) {
+                status.textContent = 'Could not save';
+                status.style.color = 'var(--danger)';
+            }
+            setTimeout(() => { status.textContent = ''; }, 2500);
+        }
+
+        loadScanInterval();
+
+        // Networks: include/exclude CIDR lists + only-configured toggle. Backed by
+        // /api/scan/networks; the server validates every CIDR and the change
+        // applies on the next scan. Chips are built with the DOM (textContent) so
+        // a value can never inject markup.
+        let includeList = [];
+        let excludeList = [];
+
+        function setOnlyConfiguredToggle(on) {
+            const t = document.getElementById('only-configured-toggle');
+            t.classList.toggle('active', on);
+            t.setAttribute('aria-checked', on ? 'true' : 'false');
+        }
+        function toggleOnlyConfigured() {
+            const t = document.getElementById('only-configured-toggle');
+            setOnlyConfiguredToggle(t.getAttribute('aria-checked') !== 'true');
+        }
+
+        function renderCidrList(kind) {
+            const arr = kind === 'include' ? includeList : excludeList;
+            const el = document.getElementById(kind + '-list');
+            el.textContent = '';
+            if (arr.length === 0) {
+                const none = document.createElement('span');
+                none.className = 'form-help';
+                none.style.margin = '0';
+                none.textContent = 'None yet.';
+                el.appendChild(none);
+                return;
+            }
+            arr.forEach((c, i) => {
+                const chip = document.createElement('span');
+                chip.className = 'cidr-chip';
+                chip.textContent = c;
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.setAttribute('aria-label', 'Remove ' + c);
+                btn.innerHTML = '&times;';
+                btn.onclick = () => removeCidr(kind, i);
+                chip.appendChild(btn);
+                el.appendChild(chip);
+            });
+        }
+
+        function addCidr(kind) {
+            const input = document.getElementById(kind + '-input');
+            const v = input.value.trim();
+            if (!v) return;
+            const arr = kind === 'include' ? includeList : excludeList;
+            if (!arr.includes(v)) arr.push(v);
+            input.value = '';
+            renderCidrList(kind);
+        }
+        function removeCidr(kind, i) {
+            const arr = kind === 'include' ? includeList : excludeList;
+            arr.splice(i, 1);
+            renderCidrList(kind);
+        }
+        function quickAddDetected(cidr) {
+            if (!includeList.includes(cidr)) {
+                includeList.push(cidr);
+                renderCidrList('include');
+                applyDetectedSuggestions(lastDetected);
+            }
+        }
+
+        let lastDetected = [];
+        function applyDetectedSuggestions(detected) {
+            lastDetected = detected || [];
+            const sug = document.getElementById('detected-suggestions');
+            sug.textContent = '';
+            const det = lastDetected.filter(c => !includeList.includes(c) && !excludeList.includes(c));
+            if (det.length === 0) return;
+            sug.appendChild(document.createTextNode('Detected: '));
+            det.forEach((c, idx) => {
+                if (idx) sug.appendChild(document.createTextNode(' · '));
+                const a = document.createElement('a');
+                a.href = '#';
+                a.textContent = c;
+                a.onclick = (e) => { e.preventDefault(); quickAddDetected(c); };
+                sug.appendChild(a);
+            });
+        }
+
+        function applyNetworksData(d) {
+            includeList = (d.networks || []).slice();
+            excludeList = (d.exclude_networks || []).slice();
+            setOnlyConfiguredToggle(!!d.only_configured);
+            renderCidrList('include');
+            renderCidrList('exclude');
+            applyDetectedSuggestions(d.detected);
+        }
+
+        async function loadNetworks() {
+            try {
+                const res = await fetch('/api/scan/networks').then(r => r.json());
+                if (res.success) applyNetworksData(res.data);
+            } catch (e) { /* leave empty if unreachable */ }
+        }
+
+        async function saveNetworks(reset) {
+            const status = document.getElementById('networks-status');
+            const only = document.getElementById('only-configured-toggle').getAttribute('aria-checked') === 'true';
+            const body = reset ? { reset: true } :
+                { networks: includeList, exclude_networks: excludeList, only_configured: only };
+            try {
+                const res = await fetch('/api/scan/networks', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                }).then(r => r.json());
+                if (res.success) {
+                    applyNetworksData(res.data);
+                    status.textContent = 'Saved';
+                    status.style.color = 'var(--success)';
+                } else {
+                    status.textContent = res.error || 'Could not save';
+                    status.style.color = 'var(--danger)';
+                }
+            } catch (e) {
+                status.textContent = 'Could not save';
+                status.style.color = 'var(--danger)';
+            }
+            setTimeout(() => { status.textContent = ''; }, 3500);
+        }
+        function resetNetworks() { saveNetworks(true); }
+
+        loadNetworks();
+
+        // Backup / restore. Backup is a plain download link. Restore reads the
+        // chosen file, shows an inline confirm (destructive), then POSTs it.
+        let restoreData = null;
+        function onRestoreFile() {
+            const input = document.getElementById('restore-file');
+            const status = document.getElementById('restore-status');
+            const file = input.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+                try {
+                    restoreData = JSON.parse(reader.result);
+                } catch (e) {
+                    status.textContent = 'That file is not valid JSON.';
+                    status.style.color = 'var(--danger)';
+                    input.value = '';
+                    return;
+                }
+                status.textContent = '';
+                document.getElementById('restore-filename').textContent = file.name;
+                document.getElementById('restore-confirm').style.display = 'block';
+            };
+            reader.readAsText(file);
+        }
+        function cancelRestore() {
+            restoreData = null;
+            document.getElementById('restore-confirm').style.display = 'none';
+            document.getElementById('restore-file').value = '';
+        }
+        async function doRestore() {
+            if (!restoreData) return;
+            const status = document.getElementById('restore-status');
+            try {
+                const res = await fetch('/api/backup/restore', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(restoreData)
+                }).then(r => r.json());
+                if (res.success) {
+                    status.textContent = 'Restored. Reloading…';
+                    status.style.color = 'var(--success)';
+                    setTimeout(() => location.reload(), 900);
+                } else {
+                    status.textContent = res.error || 'Restore failed';
+                    status.style.color = 'var(--danger)';
+                }
+            } catch (e) {
+                status.textContent = 'Restore failed';
+                status.style.color = 'var(--danger)';
+            }
+            document.getElementById('restore-confirm').style.display = 'none';
         }
     </script>
 </body>

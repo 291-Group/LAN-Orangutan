@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/291-Group/LAN-Orangutan/internal/network"
@@ -19,7 +20,10 @@ import (
 type Scanner struct {
 	minInterval time.Duration
 	// serviceDetection turns on the opt-in probe that identifies devices by
-	// their open ports. Off by default; a scan stays a quiet ping sweep.
+	// their open ports. Off by default; a scan stays a quiet ping sweep. It can
+	// be toggled at runtime from the Settings page, and a scan may be running on
+	// another goroutine when that happens, so it is guarded by mu.
+	mu               sync.RWMutex
 	serviceDetection bool
 }
 
@@ -30,6 +34,21 @@ func New(minIntervalSeconds int, serviceDetection bool) *Scanner {
 		minInterval:      time.Duration(minIntervalSeconds) * time.Second,
 		serviceDetection: serviceDetection,
 	}
+}
+
+// SetServiceDetection turns the opt-in port probe on or off. The change takes
+// effect on the next scan.
+func (s *Scanner) SetServiceDetection(on bool) {
+	s.mu.Lock()
+	s.serviceDetection = on
+	s.mu.Unlock()
+}
+
+// serviceDetectionEnabled reports whether the port probe is currently on.
+func (s *Scanner) serviceDetectionEnabled() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.serviceDetection
 }
 
 // nmapRun represents the root element of nmap XML output
@@ -114,7 +133,7 @@ func (s *Scanner) Scan(ctx context.Context, cidr string) (*types.ScanResult, err
 	// With service detection on, probe each device's well-known ports to refine
 	// its type and flag a web interface. This is the only step that sends more
 	// than a ping or a name query, so it stays behind the opt-in flag.
-	if s.serviceDetection {
+	if s.serviceDetectionEnabled() {
 		enrichWithServices(ctx, devices)
 	}
 

@@ -84,7 +84,7 @@ jobs:
             -X 'github.com/291-Group/LAN-Orangutan/internal/cli.Commit=${COMMIT}' \
             -X 'github.com/291-Group/LAN-Orangutan/internal/cli.BuildDate=${BUILD_DATE}'"
 
-          go build -ldflags "${LDFLAGS}" -o orangutan-${{ matrix.suffix }}${{ matrix.ext }} ./cmd/orangutan
+          go build -trimpath -ldflags "${LDFLAGS}" -o orangutan-${{ matrix.suffix }}${{ matrix.ext }} ./cmd/orangutan
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

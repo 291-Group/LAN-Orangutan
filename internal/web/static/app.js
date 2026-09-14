@@ -367,7 +367,9 @@ function filterDevices() {
         const matchGroup = groupFilter === 'all' || group === groupFilter;
         const matchChip = !statChipFilter ||
             (statChipFilter === 'moved' && row.dataset.moved === '1') ||
-            (statChipFilter === 'flagged' && row.dataset.flagged === '1');
+            (statChipFilter === 'flagged' && row.dataset.flagged === '1') ||
+            (statChipFilter === 'unexpected' && row.dataset.unexpected === '1') ||
+            (statChipFilter === 'missing' && row.dataset.missing === '1');
 
         const show = matchSearch && matchStatus && matchGroup && matchChip;
         row.style.display = show ? '' : 'none';
@@ -388,12 +390,146 @@ function editDevice(ip) {
     document.getElementById('edit-label').value = row.dataset.labelOriginal || '';
     document.getElementById('edit-group').value = row.dataset.group || '';
     document.getElementById('edit-notes').value = row.dataset.notes || '';
+    document.getElementById('edit-expected').checked = row.dataset.expected === '1';
     modal.style.display = 'flex';
 }
 
 function closeModal() {
-    const modal = document.getElementById('edit-modal');
-    if (modal) modal.style.display = 'none';
+    // Close whichever modal is open, so Escape and a backdrop click work for all
+    // of them (edit device, snapshots).
+    document.querySelectorAll('.modal').forEach(m => { m.style.display = 'none'; });
+}
+
+// --- Snapshots ---------------------------------------------------------------
+
+function openSnapshots() {
+    document.getElementById('snapshots-modal').style.display = 'flex';
+    document.getElementById('compare-result').textContent = '';
+    loadSnapshots();
+}
+
+function formatSnapDate(iso) {
+    try { return new Date(iso).toLocaleString(); } catch (e) { return iso; }
+}
+
+async function loadSnapshots() {
+    const res = await api('snapshots');
+    const snaps = (res && res.success && Array.isArray(res.data)) ? res.data : [];
+    const list = document.getElementById('snapshot-list');
+    const fromSel = document.getElementById('compare-from');
+    const toSel = document.getElementById('compare-to');
+    list.textContent = '';
+    fromSel.innerHTML = '';
+    toSel.innerHTML = '';
+
+    if (snaps.length === 0) {
+        const p = document.createElement('p');
+        p.className = 'form-help';
+        p.style.margin = '0';
+        p.textContent = 'No snapshots yet.';
+        list.appendChild(p);
+    } else {
+        snaps.forEach(s => {
+            const row = document.createElement('div');
+            row.className = 'snapshot-row';
+            const info = document.createElement('span');
+            info.textContent = `${s.name} · ${formatSnapDate(s.created_at)} · ${s.device_count} device${s.device_count === 1 ? '' : 's'}`;
+            const del = document.createElement('button');
+            del.className = 'btn btn-sm';
+            del.textContent = 'Delete';
+            del.onclick = () => deleteSnapshot(s.id);
+            row.appendChild(info);
+            row.appendChild(del);
+            list.appendChild(row);
+            fromSel.add(new Option(s.name, s.id));
+            toSel.add(new Option(s.name, s.id));
+        });
+    }
+    // "Current network" is always a valid comparison target.
+    toSel.add(new Option('Current network', 'current'));
+    toSel.value = 'current';
+}
+
+async function saveSnapshot() {
+    const name = document.getElementById('snapshot-name').value.trim();
+    const status = document.getElementById('snapshot-status');
+    const res = await api('snapshots', { name }, 'POST');
+    if (res && res.success) {
+        document.getElementById('snapshot-name').value = '';
+        status.textContent = 'Saved';
+        status.style.color = 'var(--success)';
+        loadSnapshots();
+    } else {
+        status.textContent = (res && res.error) || 'Could not save';
+        status.style.color = 'var(--danger)';
+    }
+    setTimeout(() => { status.textContent = ''; }, 2500);
+}
+
+async function deleteSnapshot(id) {
+    try {
+        // DELETE takes the id as a query param and needs the CSRF header.
+        await fetch(`/api/snapshots?id=${encodeURIComponent(id)}`, {
+            method: 'DELETE',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        });
+    } catch (e) { /* ignore; the reload below reflects reality */ }
+    document.getElementById('compare-result').textContent = '';
+    loadSnapshots();
+}
+
+async function runCompare() {
+    const from = document.getElementById('compare-from').value;
+    const to = document.getElementById('compare-to').value;
+    const result = document.getElementById('compare-result');
+    if (!from || !to) { result.textContent = 'Pick two snapshots to compare.'; return; }
+    if (from === to) { result.textContent = 'Pick two different snapshots.'; return; }
+    const res = await api('snapshots/compare', { from, to });
+    if (!res || !res.success) {
+        result.textContent = (res && res.error) || 'Could not compare.';
+        return;
+    }
+    renderDiff(res.data);
+}
+
+function renderDiff(d) {
+    const result = document.getElementById('compare-result');
+    result.textContent = '';
+    const total = d.added.length + d.removed.length + d.changed.length;
+    if (total === 0) {
+        const p = document.createElement('p');
+        p.className = 'form-help';
+        p.style.margin = '0';
+        p.textContent = 'No differences — the network is unchanged between these two.';
+        result.appendChild(p);
+        return;
+    }
+    const groups = [
+        { key: 'added', label: 'New', cls: 'diff-added', sign: '+' },
+        { key: 'removed', label: 'Gone', cls: 'diff-removed', sign: '−' },
+        { key: 'changed', label: 'Changed', cls: 'diff-changed', sign: '~' }
+    ];
+    groups.forEach(g => {
+        const items = d[g.key];
+        if (!items || items.length === 0) return;
+        const head = document.createElement('div');
+        head.className = 'diff-group-head ' + g.cls;
+        head.textContent = `${g.label} (${items.length})`;
+        result.appendChild(head);
+        items.forEach(item => {
+            const dev = g.key === 'changed' ? item.after : item;
+            let text = `${g.sign} ${dev.ip}`;
+            if (dev.hostname) text += ` · ${dev.hostname}`;
+            else if (dev.vendor) text += ` · ${dev.vendor}`;
+            if (g.key === 'changed') {
+                text += '  (' + item.fields.map(f => `${f}: ${item.before[f] || '—'} → ${item.after[f] || '—'}`).join(', ') + ')';
+            }
+            const line = document.createElement('div');
+            line.className = 'diff-line';
+            line.textContent = text;
+            result.appendChild(line);
+        });
+    });
 }
 
 async function saveDevice() {
@@ -401,8 +537,9 @@ async function saveDevice() {
     const label = document.getElementById('edit-label').value;
     const group = document.getElementById('edit-group').value;
     const notes = document.getElementById('edit-notes').value;
+    const expected = document.getElementById('edit-expected').checked;
     try {
-        const result = await api('device', { ip, label, group, notes }, 'POST');
+        const result = await api('device', { ip, label, group, notes, expected }, 'POST');
         if (result.success) {
             showToast('Device updated', 'success');
             closeModal();
@@ -411,6 +548,22 @@ async function saveDevice() {
             if (!(await refreshInPlace())) location.reload();
         } else {
             showToast(result.error || 'Failed to update device', 'error');
+        }
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
+// Mark every current device as expected, baselining the network so the
+// "unexpected" and "missing" flags become meaningful afterwards.
+async function markAllExpected() {
+    try {
+        const result = await api('devices/mark-expected', { expected: true }, 'POST');
+        if (result && result.success) {
+            showToast('All current devices marked as expected', 'success');
+            if (!(await refreshInPlace())) location.reload();
+        } else {
+            showToast((result && result.error) || 'Could not update devices', 'error');
         }
     } catch (e) {
         showToast('Error: ' + e.message, 'error');
@@ -521,13 +674,25 @@ function legacyCopy(text) {
     field.value = text;
     field.contentEditable = 'true';
     field.readOnly = false;
+    // Keep the field in the viewport (top/left 0, 1px, transparent). Several
+    // browsers refuse to copy from an element scrolled off-screen, which made the
+    // copy work only sometimes on a plain-http instance where this path is the
+    // only one available. Tiny and opacity 0 so it is never actually seen.
     field.style.position = 'fixed';
-    field.style.top = '-1000px';
+    field.style.top = '0';
+    field.style.left = '0';
+    field.style.width = '1px';
+    field.style.height = '1px';
+    field.style.padding = '0';
+    field.style.border = 'none';
     field.style.opacity = '0';
     document.body.appendChild(field);
     const selection = window.getSelection();
     const previous = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
     try {
+        // Focusing the field first is what makes execCommand reliably copy from
+        // it rather than from whatever was selected on the page.
+        field.focus();
         const range = document.createRange();
         range.selectNodeContents(field);
         selection.removeAllRanges();
@@ -1140,12 +1305,16 @@ async function disconnectTailscale() {
 // value that contains quotes (a vendor name, say) can never break out of the
 // handler, and rows added by an auto-refresh are covered automatically. Empty
 // values (a placeholder like "Unknown") carry data-copy="" and are skipped.
+//
+// The target is the nearest element carrying data-copy, not just the cell, so a
+// value nested inside a cell (the IPv6 address shown under the IPv4 one) copies
+// itself rather than the cell's primary value.
 (function initCopyCells() {
     const table = document.getElementById('devices-table');
     if (!table) return;
     table.addEventListener('click', function (e) {
-        const cell = e.target.closest('td[data-copy]');
-        if (!cell) return;
+        const cell = e.target.closest('[data-copy]');
+        if (!cell || !table.contains(cell)) return;
         const value = cell.getAttribute('data-copy');
         if (value) copyToClipboard(value, e);
     });
