@@ -1,5 +1,7 @@
 # 🦧 LAN Orangutan 
 
+[![Deploy to Railyard](https://app.railyard.run/deploy/badge)](https://app.railyard.run/deploy?repo=https://github.com/291-Group/LAN-Orangutan)
+
 <p align="left">
   <img src="https://291grp.com/assets/badges/stars.svg?v=1" alt="Stars" height="20">
   <img src="https://291grp.com/assets/badges/forks.svg?v=1" alt="Forks" height="20">
