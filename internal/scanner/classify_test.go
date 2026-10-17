@@ -64,3 +64,100 @@ func TestClassify(t *testing.T) {
 		})
 	}
 }
+
+func TestKnownTypes(t *testing.T) {
+	if len(KnownTypes) != 9 {
+		t.Fatalf("expected 9 standard types, got %d: %v", len(KnownTypes), KnownTypes)
+	}
+	expected := []string{
+		TypePhone, TypeComputer, TypePrinter, TypeTV,
+		TypeMediaPlayer, TypeRouter, TypeServer, TypeIoT, TypeConsole,
+	}
+	for i, exp := range expected {
+		if KnownTypes[i] != exp {
+			t.Errorf("expected KnownTypes[%d] == %q, got %q", i, exp, KnownTypes[i])
+		}
+	}
+}
+
+func TestIsKnownType(t *testing.T) {
+	for _, kt := range KnownTypes {
+		if !IsKnownType(kt) {
+			t.Errorf("expected IsKnownType(%q) to be true", kt)
+		}
+	}
+	for _, unknown := range []string{"Smart Plug", "Thermostat", "Unknown", "", "Custom"} {
+		if IsKnownType(unknown) {
+			t.Errorf("expected IsKnownType(%q) to be false", unknown)
+		}
+	}
+}
+
+func TestValidateType(t *testing.T) {
+	// Empty string is valid (auto / reset)
+	got, err := ValidateType("")
+	if err != nil || got != "" {
+		t.Fatalf("ValidateType(\"\") = (%q, %v), want (\"\", nil)", got, err)
+	}
+
+	// Whitespace only is treated as empty
+	got, err = ValidateType("   ")
+	if err != nil || got != "" {
+		t.Fatalf("ValidateType(\"   \") = (%q, %v), want (\"\", nil)", got, err)
+	}
+
+	// Canonical types match and return normalized
+	for _, kt := range KnownTypes {
+		got, err := ValidateType(kt)
+		if err != nil || got != kt {
+			t.Errorf("ValidateType(%q) = (%q, %v), want (%q, nil)", kt, got, err, kt)
+		}
+	}
+
+	// Case-insensitive and trimmed matches
+	cases := []struct {
+		input string
+		want  string
+	}{
+		{"phone", "Phone"},
+		{"COMPUTER", "Computer"},
+		{"  server  ", "Server"},
+		{"media player", "Media Player"},
+		{"game console", "Game Console"},
+		{"IoT", "IoT"},
+		{"iot", "IoT"},
+	}
+	for _, c := range cases {
+		got, err := ValidateType(c.input)
+		if err != nil || got != c.want {
+			t.Errorf("ValidateType(%q) = (%q, %v), want (%q, nil)", c.input, got, err, c.want)
+		}
+	}
+
+	// Invalid / unknown types rejected
+	invalids := []string{
+		"Smart Plug",
+		"Outlet",
+		"Thermostat",
+		"Random",
+		"FooBar",
+	}
+	for _, inv := range invalids {
+		if _, err := ValidateType(inv); err == nil {
+			t.Errorf("expected ValidateType(%q) to fail", inv)
+		}
+	}
+
+	// Length cap exceeded (> 32 characters)
+	tooLong := "ThisDeviceTypeStringIsWayTooLongToBeValid"
+	if _, err := ValidateType(tooLong); err == nil {
+		t.Errorf("expected error for type exceeding maxTypeLen, got nil")
+	}
+
+	// Control characters rejected
+	control := "Server\x00"
+	if _, err := ValidateType(control); err == nil {
+		t.Errorf("expected error for control character in type, got nil")
+	}
+}
+

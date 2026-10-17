@@ -389,8 +389,18 @@ function editDevice(ip) {
     document.getElementById('edit-ip-display').value = ip;
     document.getElementById('edit-label').value = row.dataset.labelOriginal || '';
     document.getElementById('edit-group').value = row.dataset.group || '';
-    document.getElementById('edit-notes').value = row.dataset.notes || '';
-    document.getElementById('edit-expected').checked = row.dataset.expected === '1';
+    const exp = document.getElementById('edit-expected');
+    if (exp) exp.checked = row.dataset.expected === '1';
+
+    const currentType = row.dataset.typeOriginal || '';
+    const isCustom = row.dataset.customType === '1';
+    const typeSelect = document.getElementById('edit-type-select');
+    if (typeSelect) {
+        const initialVal = (isCustom && currentType) ? currentType : '';
+        typeSelect.value = initialVal;
+        typeSelect.dataset.initial = initialVal;
+    }
+
     modal.style.display = 'flex';
 }
 
@@ -537,9 +547,22 @@ async function saveDevice() {
     const label = document.getElementById('edit-label').value;
     const group = document.getElementById('edit-group').value;
     const notes = document.getElementById('edit-notes').value;
-    const expected = document.getElementById('edit-expected').checked;
+    const expected = document.getElementById('edit-expected') ? document.getElementById('edit-expected').checked : false;
+
+    const payload = { ip, label, group, notes, expected };
+    const typeSelect = document.getElementById('edit-type-select');
+    if (typeSelect) {
+        if (typeSelect.value !== '') {
+            payload.type = typeSelect.value;
+            payload.custom_type = true;
+        } else if (typeSelect.dataset.initial && typeSelect.dataset.initial !== '') {
+            payload.type = '';
+            payload.custom_type = false;
+        }
+    }
+
     try {
-        const result = await api('device', { ip, label, group, notes, expected }, 'POST');
+        const result = await api('device', payload, 'POST');
         if (result.success) {
             showToast('Device updated', 'success');
             closeModal();

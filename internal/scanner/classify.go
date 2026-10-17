@@ -1,6 +1,10 @@
 package scanner
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+	"unicode"
+)
 
 // Device type labels produced by Classify. They are stable strings so stored
 // records, the API and the UI can all rely on them. TypeUnknown is the empty
@@ -17,6 +21,57 @@ const (
 	TypeConsole     = "Game Console"
 	TypeUnknown     = ""
 )
+
+// KnownTypes lists the standard built-in device types.
+var KnownTypes = []string{
+	TypePhone,
+	TypeComputer,
+	TypePrinter,
+	TypeTV,
+	TypeMediaPlayer,
+	TypeRouter,
+	TypeServer,
+	TypeIoT,
+	TypeConsole,
+}
+
+// MaxTypeLen bounds the length of a device type string.
+const MaxTypeLen = 32
+
+// IsKnownType reports whether t is one of the built-in classification types.
+func IsKnownType(t string) bool {
+	for _, k := range KnownTypes {
+		if k == t {
+			return true
+		}
+	}
+	return false
+}
+
+// ValidateType checks whether t is a valid device type string.
+// An empty string is valid and represents an unclassified / auto-detected device.
+// Non-empty strings must match one of the 9 built-in taxonomy types (case-insensitively).
+// Returns the canonical casing of the matched type, or an error if invalid or too long.
+func ValidateType(t string) (string, error) {
+	for _, r := range t {
+		if unicode.IsControl(r) {
+			return "", fmt.Errorf("device type cannot contain control characters")
+		}
+	}
+	t = strings.TrimSpace(t)
+	if t == "" {
+		return "", nil
+	}
+	if len([]rune(t)) > MaxTypeLen {
+		return "", fmt.Errorf("device type cannot be longer than %d characters", MaxTypeLen)
+	}
+	for _, k := range KnownTypes {
+		if strings.EqualFold(t, k) {
+			return k, nil
+		}
+	}
+	return "", fmt.Errorf("invalid device type %q: must be one of %s", t, strings.Join(KnownTypes, ", "))
+}
 
 // Classify infers a device's type from the signals a scan gathers: its vendor
 // (from the MAC OUI), its hostname, and, when service detection is enabled, the

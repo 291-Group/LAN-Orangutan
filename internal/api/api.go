@@ -213,11 +213,13 @@ func (h *Handler) handleDevice(w http.ResponseWriter, r *http.Request) {
 
 	case http.MethodPost:
 		var req struct {
-			IP       string  `json:"ip"`
-			Label    *string `json:"label"`
-			Notes    *string `json:"notes"`
-			Group    *string `json:"group"`
-			Expected *bool   `json:"expected"`
+			IP         string  `json:"ip"`
+			Label      *string `json:"label"`
+			Notes      *string `json:"notes"`
+			Group      *string `json:"group"`
+			Expected   *bool   `json:"expected"`
+			Type       *string `json:"type"`
+			CustomType *bool   `json:"custom_type"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			h.error(w, http.StatusBadRequest, "invalid JSON")
@@ -234,8 +236,21 @@ func (h *Handler) handleDevice(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if err := h.store.UpdateDeviceFields(ip, req.Label, req.Notes, req.Group, req.Expected); err != nil {
-			h.error(w, http.StatusNotFound, err.Error())
+		if req.Type != nil {
+			cleanType, err := scanner.ValidateType(*req.Type)
+			if err != nil {
+				h.error(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			req.Type = &cleanType
+		}
+
+		if err := h.store.UpdateDeviceFields(ip, req.Label, req.Notes, req.Group, req.Expected, req.Type, req.CustomType); err != nil {
+			if strings.Contains(err.Error(), "device not found") {
+				h.error(w, http.StatusNotFound, err.Error())
+			} else {
+				h.error(w, http.StatusBadRequest, err.Error())
+			}
 			return
 		}
 		h.success(w, map[string]string{"message": "device updated"})

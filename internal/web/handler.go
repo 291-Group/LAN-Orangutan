@@ -57,6 +57,7 @@ type PageData struct {
 	Stats        types.DeviceStats
 	Groups       []string
 	CurrentGroup string
+	Types        []string
 	Error        string
 
 	// AuthEnabled reports whether a password is configured, so pages can show
@@ -391,6 +392,9 @@ func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 	// is kept, so a user's ordering is not re-sorted out from under them.
 	groups := h.store.GetGroups()
 
+	// Standard taxonomy types for device type selection
+	typesList := scanner.KnownTypes
+
 	// Get networks
 	networks, _ := network.DetectNetworks()
 	networks = network.WithConfigured(networks, h.networkFilter())
@@ -409,6 +413,7 @@ func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 		Tailscale:      tailscale,
 		Stats:          stats,
 		Groups:         groups,
+		Types:          typesList,
 		AuthEnabled:    h.auth.Enabled(),
 		Flagged:        flagged,
 		Moved:          moved,
