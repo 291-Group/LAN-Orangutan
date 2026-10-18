@@ -96,6 +96,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleMarkAllExpected(w, r)
 	case path == "networks":
 		h.handleNetworks(w, r)
+	case path == "groups":
+		h.handleGroups(w, r)
 	case path == "scan":
 		h.handleScan(w, r)
 	case path == "scan/start":
@@ -629,14 +631,22 @@ func (h *Handler) handleScanInterval(w http.ResponseWriter, r *http.Request) {
 			"default": h.cfg.Scanning.ScanInterval,
 		})
 	case http.MethodPost:
+		// A pointer, so a body that omits "seconds" (or misspells it) is rejected
+		// rather than decoding to 0 and being clamped up to the floor. Silently
+		// turning a malformed request into a 10-second scan loop is the wrong
+		// kind of forgiving. Matches how the storage limits are handled below.
 		var body struct {
-			Seconds int `json:"seconds"`
+			Seconds *int `json:"seconds"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			h.error(w, http.StatusBadRequest, "invalid request body")
 			return
 		}
-		secs := clampInt(body.Seconds, minScanIntervalSeconds, maxScanIntervalSeconds)
+		if body.Seconds == nil {
+			h.error(w, http.StatusBadRequest, "seconds is required")
+			return
+		}
+		secs := clampInt(*body.Seconds, minScanIntervalSeconds, maxScanIntervalSeconds)
 		if err := h.store.SetScanInterval(secs); err != nil {
 			h.error(w, http.StatusInternalServerError, "could not save setting: "+err.Error())
 			return
@@ -724,6 +734,69 @@ func (h *Handler) networkSettingsView() map[string]interface{} {
 		"only_configured":  f.OnlyConfigured,
 		"detected":         detected,
 		"overridden":       nOver != nil || eOver != nil || oOver != nil,
+	}
+}
+
+// handleGroups handles GET/POST /api/groups, the device-group list shown in the
+// dashboard dropdowns and the Settings page.
+//
+// Groups were a fixed list baked into the template even though storage has
+// always accepted any value, so a user could not name a group after their own
+// kit. The list now lives in the scan state (nil = the built-in defaults) and is
+// edited here. A rename rewrites the group on every device that used it and a
+// delete clears it, so the list and the devices stay consistent.
+func (h *Handler) handleGroups(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		h.success(w, h.groupsView())
+
+	case http.MethodPost:
+		var body struct {
+			Action  string `json:"action"`
+			Name    string `json:"name"`
+			NewName string `json:"new_name"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			h.error(w, http.StatusBadRequest, "invalid request body")
+			return
+		}
+
+		var err error
+		switch body.Action {
+		case "add":
+			err = h.store.AddGroup(body.Name)
+		case "rename":
+			err = h.store.RenameGroup(body.Name, body.NewName)
+		case "delete":
+			err = h.store.DeleteGroup(body.Name)
+		case "reset":
+			err = h.store.SetGroups(nil)
+		default:
+			h.error(w, http.StatusBadRequest, "action must be one of: add, rename, delete, reset")
+			return
+		}
+		if err != nil {
+			// These are all user-input problems (empty name, duplicate, unknown
+			// group), so they are a 400 rather than a server error.
+			h.error(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		h.success(w, h.groupsView())
+
+	default:
+		h.error(w, http.StatusMethodNotAllowed, "method not allowed")
+	}
+}
+
+// groupsView returns the effective group list, whether it has been customised,
+// and how many devices carry each group so the UI can warn before a destructive
+// edit.
+func (h *Handler) groupsView() map[string]interface{} {
+	return map[string]interface{}{
+		"groups":     nonNil(h.store.GetGroups()),
+		"defaults":   storage.DefaultGroups(),
+		"customised": h.store.GroupsCustomised(),
+		"counts":     h.store.GroupCounts(),
 	}
 }
 

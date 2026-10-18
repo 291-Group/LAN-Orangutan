@@ -649,5 +649,87 @@ jobs:
             dist/SHA256SUMS.txt
           generate_release_notes: true
           draft: false
+          # A tag with a hyphen (v3.4.2-beta.1) is a pre-release. Without this
+          # it would publish as a normal release and GitHub would mark it
+          # "Latest" on the repository front page, above the real one. Evaluates
+          # to false for an ordinary tag, so release behaviour is unchanged.
+          prerelease: ${{ contains(github.event.inputs.tag || github.ref_name, '-') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Publish the Homebrew formula and Scoop manifest into the org's shared
+      # tap and bucket, so `brew install 291-group/tap/lan-orangutan` and
+      # `scoop install lan-orangutan` pick up this release. Both repositories
+      # are shared with LAN Sheriff. Each product owns one file by name
+      # (Sheriff a cask, this a formula), so the only thing that can collide is
+      # the push itself, which is handled below.
+      #
+      # Deliberately after the release exists: the formula and manifest point at
+      # this release's download URLs, which must resolve before anyone installs.
+      # Deliberately unable to block the release: with no TAP_TOKEN secret the
+      # step says so and stops, and a failure here leaves the release already
+      # published, so the fix is to re-run this job, not to re-release.
+      - name: Publish to Homebrew tap and Scoop bucket
+        env:
+          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          VERSION=${{ steps.version.outputs.VERSION }}
+
+          if [ -z "${TAP_TOKEN:-}" ]; then
+            echo "TAP_TOKEN secret is not set; skipping the tap and bucket update."
+            echo "Add it under Settings > Secrets and variables > Actions to enable this step."
+            exit 0
+          fi
+
+          # A pre-release tag (v3.4.2-beta.1) must not reach the channels people
+          # install from. Report what would change and stop short of committing.
+          case "$TAG" in
+            *-*) PUBLIC=false ;;
+            *)   PUBLIC=true ;;
+          esac
+
+          git config --global user.name "291 Group release"
+          git config --global user.email "info@291group.com"
+
+          publish() {   # repo, source file, destination path
+            local repo=$1 src=$2 dst=$3
+            local dir="$RUNNER_TEMP/$repo"
+            # The clone is the real test of the token: wrong scope, wrong
+            # repository or an expired token all fail here, plainly.
+            git clone --depth 1 "https://x-access-token:${TAP_TOKEN}@github.com/291-Group/${repo}.git" "$dir"
+            mkdir -p "$dir/$(dirname "$dst")"
+            cp "$src" "$dir/$dst"
+            ( cd "$dir"
+              git add "$dst"
+              if git diff --cached --quiet; then
+                echo "  $repo already has $VERSION"
+                return
+              fi
+              if [ "$PUBLIC" != "true" ]; then
+                echo "  $repo would be updated to $VERSION; not committing, this is a pre-release"
+                git --no-pager diff --cached --stat | sed 's/^/    /'
+                return
+              fi
+              git commit -m "lan-orangutan $VERSION"
+              # These repositories are shared, so the push can lose a race: if
+              # the other product commits between our clone and our push, the
+              # push is rejected as non-fast-forward. Our change is a single
+              # file nobody else touches, so a rebase is never a merge decision.
+              pushed=0
+              for attempt in 1 2 3; do
+                if git push; then pushed=1; break; fi
+                echo "  $repo: push rejected on attempt $attempt, rebasing onto what landed first"
+                git pull --rebase --quiet || true
+              done
+              if [ "$pushed" -ne 1 ]; then
+                echo "::error::$repo: could not push after three attempts"
+                exit 1
+              fi
+              echo "  $repo updated to $VERSION"
+            )
+          }
+
+          publish homebrew-tap dist/lan-orangutan.rb   Formula/lan-orangutan.rb
+          publish scoop-bucket dist/lan-orangutan.json bucket/lan-orangutan.json

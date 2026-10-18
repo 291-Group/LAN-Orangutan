@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/291-Group/LAN-Orangutan/internal/network"
+	"github.com/291-Group/LAN-Orangutan/internal/scanner"
 	"github.com/291-Group/LAN-Orangutan/internal/storage"
 )
 
@@ -32,7 +33,11 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 	fmt.Println("Tools:")
 	checkTool("nmap")
-	checkTool("arp-scan")
+	// arp-scan has no Windows build, so listing it there only ever reports a
+	// tool the user cannot install as missing.
+	if scanner.ArpScanAvailable() {
+		checkTool("arp-scan")
+	}
 	checkTool("tailscale")
 
 	// Storage
@@ -101,7 +106,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 }
 
 func checkTool(name string) {
-	path, err := exec.LookPath(name)
+	path, err := toolPath(name)
 	if err != nil {
 		fmt.Printf("  %s: not found\n", name)
 	} else {
@@ -115,11 +120,27 @@ func checkTool(name string) {
 	}
 }
 
+// toolPath resolves a tool the same way the scanner does, so `status` and a
+// real scan never disagree about whether nmap is present. For nmap that means
+// checking the standard install locations as well as PATH.
+func toolPath(name string) (string, error) {
+	if name == "nmap" {
+		return scanner.NmapPath()
+	}
+	return exec.LookPath(name)
+}
+
 func getToolVersion(name string) string {
 	var cmd *exec.Cmd
 	switch name {
 	case "nmap":
-		cmd = exec.Command("nmap", "--version")
+		// Resolved path, not the bare name: this has to work in the same case
+		// NmapPath exists for, where nmap is installed but not yet on PATH.
+		bin, err := scanner.NmapPath()
+		if err != nil {
+			return ""
+		}
+		cmd = exec.Command(bin, "--version")
 	case "arp-scan":
 		cmd = exec.Command("arp-scan", "--version")
 	case "tailscale":

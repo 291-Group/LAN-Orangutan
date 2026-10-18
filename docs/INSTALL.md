@@ -17,6 +17,14 @@ sudo ./orangutan serve
 
 ### macOS
 
+With Homebrew:
+
+```bash
+brew install 291-group/tap/lan-orangutan
+```
+
+Or by hand:
+
 ```bash
 # Download and extract
 curl -LO https://github.com/291-Group/LAN-Orangutan/releases/latest/download/orangutan-darwin-arm64.tar.gz
@@ -27,6 +35,15 @@ sudo ./orangutan serve
 ```
 
 ### Windows
+
+With Scoop:
+
+```powershell
+scoop bucket add 291group https://github.com/291-Group/scoop-bucket
+scoop install lan-orangutan
+```
+
+Or by hand:
 
 Download `orangutan-windows-amd64.zip` from [GitHub Releases](https://github.com/291-Group/LAN-Orangutan/releases), extract, and run as Administrator.
 

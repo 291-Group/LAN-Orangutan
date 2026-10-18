@@ -1,0 +1,27 @@
+name: Feature request
+description: An idea for something LAN Orangutan should do
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ideas are welcome. One thing to know first: LAN Orangutan is meant to be the simplest and fastest scanner to reach for, so anything that adds setup or complexity for the user is a hard sell. If your idea fits that, say so. If it does not, we would still rather hear it.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The situation, not the solution. What is awkward or missing today?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like to see?
+      description: How you imagine it working. Rough is fine.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What do you do instead today?
+      description: Workarounds, other tools, or nothing.

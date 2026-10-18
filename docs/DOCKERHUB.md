@@ -136,7 +136,7 @@ If Tailscale is connected, its online peers are added to your device list alongs
 - **First run** presents a "create a password" screen. Until you finish it, every page and every API endpoint is refused. The password is stored as a bcrypt hash in a file readable only by its owner, separately from your config.
 - **Sign-in** lasts a week by default. Five wrong guesses lock that address out for fifteen minutes.
 - **Set the password in advance** with `ORANGUTAN_PASSWORD`, or keep it out of the environment with `ORANGUTAN_PASSWORD_FILE=/run/secrets/orangutan`.
-- **Turn auth off** with `ORANGUTAN_ALLOW_INSECURE=true` only when access control genuinely lives elsewhere, such as a reverse proxy that handles login.
+- **Turn auth off** with `ORANGUTAN_ALLOW_INSECURE=true` only when access control genuinely lives elsewhere, such as a reverse proxy that handles login. This also overrides a password created earlier through the setup page, which is stored in the data volume.
 - **No built-in HTTPS.** Put LAN Orangutan behind a reverse proxy, or reach it over Tailscale, if you need the connection encrypted.
 
 Full details, known limitations, and how to report a vulnerability: [SECURITY.md](https://github.com/291-Group/LAN-Orangutan/blob/main/SECURITY.md).

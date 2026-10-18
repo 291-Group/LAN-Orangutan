@@ -234,6 +234,26 @@ orangutan export out.csv</code></pre>
         </section>
 
         <section class="section">
+            <h2 class="section-title">Device Groups</h2>
+            <div class="card">
+                <div class="form-group">
+                    <label>Your groups</label>
+                    <p class="form-help" style="margin-top: 0;">Rename a group to fit your own kit, or add ones that suit it better. Renaming updates every device already in that group. Deleting a group leaves its devices ungrouped, it never deletes a device.</p>
+                    <div id="group-list" class="group-list"></div>
+                    <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
+                        <input type="text" id="group-input" class="input" placeholder="e.g. Wearables" maxlength="32" style="width: 220px;" onkeydown="if(event.key==='Enter'){event.preventDefault();addGroup();}">
+                        <button class="btn" onclick="addGroup()">Add group</button>
+                    </div>
+                </div>
+                <div class="form-group" style="display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0;">
+                    <button class="btn" onclick="resetGroups()">Reset to defaults</button>
+                    <span id="groups-status" class="form-help" style="margin: 0;"></span>
+                </div>
+                <p class="form-help">Changes apply immediately. Saved to this instance, not your config file.</p>
+            </div>
+        </section>
+
+        <section class="section">
             <h2 class="section-title">Storage</h2>
             <div class="card">
                 <div class="form-group">
@@ -608,6 +628,179 @@ orangutan export out.csv</code></pre>
         function resetNetworks() { saveNetworks(true); }
 
         loadNetworks();
+
+        // Device groups. The list is built with the DOM (textContent), never by
+        // string-concatenating markup, so a group name can never inject anything.
+        // Rename edits in place; delete asks first when devices would be affected.
+        let groupCounts = {};
+
+        function renderGroups(data) {
+            groupCounts = data.counts || {};
+            const el = document.getElementById('group-list');
+            el.textContent = '';
+            const groups = data.groups || [];
+            if (groups.length === 0) {
+                const none = document.createElement('span');
+                none.className = 'form-help';
+                none.style.margin = '0';
+                none.textContent = 'No groups. Add one below, or reset to the defaults.';
+                el.appendChild(none);
+                return;
+            }
+            groups.forEach(name => el.appendChild(groupRow(name)));
+        }
+
+        function groupRow(name) {
+            const row = document.createElement('div');
+            row.className = 'group-row';
+
+            const label = document.createElement('span');
+            label.className = 'group-name';
+            label.textContent = name;
+            row.appendChild(label);
+
+            const count = groupCounts[name] || 0;
+            const meta = document.createElement('span');
+            meta.className = 'group-count';
+            meta.textContent = count === 1 ? '1 device' : count + ' devices';
+            row.appendChild(meta);
+
+            const actions = document.createElement('span');
+            actions.className = 'group-actions';
+
+            const rename = document.createElement('button');
+            rename.type = 'button';
+            rename.className = 'btn btn-sm';
+            rename.textContent = 'Rename';
+            rename.onclick = () => startRename(row, name);
+            actions.appendChild(rename);
+
+            const del = document.createElement('button');
+            del.type = 'button';
+            del.className = 'btn btn-sm danger';
+            del.textContent = 'Delete';
+            del.onclick = () => confirmDeleteGroup(row, name, count);
+            actions.appendChild(del);
+
+            row.appendChild(actions);
+            return row;
+        }
+
+        // Rename in place: swap the row for an input seeded with the current
+        // name, so the user edits the name rather than retyping it.
+        function startRename(row, name) {
+            row.textContent = '';
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'input';
+            input.value = name;
+            input.maxLength = 32;
+            input.style.width = '220px';
+            input.onkeydown = (e) => {
+                if (e.key === 'Enter') { e.preventDefault(); commit(); }
+                if (e.key === 'Escape') { e.preventDefault(); loadGroups(); }
+            };
+            row.appendChild(input);
+
+            const save = document.createElement('button');
+            save.type = 'button';
+            save.className = 'btn btn-sm btn-primary';
+            save.textContent = 'Save';
+            save.onclick = commit;
+            row.appendChild(save);
+
+            const cancel = document.createElement('button');
+            cancel.type = 'button';
+            cancel.className = 'btn btn-sm';
+            cancel.textContent = 'Cancel';
+            cancel.onclick = () => loadGroups();
+            row.appendChild(cancel);
+
+            input.focus();
+            input.select();
+
+            function commit() {
+                const next = input.value.trim();
+                if (!next || next === name) { loadGroups(); return; }
+                groupAction({ action: 'rename', name: name, new_name: next });
+            }
+        }
+
+        // Deleting a group that devices are using is worth a confirm, since it
+        // clears the group from all of them. An empty group just goes.
+        function confirmDeleteGroup(row, name, count) {
+            if (count === 0) {
+                groupAction({ action: 'delete', name: name });
+                return;
+            }
+            row.textContent = '';
+            const msg = document.createElement('span');
+            msg.className = 'group-name';
+            msg.textContent = 'Remove "' + name + '" from ' + (count === 1 ? '1 device' : count + ' devices') + '?';
+            row.appendChild(msg);
+
+            const yes = document.createElement('button');
+            yes.type = 'button';
+            yes.className = 'btn btn-sm danger';
+            yes.textContent = 'Delete group';
+            yes.onclick = () => groupAction({ action: 'delete', name: name });
+            row.appendChild(yes);
+
+            const no = document.createElement('button');
+            no.type = 'button';
+            no.className = 'btn btn-sm';
+            no.textContent = 'Cancel';
+            no.onclick = () => loadGroups();
+            row.appendChild(no);
+        }
+
+        function addGroup() {
+            const input = document.getElementById('group-input');
+            const v = input.value.trim();
+            if (!v) return;
+            groupAction({ action: 'add', name: v }, () => { input.value = ''; });
+        }
+
+        function resetGroups() {
+            groupAction({ action: 'reset' });
+        }
+
+        async function loadGroups() {
+            try {
+                const res = await fetch('/api/groups').then(r => r.json());
+                if (res.success) renderGroups(res.data);
+            } catch (e) { /* leave empty if unreachable */ }
+        }
+
+        async function groupAction(body, onOk) {
+            const status = document.getElementById('groups-status');
+            try {
+                const res = await fetch('/api/groups', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                }).then(r => r.json());
+                if (res.success) {
+                    renderGroups(res.data);
+                    if (onOk) onOk();
+                    status.textContent = 'Saved';
+                    status.style.color = 'var(--success)';
+                } else {
+                    // The server rejected it (duplicate, empty, too long). Show
+                    // its message and put the list back the way it was.
+                    status.textContent = res.error || 'Could not save';
+                    status.style.color = 'var(--danger)';
+                    loadGroups();
+                }
+            } catch (e) {
+                status.textContent = 'Could not save';
+                status.style.color = 'var(--danger)';
+                loadGroups();
+            }
+            setTimeout(() => { status.textContent = ''; }, 3500);
+        }
+
+        loadGroups();
 
         // Backup / restore. Backup is a plain download link. Restore reads the
         // chosen file, shows an inline confirm (destructive), then POSTs it.

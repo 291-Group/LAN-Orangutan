@@ -4,6 +4,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/291-Group/LAN-Orangutan/internal/auth"
+	"github.com/291-Group/LAN-Orangutan/internal/config"
 )
 
 func TestHostIsLoopback(t *testing.T) {
@@ -80,5 +83,88 @@ func TestGuardHost_NetworkBindIsPassthrough(t *testing.T) {
 	guard.ServeHTTP(w, r)
 	if !reached || w.Code != http.StatusOK {
 		t.Fatalf("network bind should pass any Host: reached=%v code=%d", reached, w.Code)
+	}
+}
+
+// authPassword is the one place that decides whether a password gates the
+// dashboard, so these pin down the precedence, and in particular that
+// allow_insecure wins over a password stored by the setup page (GitHub #45).
+
+func authTestConfig(t *testing.T) *config.Config {
+	t.Helper()
+	cfg := config.Default()
+	cfg.Storage.DataDir = t.TempDir()
+	return cfg
+}
+
+func storeSetupPassword(t *testing.T, cfg *config.Config) {
+	t.Helper()
+	// A real bcrypt hash of "correct horse", so LoadHash accepts it.
+	const hash = "$2a$10$7EqJtq98hPqEX7fNZaFWoOa5aL1ScuGUHyvFuVvYQWD/2lmGhDHPa"
+	if err := auth.SaveHash(cfg.PasswordFile(), hash); err != nil {
+		t.Fatalf("SaveHash: %v", err)
+	}
+}
+
+func TestAuthPasswordFallsBackToSetupPagePassword(t *testing.T) {
+	cfg := authTestConfig(t)
+	storeSetupPassword(t, cfg)
+
+	got, ignored := authPassword(cfg)
+	if got == "" {
+		t.Fatal("with no configured password, the stored setup-page password should be used")
+	}
+	if ignored != "" {
+		t.Errorf("nothing should be reported as ignored, got %q", ignored)
+	}
+}
+
+func TestAuthPasswordConfiguredWinsOverStored(t *testing.T) {
+	cfg := authTestConfig(t)
+	storeSetupPassword(t, cfg)
+	cfg.Server.Password = "from-config"
+
+	got, _ := authPassword(cfg)
+	if got != "from-config" {
+		t.Fatalf("configured password should win over the stored one, got %q", got)
+	}
+}
+
+// The #45 case: a password was created on first visit, then allow_insecure was
+// set. The stored hash must not gate the dashboard any more.
+func TestAllowInsecureIgnoresSetupPagePassword(t *testing.T) {
+	cfg := authTestConfig(t)
+	storeSetupPassword(t, cfg)
+	cfg.Server.AllowInsecure = true
+
+	got, ignored := authPassword(cfg)
+	if got != "" {
+		t.Fatalf("allow_insecure must disable the stored password, got %q", got)
+	}
+	if ignored == "" {
+		t.Error("the banner should be told a stored password was ignored")
+	}
+}
+
+func TestAllowInsecureIgnoresConfiguredPassword(t *testing.T) {
+	cfg := authTestConfig(t)
+	cfg.Server.Password = "from-config"
+	cfg.Server.AllowInsecure = true
+
+	got, ignored := authPassword(cfg)
+	if got != "" {
+		t.Fatalf("allow_insecure must disable the configured password, got %q", got)
+	}
+	if ignored == "" {
+		t.Error("the banner should be told a configured password was ignored")
+	}
+}
+
+func TestAllowInsecureWithNoPasswordReportsNothingIgnored(t *testing.T) {
+	cfg := authTestConfig(t)
+	cfg.Server.AllowInsecure = true
+
+	if got, ignored := authPassword(cfg); got != "" || ignored != "" {
+		t.Fatalf("got password %q, ignored %q; want both empty", got, ignored)
 	}
 }

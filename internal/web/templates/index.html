@@ -224,13 +224,7 @@ orangutan export out.csv</code></pre>
                     </select>
                     <select id="group-filter" class="select" style="width:auto" onchange="filterDevices()">
                         <option value="all">All Groups</option>
-                        <option value="Server">Server</option>
-                        <option value="Desktop">Desktop</option>
-                        <option value="Laptop">Laptop</option>
-                        <option value="Mobile">Mobile</option>
-                        <option value="IoT">IoT</option>
-                        <option value="Network">Network</option>
-                        <option value="Pi">Pi</option>
+                        {{range .Groups}}<option value="{{.}}">{{.}}</option>{{end}}
                     </select>
                     <button class="btn" onclick="markAllExpected()" title="Mark every current device as expected, so you are flagged only when something new appears or a known device goes missing">Mark all expected</button>
                     <button class="btn" onclick="openSnapshots()">Snapshots</button>
@@ -259,8 +253,8 @@ orangutan export out.csv</code></pre>
                             <th data-sort="type" onclick="sortTable('type')">Type <span class="sort-icon">↕</span></th>
                             <th data-sort="mac" onclick="sortTable('mac')">MAC Address <span class="sort-icon">↕</span></th>
                             <th data-sort="vendor" onclick="sortTable('vendor')">Vendor <span class="sort-icon">↕</span></th>
-                            <th>Label</th>
-                            <th>Group</th>
+                            <th data-sort="label" onclick="sortTable('label')">Label <span class="sort-icon">↕</span></th>
+                            <th data-sort="group" onclick="sortTable('group')">Group <span class="sort-icon">↕</span></th>
                             <th data-sort="lastseen" onclick="sortTable('lastseen')">Last Seen <span class="sort-icon">↕</span></th>
                             <th>Actions</th>
                         </tr>
@@ -304,13 +298,7 @@ orangutan export out.csv</code></pre>
                             <td data-label="Group">
                                 <select class="group-select" data-ip="{{.IP}}" onchange="updateDeviceGroup(this)">
                                     <option value="">-</option>
-                                    <option value="Server" {{if eq .Group "Server"}}selected{{end}}>Server</option>
-                                    <option value="Desktop" {{if eq .Group "Desktop"}}selected{{end}}>Desktop</option>
-                                    <option value="Laptop" {{if eq .Group "Laptop"}}selected{{end}}>Laptop</option>
-                                    <option value="Mobile" {{if eq .Group "Mobile"}}selected{{end}}>Mobile</option>
-                                    <option value="IoT" {{if eq .Group "IoT"}}selected{{end}}>IoT</option>
-                                    <option value="Network" {{if eq .Group "Network"}}selected{{end}}>Network</option>
-                                    <option value="Pi" {{if eq .Group "Pi"}}selected{{end}}>Pi</option>
+                                    {{$g := .Group}}{{range $.Groups}}<option value="{{.}}" {{if eq $g .}}selected{{end}}>{{.}}</option>{{end}}
                                 </select>
                             </td>
                             <td class="time-cell" data-label="Last Seen" data-relative-time="{{.LastSeenUnix}}">{{.TimeAgo}}</td>
@@ -331,6 +319,7 @@ orangutan export out.csv</code></pre>
                         <span class="legend-item"><span class="legend-dot online"></span>Online</span>
                         <span class="legend-item"><span class="legend-dot seen"></span>Seen recently</span>
                         <span class="legend-item"><span class="legend-dot offline"></span>Offline</span>
+                        <span class="legend-item clip-hint" id="clip-hint" hidden>Shortened values show in full on hover</span>
                     </div>
                     {{if or .ContinuousScan .LastScanAt}}
                     <span class="table-footer-label">
@@ -373,13 +362,7 @@ orangutan export out.csv</code></pre>
                         <label>Group</label>
                         <select id="edit-group" name="group" class="select">
                             <option value="">None</option>
-                            <option value="Server">Server</option>
-                            <option value="Desktop">Desktop</option>
-                            <option value="Laptop">Laptop</option>
-                            <option value="Mobile">Mobile</option>
-                            <option value="IoT">IoT</option>
-                            <option value="Network">Network</option>
-                            <option value="Pi">Pi</option>
+                            {{range .Groups}}<option value="{{.}}">{{.}}</option>{{end}}
                         </select>
                     </div>
                     <div class="form-group">

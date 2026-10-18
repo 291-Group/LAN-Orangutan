@@ -17,6 +17,7 @@ import (
 
 	"github.com/291-Group/LAN-Orangutan/internal/api"
 	"github.com/291-Group/LAN-Orangutan/internal/auth"
+	"github.com/291-Group/LAN-Orangutan/internal/config"
 	"github.com/291-Group/LAN-Orangutan/internal/network"
 	"github.com/291-Group/LAN-Orangutan/internal/storage"
 	"github.com/291-Group/LAN-Orangutan/internal/web"
@@ -84,13 +85,8 @@ func runServe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to apply storage limits: %w", err)
 	}
 
-	// A password from the config file or environment wins. Otherwise fall back
-	// to one created earlier through the setup page.
-	password := cfg.Server.Password
-	if password == "" {
-		password = auth.LoadHash(cfg.PasswordFile())
-		cfg.Server.Password = password
-	}
+	password, ignoredPassword := authPassword(cfg)
+	cfg.Server.Password = password
 
 	authn, err := auth.New(password, cfg.SessionTTL())
 	if err != nil {
@@ -208,6 +204,11 @@ func runServe(cmd *cobra.Command, args []string) error {
 	}
 
 	switch {
+	case cfg.Server.AllowInsecure:
+		fmt.Println("Password:       OFF (allow_insecure is set: anyone who can reach this address has full access)")
+		if ignoredPassword != "" {
+			fmt.Printf("                %s is being ignored because allow_insecure is set\n", ignoredPassword)
+		}
 	case authn.NeedsSetup():
 		fmt.Println("Password:       not set yet, open the page above to create one")
 	case authn.Enabled():
@@ -350,4 +351,31 @@ func listenAddresses(bind string, port int) []string {
 		out = append(out, net.JoinHostPort(n.IP.String(), fmt.Sprint(port)))
 	}
 	return out
+}
+
+// authPassword decides which password, if any, protects this instance, and
+// names anything it deliberately ignored so the startup banner can say so.
+//
+// A password from the config file or environment wins over one created through
+// the setup page, which lives in the data dir. allow_insecure means what the
+// docs say, no password protection at all, so it wins over both. It has to: the
+// setup-page password is easy to forget you ever created, and a user who set one
+// on first visit and later opted out (a container behind a reverse proxy, say)
+// otherwise found the flag did nothing. Setup was skipped, but the old hash still
+// gated every page and sent them to the login screen. That was GitHub #45.
+func authPassword(cfg *config.Config) (password, ignored string) {
+	stored := auth.LoadHash(cfg.PasswordFile())
+	if cfg.Server.AllowInsecure {
+		switch {
+		case cfg.Server.Password != "":
+			return "", "The configured password"
+		case stored != "":
+			return "", "The password created through the setup page"
+		}
+		return "", ""
+	}
+	if cfg.Server.Password != "" {
+		return cfg.Server.Password, ""
+	}
+	return stored, ""
 }

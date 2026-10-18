@@ -134,6 +134,11 @@ type ScanState struct {
 	Networks               *[]string `json:"networks,omitempty"`
 	ExcludeNetworks        *[]string `json:"exclude_networks,omitempty"`
 	OnlyConfiguredNetworks *bool     `json:"only_configured_networks,omitempty"`
+	// Groups is the user's device-group list, set from the Settings page. nil
+	// means "use the built-in defaults"; a non-nil slice replaces them outright,
+	// so a group can be added, renamed or removed. Renaming rewrites the group
+	// on every device that used it, so the list and the devices never disagree.
+	Groups *[]string `json:"groups,omitempty"`
 }
 
 // ScanResult represents the outcome of a network scan

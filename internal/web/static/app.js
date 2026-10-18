@@ -622,22 +622,38 @@ async function updateDeviceGroup(select) {
 function copyToClipboard(text, event) {
     const ok = () => showCopied(event);
     const fail = () => showToast('Failed to copy', 'error');
+    // Chromium over plain http cannot be written to at all (see
+    // clipboardWriteBlocked). The one copy the browser still honours there is
+    // the user's own keyboard shortcut, so select the value for them and say so,
+    // instead of claiming a copy that did not happen.
+    if (clipboardWriteBlocked()) {
+        if (selectValueText(event, text)) {
+            showCopied(event, 'Press ' + copyShortcutName() + ' to copy');
+        } else {
+            fail();
+        }
+        return;
+    }
+    // Non-secure fallbacks, in order: the copy-event route first (nothing to
+    // tear down, so nothing to race), the hidden-field route last.
+    const fallback = () => copyViaEvent(text) || legacyCopy(text);
     if (navigator.clipboard && window.isSecureContext) {
         navigator.clipboard.writeText(text).then(ok).catch(() => {
-            if (legacyCopy(text)) ok(); else fail();
+            if (fallback()) ok(); else fail();
         });
-    } else if (legacyCopy(text)) {
+    } else if (fallback()) {
         ok();
     } else {
         fail();
     }
 }
 
-// The floating "Copied!" note at the tap/cursor point.
-function showCopied(event) {
+// The floating "Copied!" note at the tap/cursor point. A different message
+// can be given for the case where the user has to finish the copy themselves.
+function showCopied(event, message) {
     const feedback = document.createElement('div');
     feedback.className = 'copy-feedback';
-    feedback.textContent = 'Copied!';
+    feedback.textContent = message || 'Copied!';
     document.body.appendChild(feedback);
     // .copy-feedback is position: fixed, so it is placed in viewport
     // coordinates (clientX/clientY). pageX/pageY include the scroll offset,
@@ -658,16 +674,101 @@ function showCopied(event) {
     const top = Math.max(pad, y - 30);
     feedback.style.left = left + 'px';
     feedback.style.top = top + 'px';
-    setTimeout(() => feedback.remove(), 800);
+    // "Copied!" is a flash; an instruction needs long enough to be read and
+    // acted on.
+    setTimeout(() => feedback.remove(), message ? 2500 : 800);
 }
 
-// Legacy clipboard copy for non-secure contexts (plain-http LAN access from a
-// phone). Uses a hidden, selectable field and document.execCommand('copy'),
-// which is deprecated but is the only clipboard path available without HTTPS
-// and still works across current mobile and desktop browsers. The Range-based
-// selection is what makes it work on iOS Safari, where textarea.select() alone
-// does not. Returns whether the copy succeeded, and restores any prior page
-// selection so the user's own text selection is left untouched.
+// Chromium (Chrome, Edge, Brave) no longer writes the clipboard from a page
+// served over plain http, whichever route is used: execCommand reports success,
+// the copy event fires, and nothing lands. Reproduced on Chromium 153 against
+// this dashboard (GitHub #43: Brave and Edge fail, Firefox copies, all on the
+// same http://<ip> instance). There is no page-side way around it and no way to
+// detect it after the fact, since every call reports success, so it has to be
+// decided up front from the two facts that define it: not a secure context, and
+// a Chromium browser. window.chrome is present in Chrome, Edge and Brave on every
+// page and absent in Firefox and Safari. (navigator.userAgentData would be the
+// tidier signal, but it is itself secure-context-only, so it is undefined on
+// precisely the pages this check exists for.) The user-agent test is a backstop
+// for a Chromium build that hides window.chrome.
+function clipboardWriteBlocked() {
+    if (window.isSecureContext) return false;
+    return !!window.chrome || /\b(Chrome|Chromium|Edg|Brave)\//.test(navigator.userAgent);
+}
+
+// Select the copied value's own text in the clicked cell, so a keyboard copy
+// takes exactly that value and nothing else in the cell (an icon, the IPv6
+// line under an IPv4 address). Returns whether a selection was made.
+function selectValueText(event, text) {
+    const cell = event && event.target && event.target.closest ? event.target.closest('[data-copy]') : null;
+    if (!cell || !window.getSelection) return false;
+    let node = null;
+    for (const child of cell.childNodes) {
+        if (child.nodeType === Node.TEXT_NODE && child.textContent.trim() === text) {
+            node = child;
+            break;
+        }
+    }
+    const range = document.createRange();
+    if (node) {
+        const start = node.textContent.indexOf(text);
+        range.setStart(node, start);
+        range.setEnd(node, start + text.length);
+    } else {
+        range.selectNodeContents(cell);
+    }
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    return true;
+}
+
+// The copy shortcut as the user knows it on their platform.
+function copyShortcutName() {
+    const p = navigator.platform || ((navigator.userAgentData && navigator.userAgentData.platform) || '');
+    return /mac|iphone|ipad/i.test(p) ? '\u2318C' : 'Ctrl+C';
+}
+
+// Clipboard copy for non-secure contexts (plain-http LAN access, the common
+// case for a self-hosted instance) with no element involved at all.
+//
+// execCommand('copy') fires a `copy` event; a listener that sets the event's
+// clipboardData and prevents the default is what the browser then puts on the
+// clipboard. Nothing is added to the page and nothing is removed afterwards.
+// That matters because the hidden-field route below removes its field the
+// instant execCommand returns, and on some systems the clipboard is served
+// lazily by whichever element owns it, so tearing that element down at once
+// can leave an empty clipboard while the copy still reported success (the
+// "Copied!" note with nothing to paste that was reported against v3.3.8).
+// Returns whether the browser accepted the copy.
+function copyViaEvent(text) {
+    if (typeof document.execCommand !== 'function') return false;
+    let handled = false;
+    const onCopy = (e) => {
+        if (!e.clipboardData) return;
+        e.clipboardData.setData('text/plain', text);
+        e.preventDefault();
+        handled = true;
+    };
+    document.addEventListener('copy', onCopy, { once: true });
+    let ok = false;
+    try {
+        ok = document.execCommand('copy');
+    } catch (e) {
+        ok = false;
+    }
+    // { once } already removed it if the event fired; this covers the case
+    // where execCommand did not dispatch a copy event at all.
+    document.removeEventListener('copy', onCopy);
+    return ok && handled;
+}
+
+// Last-resort clipboard copy: a hidden, selectable field and
+// document.execCommand('copy'). Deprecated, but still the widest-supported
+// path when copyViaEvent is refused. The Range-based selection is what makes
+// it work on iOS Safari, where textarea.select() alone does not. Returns
+// whether the copy succeeded, and restores any prior page selection so the
+// user's own text selection is left untouched.
 function legacyCopy(text) {
     let ok = false;
     const field = document.createElement('textarea');
@@ -702,11 +803,15 @@ function legacyCopy(text) {
     } catch (e) {
         ok = false;
     }
-    document.body.removeChild(field);
+    // Restore the user's selection now, but take the field itself down on the
+    // next tick rather than synchronously: it is the clipboard's owner until
+    // the handoff completes, and removing it in the same task has been seen to
+    // leave the clipboard empty despite execCommand reporting success.
     if (selection) {
         selection.removeAllRanges();
         if (previous) selection.addRange(previous);
     }
+    setTimeout(() => { if (field.parentNode) field.parentNode.removeChild(field); }, 0);
     return ok;
 }
 
@@ -806,6 +911,14 @@ function compareRows(a, b, column) {
         case 'vendor':
             valA = a.dataset.vendor || 'zzz';
             valB = b.dataset.vendor || 'zzz';
+            break;
+        case 'label':
+        case 'group':
+            // The two the user types themselves, so compare them the way the
+            // user reads them: case-insensitively, with devices that have no
+            // value sorted to the end rather than to the top.
+            valA = (a.dataset[column] || '').toLowerCase() || 'zzz';
+            valB = (b.dataset[column] || '').toLowerCase() || 'zzz';
             break;
         case 'status':
             const order = { online: 0, recent: 1, offline: 2 };
@@ -1298,6 +1411,54 @@ async function disconnectTailscale() {
     });
     // A stale tooltip must not linger over new content.
     window.addEventListener('scroll', hide, { passive: true });
+
+    // Discoverability. The reveal existed but nothing said so: a clipped cell
+    // looked identical to a normal one apart from the ellipsis, which reads as
+    // "cut off", not "hover me" (GitHub #41). Two signals, both present only
+    // when something is actually clipped, so a table whose values all fit shows
+    // neither: the cell itself fades out at its right edge instead of ending in
+    // an ellipsis (.is-clipped), and the footer legend gains a one-line hint.
+    //
+    // Re-run whenever widths can change: after load and font loading (metrics
+    // shift once web fonts arrive), on resize, and after an auto-refresh swaps
+    // the rows and the footer (which is why the hint is server-rendered and
+    // toggled here rather than injected once).
+    function markClipped() {
+        let any = false;
+        table.querySelectorAll(SELECTOR).forEach(cell => {
+            const clipped = isClipped(cell);
+            cell.classList.toggle('is-clipped', clipped);
+            if (clipped) any = true;
+        });
+        const hint = document.getElementById('clip-hint');
+        if (hint) hint.hidden = !any;
+    }
+    // Coalesced with a timer rather than requestAnimationFrame: a frame never
+    // fires while the tab is hidden, so a dashboard opened in a background tab
+    // would sit unmarked until something else nudged it. A timer runs either
+    // way, and a zero delay still folds a burst of resize events into one pass.
+    let markPending = false;
+    function scheduleMark() {
+        if (markPending) return;
+        markPending = true;
+        setTimeout(() => { markPending = false; markClipped(); }, 0);
+    }
+    scheduleMark();
+    window.addEventListener('load', scheduleMark);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(scheduleMark);
+    window.addEventListener('resize', scheduleMark, { passive: true });
+    window.addEventListener('devices-refreshed', scheduleMark);
+
+    // Touch has no hover. On a touch device wide enough to show the table (an
+    // iPad in landscape), a tap on a clipped cell reveals it briefly. The tap
+    // also copies the value, and the two do not conflict: the copy note sits at
+    // the finger, the reveal overlays the cell.
+    table.addEventListener('touchstart', function (e) {
+        const cell = e.target.closest(SELECTOR);
+        if (!cell || !isClipped(cell)) return;
+        show(cell);
+        setTimeout(hide, 1800);
+    }, { passive: true });
 })();
 
 // Click-to-copy for value cells (IP, MAC, hostname, vendor). Driven by a

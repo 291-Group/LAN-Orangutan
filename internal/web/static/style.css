@@ -1034,16 +1034,16 @@ td[data-copy]:not([data-copy=""]) {
 /* Column widths for the fixed layout (they sum to 100%). When the responsive
    rules further down hide a column, its share is redistributed across the
    rest, so the table always fills its panel exactly. */
-.table th:nth-child(1),  .table td:nth-child(1)  { width: 6%; }   /* Status (just a dot) */
+.table th:nth-child(1),  .table td:nth-child(1)  { width: 5%; }   /* Status (just a dot) */
 .table th:nth-child(2),  .table td:nth-child(2)  { width: 12%; }  /* IP       */
-.table th:nth-child(3),  .table td:nth-child(3)  { width: 13%; }  /* Hostname */
-.table th:nth-child(4),  .table td:nth-child(4)  { width: 10%; }  /* Type     */
-.table th:nth-child(5),  .table td:nth-child(5)  { width: 13%; }  /* MAC      */
+.table th:nth-child(3),  .table td:nth-child(3)  { width: 12%; }  /* Hostname */
+.table th:nth-child(4),  .table td:nth-child(4)  { width: 9%; }   /* Type     */
+.table th:nth-child(5),  .table td:nth-child(5)  { width: 12%; }  /* MAC      */
 .table th:nth-child(6),  .table td:nth-child(6)  { width: 10%; }  /* Vendor   */
-.table th:nth-child(7),  .table td:nth-child(7)  { width: 5%; }   /* Label (just an icon) */
+.table th:nth-child(7),  .table td:nth-child(7)  { width: 14%; }  /* Label (free text, the widest user-set value) */
 .table th:nth-child(8),  .table td:nth-child(8)  { width: 11%; }  /* Group (dropdown needs room) */
-.table th:nth-child(9),  .table td:nth-child(9)  { width: 10%; }  /* Last Seen*/
-.table th:nth-child(10), .table td:nth-child(10) { width: 10%; }  /* Actions (two icons) */
+.table th:nth-child(9),  .table td:nth-child(9)  { width: 8%; }   /* Last Seen*/
+.table th:nth-child(10), .table td:nth-child(10) { width: 7%; }   /* Actions (two icons) */
 
 /* Single-line cells that should truncate rather than wrap. The group select
    fills its column so it never forces the row wider. */
@@ -1058,6 +1058,24 @@ td[data-copy]:not([data-copy=""]) {
 
 /* Keep the table inside its panel with no horizontal scroll: the two free-text
    columns truncate with an ellipsis rather than forcing the table wider. */
+/* A value that does not fit its column fades out at the right edge instead of
+   ending in an ellipsis. The fade is the signal that there is more and that
+   hovering shows it; a value that fits gets no fade at all. The class is set
+   by JS from a real overflow measurement, so it is never applied by guess. The
+   fade ends before the cell's right padding so the last visible glyphs are not
+   swallowed by it. */
+.table td.is-clipped {
+    text-overflow: clip;
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 2.4rem), transparent calc(100% - 0.65rem));
+    mask-image: linear-gradient(90deg, #000 calc(100% - 2.4rem), transparent calc(100% - 0.65rem));
+}
+
+/* The footer hint that pairs with the fade; JS shows it only while at least
+   one cell on the page is clipped. */
+.clip-hint {
+    font-style: italic;
+}
+
 .hostname-cell, .vendor-cell {
     max-width: 150px;
     overflow: hidden;
@@ -1202,8 +1220,10 @@ td[data-copy]:not([data-copy=""]) {
     font-weight: 500;
     color: var(--accent-primary);
     /* Labels are free text, so cap and truncate them like hostname and vendor
-       so a long one can never stretch the table past its panel. */
-    max-width: 160px;
+       so a long one can never stretch the table past its panel. The column
+       percentage above is the real constraint at normal widths; this only binds
+       on a very wide screen. */
+    max-width: 260px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1340,6 +1360,54 @@ textarea.input {
 
 .cidr-chip button:hover {
     color: var(--danger);
+}
+
+/* Device-group editor on the Settings page. One row per group: the name, how
+   many devices carry it, and the rename/delete actions. The row doubles as the
+   inline rename and delete-confirm surface, so nothing shifts when either
+   opens. */
+.group-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+}
+
+.group-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.45rem 0.6rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    min-height: 2.35rem;
+}
+
+.group-name {
+    font-weight: 500;
+}
+
+.group-count {
+    color: var(--text-muted);
+    font-size: 0.82rem;
+}
+
+/* Push the buttons to the right edge, leaving the name and count on the left. */
+.group-actions {
+    display: flex;
+    gap: 0.4rem;
+    margin-left: auto;
+}
+
+@media (max-width: 600px) {
+    .group-row {
+        flex-wrap: wrap;
+    }
+    .group-actions {
+        margin-left: 0;
+        width: 100%;
+    }
 }
 
 .form-group {
@@ -1504,7 +1572,13 @@ textarea.input {
     border-bottom: none;
 }
 
-.btn-sm {
+/* Buttons inside a dense row list (snapshots, device groups) sit tighter than
+   the page-level .btn-sm defined above, so a row stays one line tall. Scoped to
+   the rows on purpose: an unscoped second .btn-sm here once overrode the
+   original for every small button on the site, silently shrinking the released
+   "Scan network", Tailscale and scan-cancel buttons. */
+.snapshot-row .btn-sm,
+.group-row .btn-sm {
     padding: 0.25rem 0.6rem;
     font-size: 0.8rem;
 }
@@ -1970,7 +2044,12 @@ textarea.input {
         white-space: normal;
         overflow: visible;
         text-overflow: clip;
+        /* Values wrap in full here, so the desktop clipped-cell fade must never
+           apply, even if a resize races the JS that clears the class. */
+        -webkit-mask-image: none;
+        mask-image: none;
     }
+    .clip-hint { display: none; }
     .table .device-row td:last-child { border-bottom: none; }
     .table .device-row td::before {
         content: attr(data-label);

@@ -332,7 +332,6 @@ func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 
 	// Convert to view models
 	var deviceViews []*DeviceView
-	groupSet := make(map[string]bool)
 	var flagged, moved, unexpected, missing int
 
 	for _, d := range devices {
@@ -378,10 +377,6 @@ func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 		}
 
 		deviceViews = append(deviceViews, dv)
-
-		if d.Group != "" {
-			groupSet[d.Group] = true
-		}
 	}
 
 	// Sort by IP
@@ -389,12 +384,12 @@ func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return ipToLong(deviceViews[i].IP) < ipToLong(deviceViews[j].IP)
 	})
 
-	// Get groups
-	var groups []string
-	for g := range groupSet {
-		groups = append(groups, g)
-	}
-	sort.Strings(groups)
+	// The group list the dropdowns are built from: the user's own list if they
+	// have customised it, otherwise the built-in defaults. GetGroups already
+	// folds in any group a device carries that the list is missing, so this
+	// covers everything in use as well as everything on offer. Declaration order
+	// is kept, so a user's ordering is not re-sorted out from under them.
+	groups := h.store.GetGroups()
 
 	// Get networks
 	networks, _ := network.DetectNetworks()

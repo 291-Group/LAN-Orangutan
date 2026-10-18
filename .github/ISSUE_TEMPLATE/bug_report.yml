@@ -1,0 +1,62 @@
+name: Bug report
+description: Something is broken or behaving unexpectedly
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. The three questions below answer most of what we would otherwise have to ask, so please fill them in.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Shown in the dashboard footer, or run `orangutan version`. For Docker, `docker exec <container> orangutan version`.
+      placeholder: "3.4.2"
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How is it installed?
+      options:
+        - Binary download
+        - Docker
+        - Homebrew
+        - Scoop
+        - .deb / .rpm / .apk package
+        - Built from source
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      description: Include the version. For Docker, the host OS.
+      placeholder: "Windows 11, Ubuntu 24.04, macOS 15, Raspberry Pi OS"
+    validations:
+      required: true
+  - type: dropdown
+    id: access
+    attributes:
+      label: How do you open the dashboard?
+      description: Some browser features behave differently over plain http from another machine, so this matters for anything in the web UI.
+      options:
+        - http on the same machine (localhost)
+        - http from another machine on the network
+        - https, through a reverse proxy
+        - Not relevant, this is a command line problem
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you saw, and what you expected instead. Paste the exact error text if there is one.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Output or logs
+      description: The startup banner or the relevant part of `docker logs <container>` often shows the cause straight away. Pasted here it is formatted as code automatically.
+      render: shell

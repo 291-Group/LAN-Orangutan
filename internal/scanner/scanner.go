@@ -110,15 +110,21 @@ func (s *Scanner) Scan(ctx context.Context, cidr string) (*types.ScanResult, err
 		return s.scanTailscale(cidr, startTime), nil
 	}
 
-	// Try nmap first
+	// Try nmap first, then arp-scan, but only where arp-scan can exist. It has
+	// no Windows build, so there a failed nmap scan is the whole story, and
+	// falling through would replace the real reason with "arp-scan not found".
 	devices, scanner, err := s.scanWithNmap(ctx, cidr)
 	if err != nil {
-		// Fallback to arp-scan
-		devices, scanner, err = s.scanWithArpScan(ctx, cidr)
+		nmapErr := err
+		var arpErr error
+		if ArpScanAvailable() {
+			devices, scanner, err = s.scanWithArpScan(ctx, cidr)
+			arpErr = err
+		}
 		if err != nil {
 			return &types.ScanResult{
 				Success:   false,
-				Error:     err.Error(),
+				Error:     ScanFailureMessage(nmapErr, arpErr),
 				Network:   cidr,
 				Timestamp: time.Now(),
 			}, nil
@@ -175,13 +181,16 @@ func (s *Scanner) scanTailscale(cidr string, startTime time.Time) *types.ScanRes
 
 // scanWithNmap performs a scan using nmap
 func (s *Scanner) scanWithNmap(ctx context.Context, cidr string) ([]types.Device, string, error) {
-	// Check if nmap is available
-	if _, err := exec.LookPath("nmap"); err != nil {
-		return nil, "", fmt.Errorf("nmap not found")
+	// Resolve nmap by path rather than name: NmapPath also checks the standard
+	// install locations, so an install that PATH has not picked up yet still
+	// works instead of reporting the tool missing.
+	nmapBin, err := NmapPath()
+	if err != nil {
+		return nil, "", err
 	}
 
 	// Run nmap with ping scan and XML output
-	cmd := exec.CommandContext(ctx, "nmap", "-sn", "-oX", "-", cidr)
+	cmd := exec.CommandContext(ctx, nmapBin, "-sn", "-oX", "-", cidr)
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, "", fmt.Errorf("nmap failed: %w", err)

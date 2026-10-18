@@ -23,11 +23,18 @@ By [291 Group](https://291group.com)
   <img src="docs/LO2.png" width="48%" />
 </p>
 
+## Why the name
+"Orangutan" is Malay for "person of the forest" [orang, person; hutan, forest]. LAN Orangutan is the person of your network. It sits quietly in your spanning tree, watches everything that moves, remembers every device it has ever met, tells you what is on your network and what has changed, and bothers no one. Orangutans are also the most solitary of the great apes: no troop, no cloud, no phoning home.
+
 ## Features
 
 - Auto-discover devices using nmap<br>
 - Password protected, with a password you set the first time you open it<br>
-- Label, group, and add notes to devices<br>
+- Label, group, and add notes to devices, with your own group names<br>
+- Save a snapshot of your network and compare it later to see what changed<br>
+- Mark the devices you expect, and get told when something new appears or something goes missing<br>
+- Back up and restore everything, or export a shareable HTML report of your network<br>
+- Change scanning and network settings from the Settings page, no config file needed<br>
 - Multi-network support<br>
 - Tailscale integration - connect, disconnect, and discover tailnet peers from inside the app<br>
 - Live scan progress you can cancel<br>
@@ -41,6 +48,19 @@ By [291 Group](https://291group.com)
 ### Download
 
 Grab the latest release of LAN Orangutan for your platform from [GitHub Releases](https://github.com/291-Group/LAN-Orangutan/releases).
+
+### Package managers
+
+```bash
+# macOS (Homebrew)
+brew install 291-group/tap/lan-orangutan
+
+# Windows (Scoop)
+scoop bucket add 291group https://github.com/291-Group/scoop-bucket
+scoop install lan-orangutan
+```
+
+Both channels update on every release. Linux packages (`.deb`, `.rpm`, `.apk`) are on the [Releases](https://github.com/291-Group/LAN-Orangutan/releases) page.
 
 ### Docker
 
@@ -204,7 +224,7 @@ ORANGUTAN_PASSWORD=your-password orangutan serve
 ORANGUTAN_PASSWORD_FILE=/run/secrets/orangutan orangutan serve
 ```
 
-**Turning authentication off.** If something else already controls access, such as a reverse proxy that handles login, set `allow_insecure = true` (or pass `--allow-insecure`). This disables password protection completely, so only do it when access control genuinely lives elsewhere. On a network bind (`0.0.0.0`) that means anyone who can route to the host can not only read your device list but also delete devices and connect or disconnect Tailscale, all without signing in. Never combine `allow_insecure` with a network bind unless a proxy or firewall in front of it is doing the authentication.
+**Turning authentication off.** If something else already controls access, such as a reverse proxy that handles login, set `allow_insecure = true` (or pass `--allow-insecure`). This disables password protection completely, including a password you created earlier through the setup page, so only do it when access control genuinely lives elsewhere. On a network bind (`0.0.0.0`) that means anyone who can route to the host can not only read your device list but also delete devices and connect or disconnect Tailscale, all without signing in. Never combine `allow_insecure` with a network bind unless a proxy or firewall in front of it is doing the authentication.
 
 There is no HTTPS built in, so put LAN Orangutan behind a reverse proxy or reach it over Tailscale if you need the connection encrypted. See [SECURITY.md](SECURITY.md) for the full picture, the known limitations, and how to report a vulnerability.
 
@@ -269,10 +289,25 @@ There are already excellent, deeply capable tools in this space, and they're the
 
 If you don't need the extra features, and the extra friction that comes with them, then this is for you. We'll keep pushing back on anything that makes it harder to use or deploy, because staying simple and fast is the whole reason it exists.
 
-## Feedback & Contributing
-Found a bug, hit a problem, or have an idea? Open an [issue](https://github.com/291-Group/LAN-Orangutan/issues) and let us know.
+## No manual
+There is no manual for LAN Orangutan, and there isn't going to be one. This README is the whole of it.
 
-Feature requests are welcome too, with one caveat that follows from the philosophy above: if something would add real complexity or setup, it's probably not a fit for LAN Orangutan. But we'd still rather hear the idea, so don't hold back.
+That's a rule we hold ourselves to, not a gap we haven't got around to. If you need a manual to use something, it has already failed at being simple. So when a feature turns out to need explaining, we treat that as a bug in the feature, and we change the tool rather than write the explanation.
+
+Please hold us to that. If you had to stop and work something out, or you found something by accident that the tool should have shown you, open an issue and say so. That isn't a complaint, it's the report we want most, because it points at the exact spot where the tool wasn't obvious enough. Hold each other to it too: if you're helping someone in an issue and find yourself writing a paragraph of instructions, that paragraph is a bug report.
+
+## Contributing
+LAN Orangutan was built by 291 Group, but it belongs to the community, and it always will. Nothing would make us prouder than to see the people who use it make it better.
+
+This is the people's tool, and the people's tool has to work for any skill level. Advanced users know what they need and have serious tools that meet it; when that's you, we'll happily point you to them. LAN Orangutan isn't trying to win on feature count or go head to head with those. It wins on getting the job done faster, and sometimes the first hour is the one that matters. It's also for everyone who doesn't have the time, or the background, for a complicated setup. This tool shouldn't make anyone contend with technology. It should make technology help them out.
+
+So if you can make it better, please do. Found a bug, hit a problem, or have an idea? Open an [issue](https://github.com/291-Group/LAN-Orangutan/issues). Want to change something yourself? [CONTRIBUTING.md](CONTRIBUTING.md) has the short version of how. Feature requests are welcome, with one caveat that follows from everything above: if something would add real complexity or setup for the user, it's probably not a fit. We'd still rather hear the idea, so don't hold back.
+
+## Thanks
+
+LAN Orangutan is shaped by the people who use it. Nearly everything in recent releases started as somebody opening an issue or a discussion, and several of them went back and forth with us until the fix was right.
+
+Thank you to [@Bluesguy1984](https://github.com/Bluesguy1984), [@chraso](https://github.com/chraso), [@dax29](https://github.com/dax29), [@dbm26](https://github.com/dbm26), [@dcchillin46](https://github.com/dcchillin46), [@devra1](https://github.com/devra1), [@Extra-Citron-7630](https://github.com/Extra-Citron-7630), [@forke24x7](https://github.com/forke24x7), [@GrafDogi](https://github.com/GrafDogi), [@Louai199](https://github.com/Louai199), [@luciancelmare](https://github.com/luciancelmare), [@msanaullahsahar](https://github.com/msanaullahsahar), [@technoplayer](https://github.com/technoplayer), [@tolga-balci](https://github.com/tolga-balci), [@wmgordon3](https://github.com/wmgordon3) and [@y90ziv](https://github.com/y90ziv).
 
 ## License
 
