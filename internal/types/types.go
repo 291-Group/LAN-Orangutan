@@ -15,10 +15,12 @@ type Device struct {
 	MAC      string `json:"mac"`
 	Hostname string `json:"hostname"`
 	Vendor   string `json:"vendor"`
-	// Type is the inferred device kind (Phone, Printer, TV, and so on), or ""
-	// when it could not be determined. It is derived at scan time from the
-	// vendor, the hostname and, when service detection is on, the open ports.
+	// Type is the inferred or user-assigned device kind (Phone, Printer, TV,
+	// Router, and so on), or "" when it could not be determined.
 	Type string `json:"type,omitempty"`
+	// CustomType reports whether Type was set or overridden by the user.
+	// When true, automated network scans preserve Type rather than recalculating it.
+	CustomType bool `json:"custom_type,omitempty"`
 	// WebUI is true when the device answered on a common web port during an
 	// opt-in service probe, meaning it likely serves a dashboard or admin page.
 	// Always false when service detection is off.

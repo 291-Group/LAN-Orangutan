@@ -18,7 +18,7 @@ func seedGrouped(t *testing.T, s *Storage, groups map[string]string) {
 	}
 	for ip, g := range groups {
 		group := g
-		if err := s.UpdateDeviceFields(ip, nil, nil, &group, nil); err != nil {
+		if err := s.UpdateDeviceFields(ip, nil, nil, &group, nil, nil, nil); err != nil {
 			t.Fatalf("UpdateDeviceFields(%s): %v", ip, err)
 		}
 	}

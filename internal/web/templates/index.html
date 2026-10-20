@@ -267,6 +267,8 @@ orangutan export out.csv</code></pre>
                             data-mac="{{lower .MAC}}"
                             data-vendor="{{lower .Vendor}}"
                             data-type="{{lower .Type}}"
+                            data-type-original="{{.Type}}"
+                            data-custom-type="{{if .CustomType}}1{{else}}0{{end}}"
                             data-label="{{lower .Label}}"
                             data-label-original="{{.Label}}"
                             data-notes="{{.Notes}}"
@@ -357,6 +359,13 @@ orangutan export out.csv</code></pre>
                     <div class="form-group">
                         <label>Label</label>
                         <input type="text" id="edit-label" name="label" class="input" placeholder="e.g., Living Room TV">
+                    </div>
+                    <div class="form-group">
+                        <label>Device Type</label>
+                        <select id="edit-type-select" name="type" class="select">
+                            <option value="">Auto (Detect)</option>
+                            {{range .Types}}<option value="{{.}}">{{.}}</option>{{end}}
+                        </select>
                     </div>
                     <div class="form-group">
                         <label>Group</label>

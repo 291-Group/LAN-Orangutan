@@ -754,7 +754,7 @@ func TestExpectedFlagAndBaseline(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Mark one expected via UpdateDeviceFields.
-	if err := s.UpdateDeviceFields("192.168.1.5", nil, nil, nil, boolptr(true)); err != nil {
+	if err := s.UpdateDeviceFields("192.168.1.5", nil, nil, nil, boolptr(true), nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	if !s.GetDevices()["192.168.1.5"].Expected {

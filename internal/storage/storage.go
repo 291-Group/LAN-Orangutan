@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/291-Group/LAN-Orangutan/internal/scanner"
 	"github.com/291-Group/LAN-Orangutan/internal/types"
 )
 
@@ -215,6 +216,12 @@ func (s *Storage) UpdateDevice(device *types.Device) error {
 		if device.Group == "" {
 			device.Group = existing.Group
 		}
+		if device.Type == "" {
+			device.Type = existing.Type
+			device.CustomType = existing.CustomType
+		} else if existing.CustomType && !device.CustomType && device.Type == existing.Type {
+			device.CustomType = true
+		}
 		if device.FirstSeen.IsZero() {
 			device.FirstSeen = existing.FirstSeen
 		}
@@ -225,7 +232,7 @@ func (s *Storage) UpdateDevice(device *types.Device) error {
 }
 
 // UpdateDeviceFields updates specific fields of a device
-func (s *Storage) UpdateDeviceFields(ip string, label, notes, group *string, expected *bool) error {
+func (s *Storage) UpdateDeviceFields(ip string, label, notes, group *string, expected *bool, deviceType *string, customType *bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -245,6 +252,20 @@ func (s *Storage) UpdateDeviceFields(ip string, label, notes, group *string, exp
 	}
 	if expected != nil {
 		device.Expected = *expected
+	}
+	if deviceType != nil {
+		cleanType, err := scanner.ValidateType(*deviceType)
+		if err != nil {
+			return err
+		}
+		device.Type = cleanType
+		if customType != nil {
+			device.CustomType = *customType
+		} else {
+			device.CustomType = (cleanType != "")
+		}
+	} else if customType != nil {
+		device.CustomType = *customType
 	}
 
 	return s.saveDevices()
@@ -297,7 +318,7 @@ func (s *Storage) MergeDevices(discovered []types.Device) error {
 			if d.Vendor != "" {
 				existing.Vendor = d.Vendor
 			}
-			if d.Type != "" {
+			if !existing.CustomType && d.Type != "" {
 				existing.Type = d.Type
 			}
 			if d.ResponseTime != nil {
@@ -343,7 +364,7 @@ func (s *Storage) MergeSupplemental(discovered []types.Device) error {
 			if existing.Vendor == "" && d.Vendor != "" {
 				existing.Vendor = d.Vendor
 			}
-			if existing.Type == "" && d.Type != "" {
+			if !existing.CustomType && existing.Type == "" && d.Type != "" {
 				existing.Type = d.Type
 			}
 			existing.LastSeen = now
@@ -388,7 +409,7 @@ func (s *Storage) MergeIPv6Neighbors(discovered []types.Device) error {
 			if existing.Vendor == "" && d.Vendor != "" {
 				existing.Vendor = d.Vendor
 			}
-			if existing.Type == "" && d.Type != "" {
+			if !existing.CustomType && existing.Type == "" && d.Type != "" {
 				existing.Type = d.Type
 			}
 			// Record the routable IPv6 address on the IPv4-primary device so a
@@ -430,8 +451,9 @@ func (s *Storage) addNewDeviceLocked(d *types.Device, now time.Time) {
 			d.Group = old.Group
 			d.Expected = old.Expected
 			d.FirstSeen = old.FirstSeen
-			if d.Type == "" {
+			if old.CustomType || d.Type == "" {
 				d.Type = old.Type
+				d.CustomType = old.CustomType
 			}
 			d.AddressHistory = appendAddressChange(old.AddressHistory, oldIP, now)
 			delete(s.devices, oldIP)
@@ -523,11 +545,12 @@ func (s *Storage) pruneEphemeralIPv6Locked() bool {
 }
 
 // isCurated reports whether the user has personalised a device with a label,
-// notes, or a group. Curated devices are never removed by any automatic cleanup:
-// the user told us this one matters, so retention, the device cap, and the IPv6
-// phantom prune all leave it alone.
+// notes, a group, expected status, or a custom device type. Curated devices
+// are never removed by any automatic cleanup: the user told us this one
+// matters, so retention, the device cap, and the IPv6 phantom prune all
+// leave it alone.
 func isCurated(d *types.Device) bool {
-	return d.Label != "" || d.Notes != "" || d.Group != "" || d.Expected
+	return d.Label != "" || d.Notes != "" || d.Group != "" || d.Expected || d.CustomType
 }
 
 // SetLimits records the retention window (in days) and the maximum device count,

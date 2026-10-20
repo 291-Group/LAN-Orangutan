@@ -20,13 +20,14 @@ var (
 	listOnline  bool
 	listOffline bool
 	listGroup   string
+	listType    string
 	listFormat  string
 )
 
 var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List discovered devices",
-	Long:  `List all discovered devices with optional filtering by status or group.`,
+	Long:  `List all discovered devices with optional filtering by status, group, or type.`,
 	RunE:  runList,
 }
 
@@ -34,6 +35,7 @@ func init() {
 	listCmd.Flags().BoolVar(&listOnline, "online", false, "Show only online devices")
 	listCmd.Flags().BoolVar(&listOffline, "offline", false, "Show only offline devices")
 	listCmd.Flags().StringVar(&listGroup, "group", "", "Filter by group")
+	listCmd.Flags().StringVar(&listType, "type", "", "Filter by device type")
 	listCmd.Flags().StringVar(&listFormat, "format", "table", "Output format (table, csv, json)")
 }
 
@@ -57,6 +59,9 @@ func runList(cmd *cobra.Command, args []string) error {
 			continue
 		}
 		if listGroup != "" && !strings.EqualFold(d.Group, listGroup) {
+			continue
+		}
+		if listType != "" && !strings.EqualFold(d.Type, listType) {
 			continue
 		}
 		filtered = append(filtered, d)
