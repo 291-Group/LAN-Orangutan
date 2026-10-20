@@ -160,4 +160,3 @@ func TestValidateType(t *testing.T) {
 		t.Errorf("expected error for control character in type, got nil")
 	}
 }
-
