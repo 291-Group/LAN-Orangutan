@@ -389,6 +389,7 @@ function editDevice(ip) {
     document.getElementById('edit-ip-display').value = ip;
     document.getElementById('edit-label').value = row.dataset.labelOriginal || '';
     document.getElementById('edit-group').value = row.dataset.group || '';
+    document.getElementById('edit-notes').value = row.dataset.notes || '';
     const exp = document.getElementById('edit-expected');
     if (exp) exp.checked = row.dataset.expected === '1';
 

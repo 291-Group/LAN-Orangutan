@@ -16,7 +16,7 @@ type Device struct {
 	Hostname string `json:"hostname"`
 	Vendor   string `json:"vendor"`
 	// Type is the inferred or user-assigned device kind (Phone, Printer, TV,
-	// Router, or custom type), or "" when it could not be determined.
+	// Router, and so on), or "" when it could not be determined.
 	Type string `json:"type,omitempty"`
 	// CustomType reports whether Type was set or overridden by the user.
 	// When true, automated network scans preserve Type rather than recalculating it.
