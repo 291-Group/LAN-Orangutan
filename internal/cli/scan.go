@@ -89,6 +89,7 @@ func runScan(cmd *cobra.Command, args []string) error {
 	}
 
 	// Scan each network
+	var scannedNetworks []string
 	for _, cidr := range networks {
 		// Check rate limit
 		lastScan := store.GetLastScan(cidr)
@@ -119,6 +120,8 @@ func runScan(cmd *cobra.Command, args []string) error {
 			fmt.Fprintf(os.Stderr, "Error saving devices: %v\n", err)
 			continue
 		}
+
+		scannedNetworks = append(scannedNetworks, cidr)
 
 		// Update last scan time
 		if err := store.SetLastScan(cidr, time.Now()); err != nil {
@@ -163,6 +166,16 @@ func runScan(cmd *cobra.Command, args []string) error {
 				}
 				fmt.Println()
 			}
+		}
+	}
+
+	// The local IPv4 neighbor cache can contain devices that do not answer
+	// nmap's ping. Restrict those results to networks scanned successfully above.
+	if ipv4 := s.DiscoverIPv4(context.Background(), scannedNetworks); len(ipv4) > 0 {
+		if err := store.MergeSupplemental(ipv4); err != nil {
+			fmt.Fprintf(os.Stderr, "Error saving IPv4 neighbors: %v\n", err)
+		} else {
+			fmt.Printf("Found %d IPv4 neighbor(s)\n", len(ipv4))
 		}
 	}
 

@@ -28,7 +28,7 @@ By [291 Group](https://291group.com)
 
 ## Features
 
-- Auto-discover devices using nmap<br>
+- Discover devices using nmap and supplement results from the local IPv4 neighbor cache<br>
 - Password protected, with a password you set the first time you open it<br>
 - Label, group, and add notes to devices, with your own group names<br>
 - Save a snapshot of your network and compare it later to see what changed<br>

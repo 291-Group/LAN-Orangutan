@@ -362,6 +362,12 @@ func (h *Handler) handleScan(w http.ResponseWriter, r *http.Request) {
 		h.error(w, http.StatusInternalServerError, "failed to save devices")
 		return
 	}
+	if neighbors := h.scanner.DiscoverIPv4(r.Context(), []string{cidr}); len(neighbors) > 0 {
+		if err := h.store.MergeSupplemental(neighbors); err != nil {
+			h.error(w, http.StatusInternalServerError, "failed to save devices")
+			return
+		}
+	}
 
 	// Update last scan time
 	h.store.SetLastScan(cidr, time.Now())
@@ -410,6 +416,7 @@ func (h *Handler) scanAllNetworks(w http.ResponseWriter, r *http.Request) {
 		Timestamp:    time.Now(),
 	}
 
+	var scannedNetworks []string
 	for _, n := range detected {
 		summary := networkScanSummary{Network: n.CIDR}
 
@@ -429,6 +436,7 @@ func (h *Handler) scanAllNetworks(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
+		scannedNetworks = append(scannedNetworks, n.CIDR)
 		summary.Status = "scanned"
 		summary.DeviceCount = scan.DeviceCount
 		summary.Duration = scan.Duration
@@ -437,10 +445,18 @@ func (h *Handler) scanAllNetworks(w http.ResponseWriter, r *http.Request) {
 		result.DeviceCount += scan.DeviceCount
 	}
 
-	// Supplemental sources, once for the whole request. IPv6 neighbors (an IPv6
-	// subnet cannot be swept) enrich devices by MAC rather than being listed per
-	// address, so they go through MergeIPv6Neighbors. mDNS announcements merge as
-	// an ordinary secondary source.
+	// Supplemental sources, once for the whole request. IPv4 neighbors are
+	// filtered to networks scanned successfully above; IPv6 neighbors enrich
+	// devices by MAC, and mDNS announcements merge as ordinary secondary sources.
+	if ipv4 := h.scanner.DiscoverIPv4(r.Context(), scannedNetworks); len(ipv4) > 0 {
+		if err := h.store.MergeSupplemental(ipv4); err == nil {
+			result.Networks = append(result.Networks, networkScanSummary{
+				Network: "IPv4 neighbors", Status: "scanned", DeviceCount: len(ipv4),
+			})
+			result.ScannedCount++
+			result.DeviceCount += len(ipv4)
+		}
+	}
 	if ipv6 := h.scanner.DiscoverIPv6(r.Context()); len(ipv6) > 0 {
 		if err := h.store.MergeIPv6Neighbors(ipv6); err == nil {
 			result.Networks = append(result.Networks, networkScanSummary{

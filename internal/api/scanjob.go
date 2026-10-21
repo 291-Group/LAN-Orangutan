@@ -145,6 +145,7 @@ func (h *Handler) startScanJob(networks []string, automatic bool) *scanJob {
 // is rate limited or fails does not abort the job, so one bad interface cannot
 // hide results from the others.
 func (j *scanJob) run(ctx context.Context, h *Handler) {
+	var scannedNetworks []string
 	for i, cidr := range j.networks {
 		if ctx.Err() != nil {
 			j.finish("cancelled", "")
@@ -178,15 +179,23 @@ func (j *scanJob) run(ctx context.Context, h *Handler) {
 			continue
 		}
 
+		scannedNetworks = append(scannedNetworks, cidr)
 		summary.Status = "scanned"
 		summary.DeviceCount = result.DeviceCount
 		summary.Duration = result.Duration
 		j.addResult(summary, result.DeviceCount)
 	}
 
-	// Supplemental discovery, once for the whole job: IPv6 neighbors (an IPv6
-	// subnet cannot be swept) and mDNS announcements. Both merge as secondary
-	// sources so they enrich rather than overwrite. A cancelled job skips them.
+	// Supplemental discovery, once for the whole job: IPv4 neighbors already
+	// known to the host, IPv6 neighbors (an IPv6 subnet cannot be swept), and
+	// mDNS announcements. They merge as secondary sources. A cancelled job skips them.
+	if ctx.Err() == nil {
+		if ipv4 := h.scanner.DiscoverIPv4(ctx, scannedNetworks); len(ipv4) > 0 {
+			if err := h.store.MergeSupplemental(ipv4); err == nil {
+				j.addResult(networkScanSummary{Network: "IPv4 neighbors", Status: "scanned", DeviceCount: len(ipv4)}, len(ipv4))
+			}
+		}
+	}
 	if ctx.Err() == nil {
 		if ipv6 := h.scanner.DiscoverIPv6(ctx); len(ipv6) > 0 {
 			if err := h.store.MergeIPv6Neighbors(ipv6); err == nil {

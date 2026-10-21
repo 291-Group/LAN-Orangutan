@@ -338,7 +338,7 @@ func (s *Storage) MergeDevices(discovered []types.Device) error {
 }
 
 // MergeSupplemental folds in devices from a secondary source, such as mDNS or
-// IPv6 neighbor discovery, that carries only part of a device's picture. It
+// IPv4 neighbor discovery, that carries only part of a device's picture. It
 // fills gaps on a known device but never clobbers what the primary scan found,
 // and never touches the probe fields, so an mDNS answer with no MAC cannot erase
 // a MAC the scan discovered, nor clear a web or risk flag.
