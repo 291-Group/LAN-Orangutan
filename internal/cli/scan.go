@@ -172,7 +172,7 @@ func runScan(cmd *cobra.Command, args []string) error {
 	if len(args) > 0 && args[0] == "all" {
 		ctx := context.Background()
 		if ipv6 := s.DiscoverIPv6(ctx); len(ipv6) > 0 {
-			if err := store.MergeSupplemental(ipv6); err != nil {
+			if err := store.MergeIPv6Neighbors(ipv6); err != nil {
 				fmt.Fprintf(os.Stderr, "Error saving IPv6 neighbors: %v\n", err)
 			} else {
 				fmt.Printf("Found %d IPv6 neighbor(s)\n", len(ipv6))
