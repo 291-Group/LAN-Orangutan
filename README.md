@@ -165,6 +165,9 @@ orangutan networks                     # Show detected networks
 orangutan version                      # Show version info
 ```
 
+The `scan all` CLI command also reads the IPv6 neighbor cache and folds dual-stack
+sightings into the same device entry by MAC address.
+
 ### Why sudo?
 
 Running with `sudo` (or as Administrator on Windows) allows nmap to:
