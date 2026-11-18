@@ -1,0 +1,17 @@
+{
+  "intro": "LAN Orangutan은 사용하는 사람들이 함께 만들어 갑니다. 최근 릴리스의 거의 모든 내용은 누군가가 이슈나 토론을 열면서 시작되었고, 그중 몇 분은 수정이 제대로 될 때까지 저희와 여러 차례 의견을 주고받았습니다.",
+  "code": "코드",
+  "for291Group": "LAN Orangutan 설계 및 개발",
+  "forDeviceTypes": "기기 유형 편집 및 지정 (#50)",
+  "forIPv6Merge": "명령줄 스캔에서 IPv6 기기가 중복되는 문제 수정 (#58)",
+  "forCiActions": "GitHub 빌드 검사를 최신 버전으로 업데이트 (#59)",
+  "community": "아이디어, 보고, 테스트",
+  "builtWith": "사용한 기술",
+  "builtGo": "언어 및 표준 라이브러리",
+  "builtNmap": "네트워크 검색",
+  "builtArpScan": "빠른 로컬 네트워크 탐색",
+  "builtCobra": "명령줄",
+  "builtCrypto": "비밀번호 해싱",
+  "builtIeee": "MAC 주소로 확인한 기기 제조사 이름",
+  "join": "이 페이지에 이름을 올리고 싶으신가요? {github}에서 이슈를 열거나 토론을 시작하세요."
+}

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/291-Group/LAN-Orangutan/internal/uerr"
 )
 
 const testPassword = "correct-horse-battery-staple"
@@ -397,5 +399,21 @@ func TestSetPasswordRejectsOverlongInput(t *testing.T) {
 	}
 	if a.Enabled() {
 		t.Error("a refused password must not become the active one")
+	}
+}
+
+// The password rules are reported with a code, so the setup page can say
+// which one failed without measuring the password a second time.
+func TestValidatePasswordCodes(t *testing.T) {
+	short := ValidatePassword("short")
+	if e, ok := uerr.Of(short); !ok || e.Code != "password.tooShort" || e.Args["min"] != MinPasswordLength {
+		t.Errorf("short password: %v", short)
+	}
+	long := ValidatePassword(strings.Repeat("x", MaxPasswordBytes+1))
+	if e, ok := uerr.Of(long); !ok || e.Code != "password.tooLong" || e.Args["max"] != MaxPasswordBytes {
+		t.Errorf("long password: %v", long)
+	}
+	if err := ValidatePassword("correct-horse-battery-staple"); err != nil {
+		t.Errorf("acceptable password rejected: %v", err)
 	}
 }

@@ -28,7 +28,9 @@ Fixes are released for the most recent version. Older releases are not patched, 
 
 **Repeated failed logins** are limited to five per address per fifteen minutes, keyed on the address rather than the connection, so reconnecting does not reset the count.
 
-**Mutating API requests** must present a JSON content type or an `X-Requested-With` header, so a form on another site cannot make your browser change your data.
+**API tokens** let scripts use the API without signing in. Only a hash of the token is stored, so it is shown once when created. A token is accepted only on `/api/` paths, never on browser pages. There is one token at a time: creating a new one replaces it, and revoking it takes effect immediately, including in a running server.
+
+**Mutating API requests** must present a JSON content type or an `X-Requested-With` header, so a form on another site cannot make your browser change your data. A request the server accepted on the strength of an API token skips this check: a browser never attaches an `Authorization` header on its own, so such a request cannot have been forged by another site, and the check would only get in the way of a script that is already proving who it is. The exemption applies when the token was what authenticated the request, not merely when the header is present.
 
 ## Known limitations
 
@@ -36,7 +38,7 @@ Worth understanding before you deploy it.
 
 **No HTTPS.** Traffic between your browser and LAN Orangutan is unencrypted, including your password at sign-in. On a home network this is usually accepted. If it is not acceptable for you, put it behind a reverse proxy that terminates TLS, or reach it over Tailscale or a VPN.
 
-**It does not open a port on your router.** LAN Orangutan contains no UPnP or NAT-PMP code and makes no outbound connections at all, so it cannot ask your router to expose it. Behind a normal home router, a machine on your LAN is not reachable from the internet unless you deliberately forward a port.
+**It does not open a port on your router.** LAN Orangutan contains no UPnP or NAT-PMP code, so it cannot ask your router to expose it. Behind a normal home router, a machine on your LAN is not reachable from the internet unless you deliberately forward a port.
 
 **Two situations where it would be reachable from the internet.** Running it on a machine that already has a public address, such as a VPS or cloud instance, publishes it the moment it starts. And a machine with a globally routable IPv6 address may be reachable directly, because IPv6 usually has no NAT: whether it is depends on your router's IPv6 firewall. `bind_address = 0.0.0.0` listens on IPv4 only, so IPv6 is not published unless you ask for it with `bind_address = ::`. In either case the setup screen still stands in the way, but do not rely on that alone on a public host: set a password up front with `ORANGUTAN_PASSWORD`, or bind to loopback and reach it over a VPN.
 
@@ -50,10 +52,10 @@ Worth understanding before you deploy it.
 
 **Scanning needs elevated privileges to be useful.** Without `sudo` or Administrator, nmap cannot read the ARP table, so you get IP addresses without MAC addresses or vendor names. Running as root is a trade-off you are choosing; it is not required for the app to run.
 
-**Your data is not encrypted at rest.** The device list is plain JSON in the data directory. It records what is on your network, when it was seen, and any labels or notes you add. Protect that directory as you would any other private file.
+**Your data is not encrypted at rest.** The device list is plain JSON in the data directory. It records what is on your network, when it was seen, and any labels or notes you add. Webhook URLs are stored there too, and they often contain a secret such as a bot token. A backup file holds all of this, webhook URLs included. Protect the data directory and any backups as you would any other private file.
 
 ## What LAN Orangutan does not do
 
-- It does not phone home, send telemetry, or contact any external service
+- It does not phone home, send telemetry, or contact any external service on its own. The only outbound connections are to webhook URLs you add yourself for notifications, and nothing is sent until you add one
 - It does not require an account or an internet connection
 - Vendor lookups are done from a list built into the binary, not by querying an online service

@@ -1,0 +1,17 @@
+{
+  "networkReport": "ネットワークレポート",
+  "generated": "{date} {time} に作成",
+  "devices.other": "デバイス",
+  "online": "オンライン",
+  "offline": "オフライン",
+  "networks.other": "ネットワーク",
+  "ipAddress": "IP アドレス",
+  "hostname": "ホスト名",
+  "type": "種類",
+  "mac": "MAC",
+  "vendor": "メーカー",
+  "group": "グループ",
+  "location": "場所",
+  "lastSeen": "最終確認",
+  "generatedBy": "LAN Orangutan で作成"
+}

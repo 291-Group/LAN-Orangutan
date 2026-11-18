@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/291-Group/LAN-Orangutan/internal/network"
+	"github.com/291-Group/LAN-Orangutan/internal/notify"
 )
 
 // percentUnknown is reported when a network has never been scanned before and
@@ -19,8 +22,12 @@ type scanJob struct {
 	networks []string
 	cancel   context.CancelFunc
 
-	mu               sync.RWMutex
-	status           string // running, done, cancelled or failed
+	mu     sync.RWMutex
+	status string // running, done, cancelled or failed
+	// discovering is set once every network has been swept and the job is on
+	// the supplemental passes (ARP table, IPv6 neighbours, mDNS), which have
+	// no timing history and no per-network identity to report.
+	discovering      bool
 	currentNetwork   string
 	networkIndex     int // 1-based; 0 before the first network starts
 	deviceCount      int
@@ -54,6 +61,10 @@ type scanProgress struct {
 	Remaining *float64             `json:"remaining,omitempty"`
 	Networks  []networkScanSummary `json:"networks"`
 	Error     string               `json:"error,omitempty"`
+	// Phase is "discover" while the sweeps are done and the job is asking the
+	// network for IPv6 neighbours and mDNS names, so the UI can say so instead
+	// of showing the last network stuck at the end of its bar. Empty otherwise.
+	Phase string `json:"phase,omitempty"`
 	// Automatic is true for a scan the background scanner started. The UI does
 	// not show its progress overlay for these, so an automatic scan never pops
 	// a dialog with a Cancel button on its own.
@@ -90,6 +101,13 @@ func (j *scanJob) snapshot() scanProgress {
 		return p
 	}
 	if j.status != "running" {
+		return p
+	}
+
+	// The supplemental passes are quick and unmeasured: no estimate, and no
+	// network to name.
+	if j.discovering {
+		p.Phase = "discover"
 		return p
 	}
 
@@ -145,6 +163,18 @@ func (h *Handler) startScanJob(networks []string, automatic bool) *scanJob {
 // is rate limited or fails does not abort the job, so one bad interface cannot
 // hide results from the others.
 func (j *scanJob) run(ctx context.Context, h *Handler) {
+	// Tell the webhooks what this scan changed, once it is over.
+	defer notify.Begin(h.store).Finish()
+
+	// The storage limits and the service-detection flag live in components
+	// that only learn of a change when told. The Settings page tells them; a
+	// change made with the CLI in another process cannot, so apply what the
+	// state file says before every scan.
+	h.applyLiveSettings()
+
+	// The networks that actually completed, for the ARP-table pass below.
+	var scannedCIDRs []string
+
 	for i, cidr := range j.networks {
 		if ctx.Err() != nil {
 			j.finish("cancelled", "")
@@ -182,12 +212,27 @@ func (j *scanJob) run(ctx context.Context, h *Handler) {
 		summary.DeviceCount = result.DeviceCount
 		summary.Duration = result.Duration
 		j.addResult(summary, result.DeviceCount)
+		scannedCIDRs = append(scannedCIDRs, cidr)
 	}
 
 	// Supplemental discovery, once for the whole job: IPv6 neighbors (an IPv6
 	// subnet cannot be swept) and mDNS announcements. Both merge as secondary
 	// sources so they enrich rather than overwrite. A cancelled job skips them.
+	// The ARP table holds devices this machine has spoken to that did not answer
+	// nmap's ARP probe during the sweep, which is ordinary for hardware that
+	// sleeps. Restricted to the networks just scanned so container bridges and
+	// VPN peers cannot appear as LAN devices.
+	j.beginDiscovery()
 	if ctx.Err() == nil {
+		if arp := h.scanner.DiscoverARP(ctx, scannedCIDRs); len(arp) > 0 {
+			if err := h.store.MergeSupplemental(arp); err == nil {
+				j.addResult(networkScanSummary{Network: "ARP table", Status: "scanned", DeviceCount: len(arp)}, 0)
+			}
+		}
+	}
+	// An IPv6 network in the list was already scanned through the neighbour
+	// table, so running the neighbour pass again would count its devices twice.
+	if ctx.Err() == nil && !network.HasIPv6Network(scannedCIDRs) {
 		if ipv6 := h.scanner.DiscoverIPv6(ctx); len(ipv6) > 0 {
 			if err := h.store.MergeIPv6Neighbors(ipv6); err == nil {
 				j.addResult(networkScanSummary{Network: "IPv6 neighbors", Status: "scanned", DeviceCount: len(ipv6)}, len(ipv6))
@@ -213,6 +258,15 @@ func (j *scanJob) beginNetwork(cidr string, index int, estimate float64) {
 	j.networkIndex = index
 	j.networkStartedAt = time.Now()
 	j.estimatedSeconds = estimate
+}
+
+// beginDiscovery records that the per-network sweeps are over and the
+// supplemental passes have started.
+func (j *scanJob) beginDiscovery() {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	j.discovering = true
+	j.currentNetwork = ""
 }
 
 // addResult records the outcome of one network.

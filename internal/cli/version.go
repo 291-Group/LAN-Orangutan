@@ -27,6 +27,11 @@ func init() {
 	// `make build` keeps it, so the same commit could report "3.1.3" or
 	// "v3.1.3". Normalise so every build of a release shows the same string.
 	Version = strings.TrimPrefix(Version, "v")
+
+	// Gives the root command --version and -v. Set here rather than where
+	// rootCmd is declared because the version is only known once it has been
+	// resolved above.
+	rootCmd.Version = Version
 }
 
 // resolveVersion fills in any version details that were not supplied at build
@@ -124,6 +129,7 @@ func DisplayVersion() string {
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print version information",
+	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Printf("LAN Orangutan %s\n", Version)
 		fmt.Printf("  Commit: %s\n", Commit)

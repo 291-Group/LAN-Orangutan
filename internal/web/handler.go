@@ -13,10 +13,12 @@ import (
 
 	"github.com/291-Group/LAN-Orangutan/internal/auth"
 	"github.com/291-Group/LAN-Orangutan/internal/config"
+	"github.com/291-Group/LAN-Orangutan/internal/i18n"
 	"github.com/291-Group/LAN-Orangutan/internal/network"
 	"github.com/291-Group/LAN-Orangutan/internal/scanner"
 	"github.com/291-Group/LAN-Orangutan/internal/storage"
 	"github.com/291-Group/LAN-Orangutan/internal/types"
+	"github.com/291-Group/LAN-Orangutan/internal/uerr"
 )
 
 //go:embed static/*
@@ -24,6 +26,13 @@ var staticFS embed.FS
 
 //go:embed templates/*
 var templateFS embed.FS
+
+// LogoSVG returns the LAN Orangutan logo, for output that has to carry it
+// itself rather than load it from /static (the self-contained HTML report).
+func LogoSVG() []byte {
+	data, _ := staticFS.ReadFile("static/orangutan.svg")
+	return data
+}
 
 // Handler handles web requests
 type Handler struct {
@@ -48,6 +57,14 @@ func (h *Handler) networkFilter() network.Filter {
 
 // PageData holds data passed to templates
 type PageData struct {
+	// Lang is the visitor's language and Dir its writing direction ("ltr" or
+	// "rtl"); Languages feeds the language picker and I18N carries the strings
+	// the page scripts need, already in Lang. Filled by withLang.
+	Lang      string
+	Dir       string
+	Languages []i18n.Language
+	I18N      map[string]string
+
 	Title        string
 	Theme        string
 	Version      string
@@ -56,6 +73,7 @@ type PageData struct {
 	Tailscale    types.TailscaleStatus
 	Stats        types.DeviceStats
 	Groups       []string
+	Locations    []string
 	CurrentGroup string
 	Types        []string
 	Error        string
@@ -63,6 +81,10 @@ type PageData struct {
 	// AuthEnabled reports whether a password is configured, so pages can show
 	// a sign out link only when there is a session to end.
 	AuthEnabled bool
+
+	// TokenAccessOff reports that API tokens are refused (enable_api is off),
+	// so the Settings page can say so instead of offering to create one.
+	TokenAccessOff bool
 
 	// MinPasswordLength is shown on the setup page and enforced by the browser.
 	MinPasswordLength int
@@ -123,6 +145,55 @@ func NewHandler(store *storage.Storage, cfg *config.Config, authn *auth.Authenti
 		"timeAgo":  timeAgo,
 		"lower":    strings.ToLower,
 		"typeIcon": typeIcon,
+		// t and tn translate: {{t $.Lang "common.settings"}}, with placeholder
+		// pairs after the key, and {{tn $.Lang "common.time.dayAgo" .Days}} for
+		// text that changes with a number.
+		"t":  i18n.T,
+		"tn": i18n.N,
+		// th is t for the few strings whose placeholders take markup (a <kbd>,
+		// a <code>); see th below. raw marks a literal snippet written in the
+		// template itself as that markup.
+		"th":  th,
+		"raw": func(s string) template.HTML { return template.HTML(s) },
+		// tparts splits a translated string at one placeholder, so a template
+		// can put its own markup there: {{$p := tparts $.Lang "x" "when"}}
+		// {{index $p 0}}<span>...</span>{{index $p 1}}. The text on either side
+		// is then escaped like any other value.
+		"tparts": func(lang, key, placeholder string) []string {
+			before, after, _ := strings.Cut(i18n.T(lang, key), "{"+placeholder+"}")
+			return []string{before, after}
+		},
+		// tailscaleStatus shows Tailscale's state in the visitor's language.
+		"tailscaleStatus": func(lang string, ts types.TailscaleStatus) string {
+			if k := ts.StatusKey(); k != "" {
+				return i18n.T(lang, "common.tailscale."+k)
+			}
+			return ts.StatusLabel()
+		},
+		// riskText translates a security finding. Findings are stored as English
+		// text in the device record, so known ones are matched back to a key.
+		"riskText": func(lang, risk string) string {
+			if k, ok := riskKeys[risk]; ok {
+				return i18n.T(lang, k)
+			}
+			return risk
+		},
+		// langPicker hands the picker partial what it needs from any page.
+		"langPicker": func(p any, compact bool) map[string]any {
+			d := pageDataOf(p)
+			return map[string]any{"Lang": d.Lang, "Languages": d.Languages, "Compact": compact}
+		},
+		// typeName shows a device type in the visitor's language. The stored
+		// value stays English, since it is data that filters and the API use.
+		"typeName": func(lang, deviceType string) string {
+			if deviceType == "" {
+				return ""
+			}
+			if s := i18n.T(lang, "common.type."+deviceType); s != "common.type."+deviceType {
+				return s
+			}
+			return deviceType
+		},
 	}
 
 	tmpl := template.Must(template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/*.html"))
@@ -164,36 +235,37 @@ func (h *Handler) HandleSetup(onPasswordSet func(hash string) error) http.Handle
 
 		switch r.Method {
 		case http.MethodGet:
-			h.renderSetup(w, "", http.StatusOK)
+			h.renderSetup(w, r, "", http.StatusOK)
 
 		case http.MethodPost:
+			lang := i18n.FromRequest(r)
 			if err := r.ParseForm(); err != nil {
-				h.renderSetup(w, "Could not read that submission. Please try again.", http.StatusBadRequest)
+				h.renderSetup(w, r, i18n.T(lang, "auth.unreadableSubmission"), http.StatusBadRequest)
 				return
 			}
 
 			password := r.FormValue("password")
 			if password != r.FormValue("confirm") {
-				h.renderSetup(w, "Those passwords do not match.", http.StatusBadRequest)
+				h.renderSetup(w, r, i18n.T(lang, "auth.passwordsDoNotMatch"), http.StatusBadRequest)
 				return
 			}
 
 			if err := auth.ValidatePassword(password); err != nil {
-				h.renderSetup(w, err.Error(), http.StatusBadRequest)
+				h.renderSetup(w, r, passwordError(lang, err), http.StatusBadRequest)
 				return
 			}
 
 			hash, err := h.auth.SetPassword(password)
 			if err != nil {
-				h.renderSetup(w, err.Error(), http.StatusBadRequest)
+				h.renderSetup(w, r, passwordError(lang, err), http.StatusBadRequest)
 				return
 			}
 
 			if err := onPasswordSet(hash); err != nil {
 				// The password is live in memory but could not be saved, so it
 				// would vanish on restart. Say so rather than pretend.
-				h.renderSetup(w,
-					"Your password was set, but could not be saved: "+err.Error(),
+				h.renderSetup(w, r,
+					i18n.T(lang, "auth.passwordNotSaved", "error", err.Error()),
 					http.StatusInternalServerError)
 				return
 			}
@@ -211,14 +283,72 @@ func (h *Handler) HandleSetup(onPasswordSet func(hash string) error) http.Handle
 	}
 }
 
+// th is t for the few strings whose placeholders take markup of their own (a
+// <kbd>, a <code>, a <span> with an id). The catalogue text is compiled in,
+// never user input, but a placeholder value might not be, so every argument
+// is escaped unless the template marked it as markup with raw.
+func th(lang, key string, args ...any) template.HTML {
+	safe := make([]any, len(args))
+	for i, a := range args {
+		switch v := a.(type) {
+		case template.HTML:
+			safe[i] = string(v)
+		case string:
+			if i%2 == 0 {
+				safe[i] = v // a placeholder name
+			} else {
+				safe[i] = template.HTMLEscapeString(v)
+			}
+		default:
+			safe[i] = template.HTMLEscapeString(fmt.Sprint(v))
+		}
+	}
+	return template.HTML(i18n.T(lang, key, safe...))
+}
+
+// passwordError shows why auth.ValidatePassword turned a password down, in the
+// visitor's language. The error names the rule that failed and the limit it
+// applied, so the message is translated from those; anything else comes back
+// as the error's own text.
+func passwordError(lang string, err error) string {
+	ue, ok := uerr.Of(err)
+	if !ok {
+		return err.Error()
+	}
+	switch ue.Code {
+	case "password.tooShort":
+		return i18n.N(lang, "auth.passwordTooShort", intArg(ue.Args["min"], auth.MinPasswordLength))
+	case "password.tooLong":
+		return i18n.N(lang, "auth.passwordTooLong", intArg(ue.Args["max"], auth.MaxPasswordBytes))
+	}
+	if key := "js-app.app.error." + ue.Code; i18n.T(i18n.Default, key) != key {
+		args := make([]any, 0, 2*len(ue.Args))
+		for k, v := range ue.Args {
+			args = append(args, k, v)
+		}
+		return i18n.T(lang, key, args...)
+	}
+	return err.Error()
+}
+
+// intArg reads a number out of an error's placeholders, or falls back.
+func intArg(v any, fallback int) int {
+	if n, ok := v.(int); ok {
+		return n
+	}
+	return fallback
+}
+
 // renderSetup draws the first run page, optionally with an error message.
-func (h *Handler) renderSetup(w http.ResponseWriter, message string, status int) {
+func (h *Handler) renderSetup(w http.ResponseWriter, r *http.Request, message string, status int) {
 	data := PageData{
 		Title:             "Welcome - LAN Orangutan",
 		Theme:             h.cfg.UI.Theme,
+		Version:           h.version,
 		Error:             message,
 		MinPasswordLength: auth.MinPasswordLength,
 	}
+	withLang(r, &data)
 
 	var buf bytes.Buffer
 	if err := h.templates.ExecuteTemplate(&buf, "setup.html", data); err != nil {
@@ -248,22 +378,22 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		h.renderLogin(w, "")
+		h.renderLogin(w, r, "")
 
 	case http.MethodPost:
 		if err := r.ParseForm(); err != nil {
-			h.renderLogin(w, "Could not read that submission. Please try again.")
+			h.renderLogin(w, r, i18n.T(i18n.FromRequest(r), "auth.unreadableSubmission"))
 			return
 		}
 
 		if h.auth.LockedOut(r.RemoteAddr) {
-			h.renderLogin(w, "Too many failed attempts. Please wait a few minutes and try again.")
+			h.renderLogin(w, r, i18n.T(i18n.FromRequest(r), "auth.tooManyAttempts"))
 			return
 		}
 
 		token, ok := h.auth.Login(r.RemoteAddr, r.FormValue("password"))
 		if !ok {
-			h.renderLogin(w, "Incorrect password.")
+			h.renderLogin(w, r, i18n.T(i18n.FromRequest(r), "auth.incorrectPassword"))
 			return
 		}
 
@@ -283,12 +413,14 @@ func (h *Handler) HandleLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 // renderLogin draws the sign in page, optionally with an error message.
-func (h *Handler) renderLogin(w http.ResponseWriter, message string) {
+func (h *Handler) renderLogin(w http.ResponseWriter, r *http.Request, message string) {
 	data := PageData{
-		Title: "Sign in - LAN Orangutan",
-		Theme: h.cfg.UI.Theme,
-		Error: message,
+		Title:   "Sign in - LAN Orangutan",
+		Theme:   h.cfg.UI.Theme,
+		Version: h.version,
+		Error:   message,
 	}
+	withLang(r, &data)
 
 	var buf bytes.Buffer
 	if err := h.templates.ExecuteTemplate(&buf, "login.html", data); err != nil {
@@ -321,6 +453,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleIndex(w, r)
 	case "/settings", "/settings.html":
 		h.handleSettings(w, r)
+	case "/credits":
+		h.handleCredits(w, r)
 	default:
 		http.NotFound(w, r)
 	}
@@ -328,6 +462,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // handleIndex renders the main dashboard
 func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
+	lang := i18n.FromRequest(r)
+
 	// Get devices
 	devices := h.store.GetDevices()
 
@@ -350,11 +486,11 @@ func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 		}
 		// Devices recorded by an older version have no vendor stored, so look it
 		// up now rather than showing "Unknown" until a rescan.
-		resolvedVendor := scanner.ResolveVendor(d.Vendor, d.MAC)
+		resolvedVendor := displayVendor(scanner.ResolveVendor(d.Vendor, d.MAC))
 
 		dv := &DeviceView{
 			Device:       d,
-			TimeAgo:      timeAgo(d.LastSeen),
+			TimeAgo:      timeAgo(lang, d.LastSeen),
 			LastSeenUnix: d.LastSeen.Unix(),
 			Vendor:       resolvedVendor,
 			Type:         d.Type,
@@ -413,6 +549,7 @@ func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 		Tailscale:      tailscale,
 		Stats:          stats,
 		Groups:         groups,
+		Locations:      h.store.GetLocations(),
 		Types:          typesList,
 		AuthEnabled:    h.auth.Enabled(),
 		Flagged:        flagged,
@@ -422,14 +559,21 @@ func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 		Version:        h.version,
 		ContinuousScan: h.store.ContinuousScanEnabled(h.cfg.Scanning.ContinuousScan),
 	}
+	withLang(r, &data)
 
-	data.NetworkWarning = network.IsolationWarning(networks)
+	if network.IsolationWarning(networks) != "" {
+		data.NetworkWarning = i18n.T(data.Lang, "common.networkIsolation")
+	}
 
 	// The table is only as current as the last scan. Say so, so that a "last
 	// seen" time is read against when the data was actually gathered.
 	if lastScan := h.store.GetMostRecentScan(); !lastScan.IsZero() {
-		data.LastScanAgo = timeAgo(lastScan)
-		data.LastScanAt = lastScan.Format("Jan 2, 2006 at 3:04 PM")
+		data.LastScanAgo = timeAgo(data.Lang, lastScan)
+		if data.Lang == i18n.Default {
+			data.LastScanAt = lastScan.Format("Jan 2, 2006 at 3:04 PM")
+		} else {
+			data.LastScanAt = lastScan.Format("2006-01-02 15:04")
+		}
 		data.LastScanUnix = lastScan.Unix()
 	}
 
@@ -452,13 +596,15 @@ func (h *Handler) handleSettings(w http.ResponseWriter, r *http.Request) {
 	stats := h.store.GetStats()
 
 	data := PageData{
-		Title:       "Settings - LAN Orangutan",
-		Theme:       h.cfg.UI.Theme,
-		Version:     h.version,
-		Tailscale:   tailscale,
-		Stats:       stats,
-		AuthEnabled: h.auth.Enabled(),
+		Title:          "Settings - LAN Orangutan",
+		Theme:          h.cfg.UI.Theme,
+		Version:        h.version,
+		Tailscale:      tailscale,
+		Stats:          stats,
+		AuthEnabled:    h.auth.Enabled(),
+		TokenAccessOff: !h.auth.TokenAccessEnabled(),
 	}
+	withLang(r, &data)
 
 	// Buffer the template output to avoid superfluous WriteHeader on error
 	var buf bytes.Buffer
@@ -470,37 +616,30 @@ func (h *Handler) handleSettings(w http.ResponseWriter, r *http.Request) {
 	buf.WriteTo(w)
 }
 
-// timeAgo returns a human-readable time difference
-func timeAgo(t time.Time) string {
+// timeAgo returns a human-readable time difference in lang.
+func timeAgo(lang string, t time.Time) string {
 	if t.IsZero() {
-		return "never"
+		return i18n.T(lang, "common.time.never")
 	}
 
 	diff := time.Since(t)
 
 	switch {
 	case diff < time.Minute:
-		return "just now"
+		return i18n.T(lang, "common.time.justNow")
 	case diff < time.Hour:
-		mins := int(diff.Minutes())
-		if mins == 1 {
-			return "1 min ago"
-		}
-		return fmt.Sprintf("%d min ago", mins)
+		return i18n.N(lang, "common.time.minAgo", int(diff.Minutes()))
 	case diff < 24*time.Hour:
-		hours := int(diff.Hours())
-		if hours == 1 {
-			return "1 hr ago"
-		}
-		return fmt.Sprintf("%d hr ago", hours)
+		return i18n.N(lang, "common.time.hrAgo", int(diff.Hours()))
 	case diff < 7*24*time.Hour:
-		days := int(diff.Hours() / 24)
-		if days == 1 {
-			return "1 day ago"
-		}
-		return fmt.Sprintf("%d days ago", days)
+		return i18n.N(lang, "common.time.dayAgo", int(diff.Hours()/24))
 	default:
-		return t.Format("Jan 2, 2006")
+		// Month names would need translating too; a numeric date reads the
+		// same everywhere.
+		if lang == i18n.Default {
+			return t.Format("Jan 2, 2006")
+		}
+		return t.Format("2006-01-02")
 	}
 }
 
@@ -522,4 +661,55 @@ func ipToLong(ip string) int64 {
 		result |= int64(n) << (24 - 8*i)
 	}
 	return result
+}
+
+// osNames spells the operating systems Tailscale reports for its peers the
+// way their makers do. Tailscale gives them in lower case ("linux", "iOS" as
+// "ios"), and the vendor column shows them beside proper manufacturer names.
+var osNames = map[string]string{
+	"linux":   "Linux",
+	"windows": "Windows",
+	"macos":   "macOS",
+	"ios":     "iOS",
+	"android": "Android",
+	"freebsd": "FreeBSD",
+	"openbsd": "OpenBSD",
+	"tvos":    "tvOS",
+}
+
+// displayVendor returns vendor as the dashboard shows it.
+func displayVendor(vendor string) string {
+	if name, ok := osNames[strings.ToLower(vendor)]; ok {
+		return name
+	}
+	return vendor
+}
+
+// withLang fills the language fields of a page from the visitor's choice.
+func withLang(r *http.Request, d *PageData) {
+	lang := i18n.FromRequest(r)
+	d.Lang = lang
+	d.Dir = i18n.Get(lang).Dir
+	d.Languages = i18n.Languages
+	d.I18N = i18n.Script(lang)
+}
+
+// pageDataOf finds the PageData in whatever a page hands a shared partial: the
+// PageData itself, a pointer to it, or a struct that embeds it (the Thanks
+// page). page has a value receiver, so all three satisfy hasPage.
+func pageDataOf(p any) PageData {
+	type hasPage interface{ page() PageData }
+	if hp, ok := p.(hasPage); ok {
+		return hp.page()
+	}
+	return PageData{Lang: i18n.Default, Languages: i18n.Languages}
+}
+
+func (d PageData) page() PageData { return d }
+
+// riskKeys maps the English findings the service probe records (see
+// scanner/probe.go) to their catalogue keys.
+var riskKeys = map[string]string{
+	"Telnet is open (unencrypted remote access)": "common.risk.telnet",
+	"FTP is open (unencrypted file transfer)":    "common.risk.ftp",
 }

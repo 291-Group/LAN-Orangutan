@@ -1,0 +1,19 @@
+{
+  "networkReport": "Informe de red",
+  "generated": "Generado el {date} a las {time}",
+  "devices.one": "dispositivo",
+  "devices.other": "dispositivos",
+  "online": "en línea",
+  "offline": "sin conexión",
+  "networks.one": "red",
+  "networks.other": "redes",
+  "ipAddress": "Dirección IP",
+  "hostname": "Nombre de host",
+  "type": "Tipo",
+  "mac": "MAC",
+  "vendor": "Fabricante",
+  "group": "Grupo",
+  "location": "Ubicación",
+  "lastSeen": "Visto por última vez",
+  "generatedBy": "Generado por LAN Orangutan"
+}

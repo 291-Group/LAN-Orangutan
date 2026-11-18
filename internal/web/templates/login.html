@@ -1,11 +1,12 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="{{.Theme}}">
+<html lang="{{.Lang}}" dir="{{.Dir}}" data-theme="{{.Theme}}">
 <head>
     <script>(function(){try{var t=localStorage.getItem("theme");if(t)document.documentElement.setAttribute("data-theme",t);var a=localStorage.getItem("accent")||"blue";if(a!=="orange")document.documentElement.setAttribute("data-accent",a);}catch(e){}})();</script>
     <meta charset="UTF-8">
+    <meta name="referrer" content="no-referrer">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sign in - LAN Orangutan</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <title>{{t $.Lang "auth.signIn"}} - LAN Orangutan</title>
+    <link rel="stylesheet" href="/static/style.css?v={{.Version}}">
     <link rel="icon" type="image/svg+xml" href="/static/orangutan.svg">
 </head>
 <body class="login-body">
@@ -22,7 +23,7 @@
 
             <form method="POST" action="/login" class="login-form">
                 <div class="form-group">
-                    <label for="password">Password</label>
+                    <label for="password">{{t $.Lang "auth.password"}}</label>
                     <input
                         type="password"
                         id="password"
@@ -32,9 +33,10 @@
                         autofocus
                         required>
                 </div>
-                <button type="submit" class="btn btn-primary login-submit">Sign in</button>
+                <button type="submit" class="btn btn-primary login-submit">{{t $.Lang "auth.signIn"}}</button>
             </form>
         </div>
+        {{template "langpicker" (langPicker . true)}}
     </main>
 
     <script>
@@ -47,5 +49,6 @@
             }
         })();
     </script>
+    {{template "i18nscript" .}}
 </body>
 </html>

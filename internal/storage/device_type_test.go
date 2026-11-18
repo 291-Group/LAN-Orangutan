@@ -33,7 +33,7 @@ func TestUpdateDeviceFields_CustomType(t *testing.T) {
 
 	// User overrides type to a supported taxonomy type "Server"
 	customType := "Server"
-	if err := s.UpdateDeviceFields("192.168.1.50", nil, nil, nil, nil, &customType, nil); err != nil {
+	if err := s.UpdateDeviceFields("192.168.1.50", nil, nil, nil, nil, &customType, nil, nil, nil); err != nil {
 		t.Fatalf("UpdateDeviceFields: %v", err)
 	}
 
@@ -57,19 +57,19 @@ func TestUpdateDeviceFields_InvalidType_Rejected(t *testing.T) {
 
 	// Arbitrary free-text type must be rejected
 	invalidType := "Smart Plug"
-	if err := s.UpdateDeviceFields("192.168.1.51", nil, nil, nil, nil, &invalidType, nil); err == nil {
+	if err := s.UpdateDeviceFields("192.168.1.51", nil, nil, nil, nil, &invalidType, nil, nil, nil); err == nil {
 		t.Fatal("expected error updating with invalid type 'Smart Plug', got nil")
 	}
 
 	// Oversized type must be rejected
 	tooLong := strings.Repeat("A", scanner.MaxTypeLen+1)
-	if err := s.UpdateDeviceFields("192.168.1.51", nil, nil, nil, nil, &tooLong, nil); err == nil {
+	if err := s.UpdateDeviceFields("192.168.1.51", nil, nil, nil, nil, &tooLong, nil, nil, nil); err == nil {
 		t.Fatal("expected error updating with oversized type, got nil")
 	}
 
 	// Control character must be rejected
 	control := "Server\n"
-	if err := s.UpdateDeviceFields("192.168.1.51", nil, nil, nil, nil, &control, nil); err == nil {
+	if err := s.UpdateDeviceFields("192.168.1.51", nil, nil, nil, nil, &control, nil, nil, nil); err == nil {
 		t.Fatal("expected error updating with control character, got nil")
 	}
 
@@ -93,7 +93,7 @@ func TestMergeDevices_PreservesCustomType(t *testing.T) {
 	// User overrides to standard device type "Server"
 	userType := "Server"
 	isCustom := true
-	if err := s.UpdateDeviceFields("192.168.1.50", nil, nil, nil, nil, &userType, &isCustom); err != nil {
+	if err := s.UpdateDeviceFields("192.168.1.50", nil, nil, nil, nil, &userType, &isCustom, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -147,7 +147,7 @@ func TestUpdateDeviceFields_ResetToAuto(t *testing.T) {
 
 	// User assigns custom type
 	customType := "Game Console"
-	if err := s.UpdateDeviceFields("192.168.1.70", nil, nil, nil, nil, &customType, nil); err != nil {
+	if err := s.UpdateDeviceFields("192.168.1.70", nil, nil, nil, nil, &customType, nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	if d := s.GetDevice("192.168.1.70"); !d.CustomType {
@@ -156,7 +156,7 @@ func TestUpdateDeviceFields_ResetToAuto(t *testing.T) {
 
 	// User resets back to auto (empty string)
 	empty := ""
-	if err := s.UpdateDeviceFields("192.168.1.70", nil, nil, nil, nil, &empty, nil); err != nil {
+	if err := s.UpdateDeviceFields("192.168.1.70", nil, nil, nil, nil, &empty, nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -191,7 +191,7 @@ func TestCustomTypePersistsAcrossIPChange(t *testing.T) {
 		t.Fatal(err)
 	}
 	iotType := "IoT"
-	if err := s.UpdateDeviceFields("192.168.1.10", nil, nil, nil, nil, &iotType, nil); err != nil {
+	if err := s.UpdateDeviceFields("192.168.1.10", nil, nil, nil, nil, &iotType, nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -224,7 +224,7 @@ func TestMergeSupplementalAndIPv6_PreservesCustomType(t *testing.T) {
 		t.Fatal(err)
 	}
 	customType := "Server"
-	if err := s.UpdateDeviceFields("192.168.1.80", nil, nil, nil, nil, &customType, nil); err != nil {
+	if err := s.UpdateDeviceFields("192.168.1.80", nil, nil, nil, nil, &customType, nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -268,7 +268,7 @@ func TestDeviceSerializationWithCustomType(t *testing.T) {
 	}
 
 	customType := "Server"
-	if err := s1.UpdateDeviceFields("192.168.1.90", nil, nil, nil, nil, &customType, nil); err != nil {
+	if err := s1.UpdateDeviceFields("192.168.1.90", nil, nil, nil, nil, &customType, nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 

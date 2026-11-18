@@ -6,7 +6,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"errors"
-	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"sort"
@@ -14,13 +14,17 @@ import (
 	"sync"
 	"time"
 
+	"github.com/291-Group/LAN-Orangutan/internal/auth"
 	"github.com/291-Group/LAN-Orangutan/internal/config"
+	"github.com/291-Group/LAN-Orangutan/internal/i18n"
 	"github.com/291-Group/LAN-Orangutan/internal/network"
+	"github.com/291-Group/LAN-Orangutan/internal/notify"
 	"github.com/291-Group/LAN-Orangutan/internal/report"
 	"github.com/291-Group/LAN-Orangutan/internal/scanner"
 	"github.com/291-Group/LAN-Orangutan/internal/snapshot"
 	"github.com/291-Group/LAN-Orangutan/internal/storage"
 	"github.com/291-Group/LAN-Orangutan/internal/types"
+	"github.com/291-Group/LAN-Orangutan/internal/uerr"
 )
 
 // Handler handles API requests
@@ -28,6 +32,10 @@ type Handler struct {
 	store   *storage.Storage
 	cfg     *config.Config
 	scanner *scanner.Scanner
+
+	// auth is held so the API token can be created and revoked through the
+	// API itself, which is how the Settings page does it.
+	auth *auth.Authenticator
 
 	// jobMu guards job, which holds the most recent background scan. Only one
 	// scan runs at a time.
@@ -43,16 +51,19 @@ type Handler struct {
 }
 
 // NewHandler creates a new API handler
-func NewHandler(store *storage.Storage, cfg *config.Config) *Handler {
+func NewHandler(store *storage.Storage, cfg *config.Config, authn *auth.Authenticator) *Handler {
+	// Honour a saved UI override for service detection at startup, falling
+	// back to the config default.
+	s := scanner.New(
+		cfg.Scanning.MinScanInterval,
+		store.ServiceDetectionEnabled(cfg.Scanning.EnableServiceDetection),
+	)
+	s.SetRoutedTiming(cfg.Scanning.NmapMaxRTTTimeout, cfg.Scanning.NmapMaxRetries)
 	return &Handler{
-		store: store,
-		cfg:   cfg,
-		// Honour a saved UI override for service detection at startup, falling
-		// back to the config default.
-		scanner: scanner.New(
-			cfg.Scanning.MinScanInterval,
-			store.ServiceDetectionEnabled(cfg.Scanning.EnableServiceDetection),
-		),
+		store:   store,
+		cfg:     cfg,
+		auth:    authn,
+		scanner: s,
 		scanCtx: context.Background(),
 	}
 }
@@ -72,14 +83,25 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Set JSON content type for all API responses
 	w.Header().Set("Content-Type", "application/json")
 
-	// CSRF protection for mutating requests
+	// CSRF protection for mutating requests.
+	//
+	// Cross-site request forgery works because a browser attaches the session
+	// cookie to a request another site made it send. A browser never attaches
+	// an Authorization header on its own, so a request the auth middleware
+	// accepted on the strength of a valid API token cannot have been forged
+	// that way, and this check would only produce a confusing error for a
+	// script that is already proving who it is. The header alone is not
+	// enough: a request can carry one and still have been let in by its
+	// session cookie, so ask the authenticator which credential it accepted.
 	if r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodDelete {
-		contentType := r.Header.Get("Content-Type")
-		xRequestedWith := r.Header.Get("X-Requested-With")
+		if h.auth == nil || !h.auth.TokenAuthenticated(r) {
+			contentType := r.Header.Get("Content-Type")
+			xRequestedWith := r.Header.Get("X-Requested-With")
 
-		if !strings.Contains(contentType, "application/json") && xRequestedWith != "XMLHttpRequest" {
-			h.error(w, http.StatusForbidden, "CSRF protection: requires Content-Type: application/json or X-Requested-With header")
-			return
+			if !strings.Contains(contentType, "application/json") && xRequestedWith != "XMLHttpRequest" {
+				h.error(w, http.StatusForbidden, "CSRF protection: requires Content-Type: application/json or X-Requested-With header")
+				return
+			}
 		}
 	}
 
@@ -98,6 +120,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleNetworks(w, r)
 	case path == "groups":
 		h.handleGroups(w, r)
+	case path == "locations":
+		h.handleLocations(w, r)
 	case path == "scan":
 		h.handleScan(w, r)
 	case path == "scan/start":
@@ -126,6 +150,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleStatus(w, r)
 	case path == "settings":
 		h.handleSettings(w, r)
+	case path == "token":
+		h.handleAPIToken(w, r)
 	case path == "snapshots":
 		h.handleSnapshots(w, r)
 	case path == "snapshots/compare":
@@ -136,6 +162,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleBackupRestore(w, r)
 	case path == "report":
 		h.handleReport(w, r)
+	case path == "webhooks":
+		h.handleWebhooks(w, r)
+	case path == "webhooks/test":
+		h.handleWebhookTest(w, r)
 	default:
 		h.error(w, http.StatusNotFound, "endpoint not found")
 	}
@@ -155,7 +185,23 @@ func (h *Handler) handleDevices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.success(w, devices)
+	out := make(map[string]deviceOut, len(devices))
+	for ip, d := range devices {
+		out[ip] = withStatus(d)
+	}
+	h.success(w, out)
+}
+
+// deviceOut is a device as the API returns it: the stored record plus whether
+// it is online now, which a script would otherwise have to work out from
+// last_seen and the one-hour rule itself.
+type deviceOut struct {
+	*types.Device
+	Online bool `json:"online"`
+}
+
+func withStatus(d *types.Device) deviceOut {
+	return deviceOut{Device: d, Online: d.IsOnline()}
 }
 
 // writeDevicesCSV sends the device list as a downloadable CSV file.
@@ -178,7 +224,7 @@ func (h *Handler) writeDevicesCSV(w http.ResponseWriter, devices map[string]*typ
 
 	_ = cw.Write([]string{
 		"IP Address", "MAC Address", "Hostname", "Vendor", "Label",
-		"Notes", "Group", "First Seen", "Last Seen", "Status",
+		"Notes", "Group", "Location", "First Seen", "Last Seen", "Status",
 	})
 
 	for _, d := range sorted {
@@ -187,7 +233,7 @@ func (h *Handler) writeDevicesCSV(w http.ResponseWriter, devices map[string]*typ
 			status = "online"
 		}
 		_ = cw.Write([]string{
-			d.IP, d.MAC, d.Hostname, scanner.ResolveVendor(d.Vendor, d.MAC), d.Label, d.Notes, d.Group,
+			d.IP, d.MAC, d.DisplayHostname(), scanner.ResolveVendor(d.Vendor, d.MAC), d.Label, d.Notes, d.Group, d.Location,
 			d.FirstSeen.Format("2006-01-02 15:04:05"),
 			d.LastSeen.Format("2006-01-02 15:04:05"),
 			status,
@@ -201,28 +247,30 @@ func (h *Handler) handleDevice(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		ip := r.URL.Query().Get("ip")
 		if ip == "" {
-			h.error(w, http.StatusBadRequest, "ip parameter required")
+			h.fail(w, http.StatusBadRequest, errIPRequired)
 			return
 		}
 		device := h.store.GetDevice(ip)
 		if device == nil {
-			h.error(w, http.StatusNotFound, "device not found")
+			h.fail(w, http.StatusNotFound, uerr.Newf("device.notFound", "no device at %s", "ip", ip))
 			return
 		}
-		h.success(w, device)
+		h.success(w, withStatus(device))
 
 	case http.MethodPost:
 		var req struct {
-			IP         string  `json:"ip"`
-			Label      *string `json:"label"`
-			Notes      *string `json:"notes"`
-			Group      *string `json:"group"`
-			Expected   *bool   `json:"expected"`
-			Type       *string `json:"type"`
-			CustomType *bool   `json:"custom_type"`
+			IP             string  `json:"ip"`
+			Label          *string `json:"label"`
+			Notes          *string `json:"notes"`
+			Group          *string `json:"group"`
+			Expected       *bool   `json:"expected"`
+			Type           *string `json:"type"`
+			CustomType     *bool   `json:"custom_type"`
+			CustomHostname *string `json:"custom_hostname"`
+			Location       *string `json:"location"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			h.error(w, http.StatusBadRequest, "invalid JSON")
+			h.fail(w, http.StatusBadRequest, errInvalidBody)
 			return
 		}
 
@@ -232,25 +280,21 @@ func (h *Handler) handleDevice(w http.ResponseWriter, r *http.Request) {
 			ip = r.URL.Query().Get("ip")
 		}
 		if ip == "" {
-			h.error(w, http.StatusBadRequest, "ip required")
+			h.fail(w, http.StatusBadRequest, errIPRequired)
 			return
 		}
 
 		if req.Type != nil {
 			cleanType, err := scanner.ValidateType(*req.Type)
 			if err != nil {
-				h.error(w, http.StatusBadRequest, err.Error())
+				h.fail(w, http.StatusBadRequest, err)
 				return
 			}
 			req.Type = &cleanType
 		}
 
-		if err := h.store.UpdateDeviceFields(ip, req.Label, req.Notes, req.Group, req.Expected, req.Type, req.CustomType); err != nil {
-			if strings.Contains(err.Error(), "device not found") {
-				h.error(w, http.StatusNotFound, err.Error())
-			} else {
-				h.error(w, http.StatusBadRequest, err.Error())
-			}
+		if err := h.store.UpdateDeviceFields(ip, req.Label, req.Notes, req.Group, req.Expected, req.Type, req.CustomType, req.CustomHostname, req.Location); err != nil {
+			h.fail(w, inputStatus(err), err)
 			return
 		}
 		h.success(w, map[string]string{"message": "device updated"})
@@ -258,11 +302,11 @@ func (h *Handler) handleDevice(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		ip := r.URL.Query().Get("ip")
 		if ip == "" {
-			h.error(w, http.StatusBadRequest, "ip parameter required")
+			h.fail(w, http.StatusBadRequest, errIPRequired)
 			return
 		}
 		if err := h.store.DeleteDevice(ip); err != nil {
-			h.error(w, http.StatusNotFound, err.Error())
+			h.fail(w, http.StatusNotFound, err)
 			return
 		}
 		h.success(w, map[string]string{"message": "device deleted"})
@@ -283,7 +327,7 @@ func (h *Handler) handleMarkAllExpected(w http.ResponseWriter, r *http.Request) 
 		Expected bool `json:"expected"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		h.error(w, http.StatusBadRequest, "invalid request body")
+		h.fail(w, http.StatusBadRequest, errInvalidBody)
 		return
 	}
 	if err := h.store.MarkAllExpected(body.Expected); err != nil {
@@ -305,7 +349,22 @@ func (h *Handler) handleNetworks(w http.ResponseWriter, r *http.Request) {
 		h.error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	h.success(w, network.WithConfigured(networks, h.networkFilter()))
+	h.success(w, uniqueNetworks(network.WithConfigured(networks, h.networkFilter())))
+}
+
+// uniqueNetworks drops a network listed twice (two interfaces on the same
+// subnet report the same CIDR), keeping the first.
+func uniqueNetworks(nets []types.Network) []types.Network {
+	seen := make(map[string]bool, len(nets))
+	out := nets[:0:0]
+	for _, n := range nets {
+		if seen[n.CIDR] {
+			continue
+		}
+		seen[n.CIDR] = true
+		out = append(out, n)
+	}
+	return out
 }
 
 // handleScan handles GET /api/scan
@@ -317,7 +376,7 @@ func (h *Handler) handleScan(w http.ResponseWriter, r *http.Request) {
 
 	cidr := r.URL.Query().Get("network")
 	if cidr == "" {
-		h.error(w, http.StatusBadRequest, "network parameter required")
+		h.fail(w, http.StatusBadRequest, errNetworkRequired)
 		return
 	}
 
@@ -329,7 +388,7 @@ func (h *Handler) handleScan(w http.ResponseWriter, r *http.Request) {
 
 	// Validate CIDR
 	if !network.ValidateCIDR(cidr) {
-		h.error(w, http.StatusBadRequest, "invalid CIDR format")
+		h.fail(w, http.StatusBadRequest, invalidNetwork(cidr))
 		return
 	}
 
@@ -341,6 +400,11 @@ func (h *Handler) handleScan(w http.ResponseWriter, r *http.Request) {
 			"rate limited, wait "+waitTime.Round(time.Second).String())
 		return
 	}
+
+	// Tell the webhooks what this scan changed, once it is over. Started only
+	// now, past every check that can reject the request, so a refused scan
+	// never advances the notifier's state.
+	defer notify.Begin(h.store).Finish()
 
 	// Perform scan
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
@@ -358,7 +422,7 @@ func (h *Handler) handleScan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Merge devices into storage
-	if err := h.store.MergeDevices(result.Devices); err != nil {
+	if err := h.store.MergeScan(cidr, result.Devices); err != nil {
 		h.error(w, http.StatusInternalServerError, "failed to save devices")
 		return
 	}
@@ -398,17 +462,24 @@ func (h *Handler) scanAllNetworks(w http.ResponseWriter, r *http.Request) {
 		h.error(w, http.StatusInternalServerError, "failed to detect networks: "+err.Error())
 		return
 	}
-	detected = network.WithConfigured(detected, h.networkFilter())
+	detected = uniqueNetworks(network.WithConfigured(detected, h.networkFilter()))
 	if len(detected) == 0 {
 		h.error(w, http.StatusNotFound, "no networks detected")
 		return
 	}
+
+	// Tell the webhooks what this scan changed, once it is over (see
+	// handleScan for why this waits until the request is accepted).
+	defer notify.Begin(h.store).Finish()
 
 	result := scanAllResult{
 		Networks:     make([]networkScanSummary, 0, len(detected)),
 		NetworkCount: len(detected),
 		Timestamp:    time.Now(),
 	}
+
+	// The networks that actually completed, for the ARP-table pass below.
+	var scannedCIDRs []string
 
 	for _, n := range detected {
 		summary := networkScanSummary{Network: n.CIDR}
@@ -435,19 +506,36 @@ func (h *Handler) scanAllNetworks(w http.ResponseWriter, r *http.Request) {
 		result.Networks = append(result.Networks, summary)
 		result.ScannedCount++
 		result.DeviceCount += scan.DeviceCount
+		scannedCIDRs = append(scannedCIDRs, n.CIDR)
 	}
 
 	// Supplemental sources, once for the whole request. IPv6 neighbors (an IPv6
 	// subnet cannot be swept) enrich devices by MAC rather than being listed per
 	// address, so they go through MergeIPv6Neighbors. mDNS announcements merge as
 	// an ordinary secondary source.
-	if ipv6 := h.scanner.DiscoverIPv6(r.Context()); len(ipv6) > 0 {
-		if err := h.store.MergeIPv6Neighbors(ipv6); err == nil {
+	// The ARP table holds devices this machine has spoken to that did not answer
+	// nmap's ARP probe during the sweep, which is ordinary for hardware that
+	// sleeps. Restricted to the networks just scanned so container bridges and
+	// VPN peers cannot appear as LAN devices.
+	if arp := h.scanner.DiscoverARP(r.Context(), scannedCIDRs); len(arp) > 0 {
+		if err := h.store.MergeSupplemental(arp); err == nil {
 			result.Networks = append(result.Networks, networkScanSummary{
-				Network: "IPv6 neighbors", Status: "scanned", DeviceCount: len(ipv6),
+				Network: "ARP table", Status: "scanned", DeviceCount: len(arp),
 			})
 			result.ScannedCount++
-			result.DeviceCount += len(ipv6)
+		}
+	}
+	// An IPv6 network in the list was already scanned through the neighbour
+	// table, so running the neighbour pass again would count its devices twice.
+	if !network.HasIPv6Network(scannedCIDRs) {
+		if ipv6 := h.scanner.DiscoverIPv6(r.Context()); len(ipv6) > 0 {
+			if err := h.store.MergeIPv6Neighbors(ipv6); err == nil {
+				result.Networks = append(result.Networks, networkScanSummary{
+					Network: "IPv6 neighbors", Status: "scanned", DeviceCount: len(ipv6),
+				})
+				result.ScannedCount++
+				result.DeviceCount += len(ipv6)
+			}
 		}
 	}
 	if mdns := h.scanner.DiscoverMDNS(r.Context()); len(mdns) > 0 {
@@ -470,7 +558,7 @@ func (h *Handler) scanAllNetworks(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) resolveScanTargets(cidr string) ([]string, error) {
 	if !strings.EqualFold(cidr, "all") {
 		if !network.ValidateCIDR(cidr) {
-			return nil, errors.New("invalid CIDR format")
+			return nil, invalidNetwork(cidr)
 		}
 		return []string{cidr}, nil
 	}
@@ -479,7 +567,7 @@ func (h *Handler) resolveScanTargets(cidr string) ([]string, error) {
 	if err != nil {
 		return nil, errors.New("failed to detect networks: " + err.Error())
 	}
-	detected = network.WithConfigured(detected, h.networkFilter())
+	detected = uniqueNetworks(network.WithConfigured(detected, h.networkFilter()))
 	if len(detected) == 0 {
 		return nil, errors.New("no networks detected")
 	}
@@ -503,13 +591,13 @@ func (h *Handler) handleScanStart(w http.ResponseWriter, r *http.Request) {
 
 	cidr := r.URL.Query().Get("network")
 	if cidr == "" {
-		h.error(w, http.StatusBadRequest, "network parameter required")
+		h.fail(w, http.StatusBadRequest, errNetworkRequired)
 		return
 	}
 
 	networks, err := h.resolveScanTargets(cidr)
 	if err != nil {
-		h.error(w, http.StatusBadRequest, err.Error())
+		h.fail(w, http.StatusBadRequest, err)
 		return
 	}
 
@@ -581,7 +669,7 @@ func (h *Handler) handleScanContinuous(w http.ResponseWriter, r *http.Request) {
 			Enabled bool `json:"enabled"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			h.error(w, http.StatusBadRequest, "invalid request body")
+			h.fail(w, http.StatusBadRequest, errInvalidBody)
 			return
 		}
 		if err := h.store.SetContinuousScan(body.Enabled); err != nil {
@@ -614,7 +702,7 @@ func (h *Handler) handleScanServiceDetection(w http.ResponseWriter, r *http.Requ
 			Enabled bool `json:"enabled"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			h.error(w, http.StatusBadRequest, "invalid request body")
+			h.fail(w, http.StatusBadRequest, errInvalidBody)
 			return
 		}
 		if err := h.store.SetServiceDetection(body.Enabled); err != nil {
@@ -654,11 +742,11 @@ func (h *Handler) handleScanInterval(w http.ResponseWriter, r *http.Request) {
 			Seconds *int `json:"seconds"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			h.error(w, http.StatusBadRequest, "invalid request body")
+			h.fail(w, http.StatusBadRequest, errInvalidBody)
 			return
 		}
 		if body.Seconds == nil {
-			h.error(w, http.StatusBadRequest, "seconds is required")
+			h.fail(w, http.StatusBadRequest, uerr.New("seconds.required", "seconds is required"))
 			return
 		}
 		secs := clampInt(*body.Seconds, minScanIntervalSeconds, maxScanIntervalSeconds)
@@ -691,7 +779,7 @@ func (h *Handler) handleScanNetworks(w http.ResponseWriter, r *http.Request) {
 			Reset           bool      `json:"reset"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			h.error(w, http.StatusBadRequest, "invalid request body")
+			h.fail(w, http.StatusBadRequest, errInvalidBody)
 			return
 		}
 		if body.Reset {
@@ -705,7 +793,7 @@ func (h *Handler) handleScanNetworks(w http.ResponseWriter, r *http.Request) {
 		if body.Networks != nil {
 			cleaned, err := validateCIDRs(*body.Networks)
 			if err != nil {
-				h.error(w, http.StatusBadRequest, err.Error())
+				h.fail(w, http.StatusBadRequest, err)
 				return
 			}
 			body.Networks = &cleaned
@@ -713,7 +801,7 @@ func (h *Handler) handleScanNetworks(w http.ResponseWriter, r *http.Request) {
 		if body.ExcludeNetworks != nil {
 			cleaned, err := validateCIDRs(*body.ExcludeNetworks)
 			if err != nil {
-				h.error(w, http.StatusBadRequest, err.Error())
+				h.fail(w, http.StatusBadRequest, err)
 				return
 			}
 			body.ExcludeNetworks = &cleaned
@@ -736,7 +824,7 @@ func (h *Handler) networkSettingsView() map[string]interface{} {
 	f := h.networkFilter()
 	detected := []string{}
 	if nets, err := network.DetectNetworks(); err == nil {
-		for _, n := range nets {
+		for _, n := range uniqueNetworks(nets) {
 			detected = append(detected, n.CIDR)
 		}
 	}
@@ -772,7 +860,7 @@ func (h *Handler) handleGroups(w http.ResponseWriter, r *http.Request) {
 			NewName string `json:"new_name"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			h.error(w, http.StatusBadRequest, "invalid request body")
+			h.fail(w, http.StatusBadRequest, errInvalidBody)
 			return
 		}
 
@@ -787,13 +875,13 @@ func (h *Handler) handleGroups(w http.ResponseWriter, r *http.Request) {
 		case "reset":
 			err = h.store.SetGroups(nil)
 		default:
-			h.error(w, http.StatusBadRequest, "action must be one of: add, rename, delete, reset")
+			h.fail(w, http.StatusBadRequest, invalidAction("add, rename, delete, reset"))
 			return
 		}
 		if err != nil {
 			// These are all user-input problems (empty name, duplicate, unknown
 			// group), so they are a 400 rather than a server error.
-			h.error(w, http.StatusBadRequest, err.Error())
+			h.fail(w, http.StatusBadRequest, err)
 			return
 		}
 		h.success(w, h.groupsView())
@@ -826,7 +914,7 @@ func validateCIDRs(list []string) ([]string, error) {
 			continue
 		}
 		if _, _, err := net.ParseCIDR(c); err != nil {
-			return nil, fmt.Errorf("%q is not a valid network (use CIDR form, e.g. 192.168.1.0/24)", c)
+			return nil, invalidNetwork(c)
 		}
 		if !seen[c] {
 			seen[c] = true
@@ -871,11 +959,11 @@ func (h *Handler) handleSnapshots(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		id := r.URL.Query().Get("id")
 		if id == "" {
-			h.error(w, http.StatusBadRequest, "id parameter required")
+			h.fail(w, http.StatusBadRequest, uerr.New("id.required", "id parameter required"))
 			return
 		}
 		if err := h.store.DeleteSnapshot(id); err != nil {
-			h.error(w, http.StatusNotFound, "could not delete snapshot: "+err.Error())
+			h.fail(w, http.StatusNotFound, err)
 			return
 		}
 		h.success(w, map[string]string{"message": "snapshot deleted"})
@@ -896,7 +984,7 @@ func (h *Handler) handleSnapshotCompare(w http.ResponseWriter, r *http.Request) 
 	from := r.URL.Query().Get("from")
 	to := r.URL.Query().Get("to")
 	if from == "" || to == "" {
-		h.error(w, http.StatusBadRequest, "from and to parameters are required")
+		h.fail(w, http.StatusBadRequest, uerr.New("compare.required", "from and to parameters are required"))
 		return
 	}
 
@@ -952,13 +1040,13 @@ func (h *Handler) handleBackupRestore(w http.ResponseWriter, r *http.Request) {
 	}
 	var backup types.Backup
 	if err := json.NewDecoder(r.Body).Decode(&backup); err != nil {
-		h.error(w, http.StatusBadRequest, "that is not a valid backup file")
+		h.fail(w, http.StatusBadRequest, uerr.New("backup.invalid", "that is not a valid backup file"))
 		return
 	}
 	// A real backup always carries a creation time. Requiring it guards against
 	// restoring some unrelated JSON file and silently wiping everything.
 	if backup.CreatedAt.IsZero() {
-		h.error(w, http.StatusBadRequest, "that file does not look like a LAN Orangutan backup")
+		h.fail(w, http.StatusBadRequest, uerr.New("backup.notOrangutan", "that file does not look like a LAN Orangutan backup"))
 		return
 	}
 	if err := h.store.ImportBackup(backup); err != nil {
@@ -978,6 +1066,19 @@ func (h *Handler) handleBackupRestore(w http.ResponseWriter, r *http.Request) {
 	h.success(w, map[string]string{"message": "backup restored"})
 }
 
+// applyLiveSettings pushes the settings that are held by live components (the
+// storage limits and the scanner's service-detection flag) from the saved
+// state, so a change made by another process takes effect without a restart.
+func (h *Handler) applyLiveSettings() {
+	if err := h.store.SetLimits(
+		h.store.RetentionDaysOrDefault(h.cfg.Storage.RetentionDays),
+		h.store.MaxDevicesOrDefault(h.cfg.Storage.MaxDevices),
+	); err != nil {
+		log.Printf("could not apply storage limits: %v", err)
+	}
+	h.scanner.SetServiceDetection(h.store.ServiceDetectionEnabled(h.cfg.Scanning.EnableServiceDetection))
+}
+
 // handleReport handles GET /api/report, rendering a self-contained HTML summary
 // of the network as a single downloadable file to save or share.
 func (h *Handler) handleReport(w http.ResponseWriter, r *http.Request) {
@@ -985,16 +1086,6 @@ func (h *Handler) handleReport(w http.ResponseWriter, r *http.Request) {
 		h.error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	devices := h.store.GetDevices()
-	list := make([]types.Device, 0, len(devices))
-	for _, d := range devices {
-		dc := *d
-		dc.Vendor = scanner.ResolveVendor(dc.Vendor, dc.MAC)
-		list = append(list, dc)
-	}
-	sort.Slice(list, func(i, j int) bool { return list[i].IP < list[j].IP })
-
-	stats := h.store.GetStats()
 	networkCount := 0
 	if nets, err := network.DetectNetworks(); err == nil {
 		networkCount = len(network.WithConfigured(nets, h.networkFilter()))
@@ -1002,14 +1093,11 @@ func (h *Handler) handleReport(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Content-Disposition", `attachment; filename="lan-orangutan-report-`+time.Now().Format("2006-01-02")+`.html"`)
-	_ = report.Render(w, report.Data{
-		GeneratedAt:  time.Now(),
-		Total:        stats.Total,
-		Online:       stats.Online,
-		Offline:      stats.Offline,
-		NetworkCount: networkCount,
-		Devices:      list,
-	})
+	// The download is written in the visitor's language, like the page it was
+	// saved from.
+	data := report.NewData(h.store.GetDevices(), h.store.GetStats(), networkCount, time.Now())
+	data.Lang = i18n.FromRequest(r)
+	_ = report.Render(w, data)
 }
 
 // scanNetwork scans a single network and merges the results into storage.
@@ -1025,7 +1113,7 @@ func (h *Handler) scanNetwork(ctx context.Context, cidr string) (*types.ScanResu
 		return nil, errors.New(result.Error)
 	}
 
-	if err := h.store.MergeDevices(result.Devices); err != nil {
+	if err := h.store.MergeScan(cidr, result.Devices); err != nil {
 		return nil, errors.New("failed to save devices")
 	}
 	h.store.SetLastScan(cidr, time.Now())
@@ -1138,7 +1226,7 @@ func (h *Handler) handleSettings(w http.ResponseWriter, r *http.Request) {
 			MaxDevices    *int `json:"max_devices"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			h.error(w, http.StatusBadRequest, "invalid JSON")
+			h.fail(w, http.StatusBadRequest, errInvalidBody)
 			return
 		}
 		if body.RetentionDays != nil {
@@ -1183,8 +1271,8 @@ func (h *Handler) settingsView() map[string]interface{} {
 	return map[string]interface{}{
 		"retention_days": field(rOver, h.cfg.Storage.RetentionDays),
 		"max_devices":    field(mOver, h.cfg.Storage.MaxDevices),
-		// Reported for information; not editable from the UI yet.
-		"scan_interval": h.cfg.Scanning.ScanInterval,
+		// Reported for information; changed through /api/scan/interval.
+		"scan_interval": h.store.ScanIntervalOrDefault(h.cfg.Scanning.ScanInterval),
 		"theme":         h.cfg.UI.Theme,
 	}
 }
@@ -1232,5 +1320,45 @@ func (h *Handler) error(w http.ResponseWriter, status int, message string) {
 		Success: false,
 		Error:   message,
 	}
+	json.NewEncoder(w).Encode(resp)
+}
+
+// The request problems this package detects itself, with the codes the web
+// interface translates (error.<code> in the js-app catalogue). Storage,
+// scanner and notify report theirs the same way, so a handler forwards those
+// unchanged through fail.
+var (
+	errInvalidBody     = uerr.New("request.invalid", "invalid request body")
+	errIPRequired      = uerr.New("ip.required", "ip parameter required")
+	errNetworkRequired = uerr.New("network.required", "network parameter required")
+)
+
+func invalidNetwork(value string) error {
+	return uerr.Newf("network.invalid", "%q is not a valid network (use CIDR form, e.g. 192.168.1.0/24)", "value", value)
+}
+
+func invalidAction(actions string) error {
+	return uerr.Newf("action.invalid", "action must be one of: %s", "actions", actions)
+}
+
+// inputStatus is the status for an error from a device update: an unknown
+// device is 404, every other complaint is about the submitted values.
+func inputStatus(err error) int {
+	if ue, ok := uerr.Of(err); ok && ue.Code == "device.notFound" {
+		return http.StatusNotFound
+	}
+	return http.StatusBadRequest
+}
+
+// fail reports err to the client. A uerr.Error also carries its code and
+// placeholders, so the page can translate it; anything else is sent as its
+// English text alone.
+func (h *Handler) fail(w http.ResponseWriter, status int, err error) {
+	resp := types.APIResponse{Success: false, Error: err.Error()}
+	if ue, ok := uerr.Of(err); ok {
+		resp.Code = ue.Code
+		resp.Args = ue.Args
+	}
+	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(resp)
 }

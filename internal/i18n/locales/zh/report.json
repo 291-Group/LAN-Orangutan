@@ -1,0 +1,17 @@
+{
+  "networkReport": "网络报告",
+  "generated": "生成于 {date} {time}",
+  "devices.other": "台设备",
+  "online": "在线",
+  "offline": "离线",
+  "networks.other": "个网络",
+  "ipAddress": "IP 地址",
+  "hostname": "主机名",
+  "type": "类型",
+  "mac": "MAC",
+  "vendor": "厂商",
+  "group": "分组",
+  "location": "位置",
+  "lastSeen": "最近出现",
+  "generatedBy": "由 LAN Orangutan 生成"
+}

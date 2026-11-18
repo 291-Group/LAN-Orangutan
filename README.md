@@ -9,6 +9,12 @@
   <a href="https://github.com/avelino/awesome-go#utilities"><img src="https://291grp.com/assets/awards/mentioned-in-awesome.svg" alt="Mentioned in Awesome" height="20"></a>&nbsp;&nbsp;<a href="https://devhunt.org/tool/lan-orangutan"><img src="https://291grp.com/assets/awards/devhunt.svg" alt="DevHunt - 2nd Product of the Week" height="20"></a>
 </p>
 
+<p align="left">
+  <img alt="Go" src="https://img.shields.io/badge/go-1.27%2B-00ADD8.svg">
+  <img alt="Platforms" src="https://img.shields.io/badge/platforms-linux%20%7C%20macos%20%7C%20windows%20%7C%20pi-lightgrey.svg">
+  <a href="https://hub.docker.com/r/291group/lan-orangutan"><img alt="Docker" src="https://img.shields.io/docker/v/291group/lan-orangutan?label=docker&color=2496ED"></a>
+</p>
+
 
 <a href="https://trendshift.io/repositories/17888?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-17888" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/17888/daily?language=Go" alt="291-Group%2FLAN-Orangutan | Trendshift" width="250" height="55"/></a>
 
@@ -28,20 +34,25 @@ By [291 Group](https://291group.com)
 
 ## Features
 
-- Auto-discover devices using nmap<br>
+- Auto-discover devices using nmap, plus devices already in this machine's ARP table that don't answer a scan<br>
+- IPv4 and IPv6, with a device seen on both shown once<br>
 - Password protected, with a password you set the first time you open it<br>
-- Label, group, and add notes to devices, with your own group names<br>
+- Label, group, and add notes to devices, with your own group names and locations<br>
+- Rename a device's hostname or set its type yourself, and scans keep your choice<br>
 - Save a snapshot of your network and compare it later to see what changed<br>
 - Mark the devices you expect, and get told when something new appears or something goes missing<br>
+- Notifications by webhook to Telegram, Discord, Slack, ntfy, Home Assistant or anything that takes JSON<br>
 - Back up and restore everything, or export a shareable HTML report of your network<br>
 - Change scanning and network settings from the Settings page, no config file needed<br>
-- Multi-network support<br>
+- Multi-network support, with faster scans of networks reached through a router or VPN, tuned automatically<br>
 - Tailscale integration - connect, disconnect, and discover tailnet peers from inside the app<br>
 - Live scan progress you can cancel<br>
 - Modern web dashboard with light/dark mode<br>
-- Full CLI with JSON output<br>
+- Full CLI with JSON output, able to do everything the web interface can<br>
+- REST API with tokens, for scripts, dashboards and agents<br>
+- Available in 16 languages, including Arabic and Hebrew right to left<br>
 - Cross-platform (Linux, macOS, Windows)<br>
-- Single binary, no dependencies<br>
+- Single binary, with nmap the only thing it needs alongside it<br>
 
 ## Quick Start
 
@@ -97,9 +108,13 @@ Open `http://localhost:291` in your browser, or `http://<that-machine>:291` from
 
 The first time you open it, LAN Orangutan asks you to create a password. Nothing else is reachable until you do. That is the whole setup.
 
-### Upgrading from an earlier version
+### Upgrading
 
-If you installed LAN Orangutan with `install.sh` before this release, you were running a Python and PHP version of the app from `/opt/lan-orangutan`. Running the new `install.sh` replaces it with the single Go binary at `/usr/local/bin/orangutan` and removes that old directory.
+Upgrading to 4.0 needs nothing extra. Install it the same way you installed your current version, and your devices, groups, locations, labels, settings and password all carry over. From 4.0, version numbers follow semantic versioning.
+
+#### From the Python and PHP version (before 3.1.3)
+
+If you installed LAN Orangutan with `install.sh` before 3.1.3, you were running a Python and PHP version of the app from `/opt/lan-orangutan`. Running the new `install.sh` replaces it with the single Go binary at `/usr/local/bin/orangutan` and removes that old directory.
 
 **Your config and your device list are kept.** Nothing in `/etc/lan-orangutan` or `/var/lib/lan-orangutan` is touched.
 
@@ -109,6 +124,41 @@ Two things change that you will notice:
 - PHP and Python are no longer needed. You can remove them if you installed them only for LAN Orangutan.
 
 Upgrading through a package (`.deb`, `.rpm`, `.apk`) or Docker needs nothing extra, since those already ran the Go binary.
+
+### Uninstalling
+
+Remove it the same way you installed it. Your device list, settings and password are kept in a separate data folder; delete that too if you want nothing left behind.
+
+```bash
+# macOS (Homebrew)
+brew uninstall lan-orangutan
+
+# Windows (Scoop)
+scoop uninstall lan-orangutan
+
+# Debian, Ubuntu, Raspberry Pi OS (.deb)
+sudo apt remove lan-orangutan
+
+# Fedora, RHEL (.rpm)
+sudo dnf remove lan-orangutan
+
+# Alpine (.apk)
+sudo apk del lan-orangutan
+
+# Installed with install.sh: run the uninstaller from the same download
+sudo ./uninstall.sh
+
+# Docker: run this next to your compose file, then delete its data/ folder
+docker compose down
+```
+
+If you downloaded the binary and ran it directly, delete the `orangutan` file. If you set it up as a service by following [docs/INSTALL.md](docs/INSTALL.md), remove that service first: `sudo systemctl disable --now lan-orangutan` and delete `/etc/systemd/system/lan-orangutan.service` on Linux, or `launchctl unload` the plist and delete `~/Library/LaunchAgents/com.291group.lan-orangutan.plist` on macOS.
+
+The data folder is in one of these places, unless you set `data_dir` yourself:
+
+- Linux: `/var/lib/lan-orangutan` when run as root or as a service, otherwise `~/.local/share/lan-orangutan`
+- macOS: `~/Library/Application Support/lan-orangutan`
+- Windows: `%APPDATA%\lan-orangutan`
 
 ## What works where
 
@@ -153,20 +203,79 @@ sudo orangutan serve --allow-insecure  # No password at all (see Security)
 # List devices
 orangutan list                         # List all devices
 orangutan list --online                # List online devices only
+orangutan list --offline               # Devices not seen for an hour
 orangutan list --format json           # JSON output
+orangutan list --format csv            # Same columns as "orangutan export"
+orangutan list --type Printer          # Only one device type
+orangutan list --group Family          # Only one group
+
+# Edit a device (anything the web edit dialog can change)
+orangutan device show 192.168.1.20
+orangutan device set 192.168.1.20 --hostname "Living Room TV" --group Family
+orangutan device set 192.168.1.20 --hostname ""     # Back to the scanned name
+orangutan device set 192.168.1.30 --type Printer --expected
+orangutan device set 192.168.1.25 --location "Living Room"
+orangutan device set 192.168.1.30 --label NAS --notes "Rack, shelf 2"
+orangutan device delete 192.168.1.40
+orangutan device expect-all            # Mark every current device as expected
+orangutan device expect-all --clear    # Remove the mark from every device
+
+# Groups
+orangutan groups                       # List groups and how many devices are in each
+orangutan groups add Office
+orangutan groups rename Office Work    # Devices in it move with it
+orangutan groups delete Work           # Devices are kept, without a group
+orangutan groups reset                 # Back to the built-in groups
+
+# Locations
+orangutan locations                    # List locations and how many devices are in each
+orangutan locations add Garage
+orangutan locations rename "Living Room" Lounge
+orangutan locations delete Garage      # Devices are kept, without a location
+orangutan locations prune              # Delete every location with no devices
+orangutan list --location Kitchen      # Only what is in one place
+
+# Snapshots
+orangutan snapshot save "Before new router"
+orangutan snapshot list                # Newest is 1
+orangutan snapshot compare 1           # What changed since snapshot 1
+orangutan snapshot compare 2 1         # Between two snapshots
+orangutan snapshot delete 3
+
+# Backup, report and API token
+orangutan backup                       # Devices, settings and snapshots to one file
+orangutan restore backup.json --yes    # Replaces what is there now
+orangutan report                       # Shareable HTML report
+orangutan token create                 # Shown once; a running server picks it up
+TOKEN=$(orangutan token create)        # Only the token goes to stdout
+orangutan token revoke                 # Stops working immediately
+
+# Notifications (webhooks)
+orangutan webhook                      # List webhooks, numbered, with the last result
+orangutan webhook add "https://api.telegram.org/bot<token>/sendMessage?chat_id=<id>" --name Phone
+orangutan webhook add https://ntfy.sh/my-topic --events missing,unexpected
+orangutan webhook test 1               # Send a test message and show the answer
+orangutan webhook set 1 --name Phone --events new,missing
+orangutan webhook disable 1            # Or enable; keeps it in the list
+orangutan webhook delete 1
 
 # Export
 orangutan export devices.csv           # Export to CSV
+orangutan export devices.json          # Same JSON as "list --format json"
 
 # Check status
 orangutan status                       # Show system status
 orangutan config                       # Show settings in effect
+orangutan settings                     # The settings the Settings page can change
+orangutan settings set scan_interval 600
+orangutan settings set networks 192.168.10.0/24,10.0.5.0/24
+orangutan settings reset scan_interval # Back to the config file's value
 orangutan networks                     # Show detected networks
 orangutan version                      # Show version info
+orangutan status --format json         # Most listing commands take --format json
 ```
 
-The `scan all` CLI command also reads the IPv6 neighbor cache and folds dual-stack
-sightings into the same device entry by MAC address.
+The `scan all` CLI command also reads the IPv6 neighbor cache and folds dual-stack sightings into the same device entry by MAC address.
 
 ### Why sudo?
 
@@ -181,18 +290,81 @@ Without elevated privileges, you'll still see device IPs but MAC addresses and v
 
 The web dashboard provides:
 - Real-time device status (online/offline)
-- Device grouping (Server, Desktop, Laptop, Mobile, IoT, etc.)
+- Device types (Server, Desktop, Laptop, Mobile, IoT and more), plus your own groups and locations
 - Labels and notes for each device
 - Search and filter devices
 - Export to CSV/JSON
 - Continuous scanning you can toggle on or off, keeping the view live
 - Keyboard shortcuts (/ to search, R to refresh, T to toggle theme)
+- A language menu in the header, and a Credits page behind the heart
 
 ### Scan progress
 
 Scans run in the background, so the dashboard stays responsive and a long scan will not time out. Progress shows which network is being scanned, how many devices have been found, and a time estimate based on how long that network took to scan last time. Scanning a large network takes a few minutes, and you can cancel at any point.
 
 The first scan of a network has no previous timing to estimate from, so it shows elapsed time instead of a percentage.
+
+## Languages
+
+LAN Orangutan is available in English, Arabic, Bengali, Chinese, French, German, Hebrew, Hindi, Italian, Japanese, Korean, Polish, Portuguese, Russian, Spanish and Ukrainian. Pick one from the language menu in the header. Your browser remembers the choice, so everyone using the same instance can have their own, and English is the default. Arabic and Hebrew use a right to left layout, and the HTML report downloaded from the dashboard comes out in the language you are using. The CLI and notification messages stay in English.
+
+If you speak one of these languages and something reads wrong, or you would like another language added, say so in [Discussion #53](https://github.com/291-Group/LAN-Orangutan/discussions/53).
+
+## Notifications
+
+LAN Orangutan can post to a webhook when something changes on your network.
+Add one under **Settings → Notifications**, or with `orangutan webhook add`,
+and choose which events it gets:
+
+| Event | When it fires |
+|---|---|
+| `device.new` | A device is seen for the first time |
+| `device.unexpected` | A device you have not marked as expected comes online: a new one, or one back after being offline |
+| `device.missing` | A device you marked as expected has not been seen for an hour |
+| `device.moved` | A device (matched by its MAC address) shows up at a new IP address |
+
+Each event fires once per change, not on every scan: a device that stays
+online, or stays missing, is not reported again. A webhook that gets both
+"new" and "unexpected" receives one message for a brand new device, not two.
+The very first scan, into an empty device list, sends nothing, and no more
+than 20 messages go to one webhook from a single scan. "Missing" is checked on
+every scan, including the automatic ones.
+
+Every webhook gets a JSON `POST`:
+
+```json
+{
+  "event": "device.moved",
+  "time": "2026-10-20T14:03:00+01:00",
+  "text": "Device changed address: Living Room TV moved from 192.168.1.20 to 192.168.1.35",
+  "content": "Device changed address: Living Room TV moved from 192.168.1.20 to 192.168.1.35",
+  "device": {"ip": "192.168.1.35", "mac": "aa:bb:cc:dd:ee:ff", "hostname": "Living Room TV",
+             "vendor": "Apple", "label": "", "group": "Mobile", "type": "Phone"},
+  "previous_ip": "192.168.1.20"
+}
+```
+
+The same message is in `text` and `content`, so most services show it with no
+setup. Messages are always in English, whatever language the interface is in,
+because they are read in another app.
+
+| Service | URL to paste |
+|---|---|
+| Telegram | `https://api.telegram.org/bot<token>/sendMessage?chat_id=<chat id>` (the chat ID is also sent in the body, where Telegram reads it) |
+| Discord | The channel's webhook URL (Channel settings → Integrations → Webhooks) |
+| Slack | An incoming webhook URL |
+| ntfy | `https://ntfy.sh/<topic>`. For ntfy.sh the message is sent as plain text with a title, so it reads cleanly. For a self-hosted ntfy server, add ntfy's templating to the URL: `https://ntfy.example.com/<topic>?tpl=1&m={{.text}}` |
+| Home Assistant | A webhook trigger URL, `http://homeassistant.local:8123/api/webhook/<id>`. The fields are available as `trigger.json` |
+
+Delivery happens in the background and never slows a scan down. Each attempt
+times out after 10 seconds, and a failure (no answer, or a 5xx or 429) is
+retried up to three times in all. The outcome of the last attempt is shown
+next to each webhook, and **Send test** (or `orangutan webhook test`) posts a
+test message straight away and shows the answer.
+
+Webhook URLs often contain a secret, such as a bot token, so they are shown
+only as their host (`https://api.telegram.org/…`) once saved. They are stored
+in the state file in the data directory, and are part of a backup.
 
 ## Tailscale
 
@@ -205,6 +377,92 @@ Only peers that are currently online are listed, and they are shown with their T
 You can also control Tailscale from the app. The dashboard and settings pages show whether Tailscale is connected, with a button to connect or disconnect. If the machine still needs to sign in, the app shows you the sign-in link to open. Disconnecting warns you first, since you might be reaching the dashboard over Tailscale itself. This needs the Tailscale CLI on the machine running LAN Orangutan.
 
 **Tailscale needs a host install, not Docker.** These features rely on the Tailscale CLI being present where LAN Orangutan runs. In the standard Docker setup the container has its own filesystem and cannot see the host's Tailscale, so the card will read "Not Installed" even when the host is on your tailnet. To use Tailscale with LAN Orangutan, run the binary directly on the host rather than in a container.
+
+## API
+
+Every endpoint below is enabled by default (`enable_api = true`) and returns JSON
+shaped as `{"success": true, "data": ...}`. A refused request returns
+`{"success": false, "error": "..."}`; when the problem is with what was sent,
+it also carries a stable `code` (`group.exists`, `url.scheme`, `network.invalid`
+and so on) and the values that went into the message as `args`
+(`{"name": "Den"}`), so a script can act on the code and the web interface can
+show the message in the visitor's language.
+
+### Getting a token
+
+Open **Settings → API access** and create one. It is shown once, because only a
+hash of it is stored, so copy it when it appears. Creating another replaces the
+previous one, and Revoke turns off token access entirely.
+
+Send it on every request:
+
+```bash
+curl -H "Authorization: Bearer lano_your-token-here" \
+     http://localhost:291/api/devices
+```
+
+A token is only accepted on `/api/` paths. Browser pages still use a normal
+login, so a token is no use for sharing a dashboard link.
+
+### Reading
+
+| Endpoint | What it returns |
+|---|---|
+| `GET /api/devices` | Every device: address, MAC, hostname (and your own name for it, if set), vendor, type, group, location, label, first and last seen, and whether it is `online` |
+| `GET /api/device?ip=<ip>` | One device |
+| `GET /api/stats` | Totals: how many devices, how many online, counts per group |
+| `GET /api/networks` | The networks that would be scanned |
+| `GET /api/status` | That the server is running, the current time, and the port, bind address and `enable_api` setting it was started with |
+| `GET /api/groups` | The group list and how many devices are in each |
+| `GET /api/snapshots` | Saved snapshots |
+| `GET /api/snapshots/compare?from=<id>&to=<id\|current>` | What changed between two points in time |
+| `GET /api/report` | The whole network as a self-contained HTML file |
+| `GET /api/backup` | Everything, as one JSON file |
+| `GET /api/scan/progress` | Progress of a scan that is running |
+| `GET /api/settings` | Current effective settings |
+| `GET /api/webhooks` | Notification webhooks, with URLs masked to their host, and the last delivery result of each |
+
+### Writing
+
+| Endpoint | What it does |
+|---|---|
+| `POST /api/scan/start?network=<cidr>` | Start a scan of one network, or `all` |
+| `POST /api/scan/cancel` | Stop the scan in progress |
+| `POST /api/device` | Update a device's `label`, `custom_hostname`, `group`, `location`, `notes`, `type` or `expected`. An empty `custom_hostname` goes back to the scanned name |
+| `POST /api/devices/mark-expected` | Mark everything currently present as expected. Body `{"expected": true}`, or `false` to clear the flag from every device |
+| `POST /api/groups` | Create, rename or delete a group |
+| `POST /api/locations` | Create, rename or delete a location. `GET` lists them with device counts |
+| `POST /api/snapshots` | Save a snapshot. `DELETE` removes one |
+| `POST /api/backup/restore` | Restore from a backup file |
+| `POST /api/token` | Create a token. `DELETE` revokes it |
+| `POST /api/webhooks` | Add, update or delete a webhook. Takes `action` (`add`, `update`, `delete`), `id`, and `url`, `name`, `events`, `enabled` as needed |
+| `POST /api/webhooks/test` | Send a test message to the webhook with this `id` and return the result |
+
+Settings have their own endpoints: `scan/interval`, `scan/continuous`,
+`scan/service-detection`, `scan/networks`, `tailscale/connect` and
+`tailscale/disconnect`.
+
+### Example
+
+```bash
+# Everything that is online right now
+curl -s -H "Authorization: Bearer $ORANGUTAN_TOKEN" \
+  http://localhost:291/api/devices | jq '.data[] | select(.online) | .ip'
+
+# Scan, then see what changed since this morning's snapshot
+curl -s -X POST -H "Authorization: Bearer $ORANGUTAN_TOKEN" \
+  "http://localhost:291/api/scan/start?network=all"
+```
+
+## Using it with an AI assistant
+
+[`skills/lan-orangutan/SKILL.md`](skills/lan-orangutan/SKILL.md) teaches an AI assistant to install LAN Orangutan, operate it from the CLI and connect to it through the API, including what to ask you before changing or deleting anything. It follows the open Agent Skills format: add the `lan-orangutan` folder to your assistant's skills, or give it the file's link and ask it to read it.
+
+## Privacy
+
+This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.
+
+In practice: LAN Orangutan sends nothing anywhere on its own. There is no telemetry, no update check and no account. The only outbound messages are notifications to webhook addresses you add yourself. Scanning stays on the networks you choose.
 
 ## Security
 
@@ -248,6 +506,8 @@ networks = 192.168.10.0/24, 10.0.5.0/24
 
 They appear on the dashboard alongside the detected ones and can be scanned the same way. Results for a routed network have no MAC addresses or manufacturer names, because those come from ARP and only work on the same network segment.
 
+Networks reached through a router or a tunnel such as WireGuard are scanned with tighter timing automatically, which makes them much faster to scan. Your local networks are scanned as before. To tune it for your own link, set `nmap_max_rtt_timeout` and `nmap_max_retries` in the config file, or the matching environment variables below.
+
 This is not a way to make Docker work on macOS or Windows. There the container runs inside a virtual machine whose NAT answers probes on its own, so a scan reports devices that do not exist.
 
 ## Configuration
@@ -257,7 +517,7 @@ Config file location:
 - macOS: `~/Library/Application Support/lan-orangutan/config.ini`
 - Windows: `%APPDATA%\lan-orangutan\config.ini`
 
-See `config.example.ini` for available options, and run `orangutan config` to print the settings actually in effect.
+See `config.example.ini` for available options, and run `orangutan config` to print the settings actually in effect. The settings the Settings page can change can also be changed with `orangutan settings set`, which a running server picks up without a restart.
 
 Every setting can also be supplied through the environment, which is usually easier in Docker. These override the config file.
 
@@ -271,8 +531,14 @@ Every setting can also be supplied through the environment, which is usually eas
 | `ORANGUTAN_ALLOW_INSECURE` | Skip password protection |
 | `ORANGUTAN_DATA_DIR` | Where devices and settings are stored |
 | `ORANGUTAN_SCAN_INTERVAL` | Auto-scan interval in seconds |
-| `ORANGUTAN_NETWORKS` | Extra networks to scan, comma separated (see below) |
+| `ORANGUTAN_NETWORKS` | Extra networks to scan, comma separated (see above) |
+| `ORANGUTAN_EXCLUDE_NETWORKS` | Detected networks never to scan, comma separated |
+| `ORANGUTAN_ONLY_CONFIGURED_NETWORKS` | `true` to scan only the networks you list, ignoring detection |
+| `ORANGUTAN_CONTINUOUS_SCAN` | `false` to scan only when asked, instead of on the interval |
+| `ORANGUTAN_ENABLE_SERVICE_DETECTION` | `true` to check a few well-known ports, for more precise device types |
 | `ORANGUTAN_THEME` | `light`, `dark` or `auto` |
+| `ORANGUTAN_NMAP_MAX_RTT_TIMEOUT` | Probe timeout on networks reached through a router or tunnel, e.g. `200ms`. Set automatically if left out |
+| `ORANGUTAN_NMAP_MAX_RETRIES` | Retries on those networks, e.g. `1`. Set automatically if left out |
 
 ## Building from Source
 
@@ -310,7 +576,9 @@ So if you can make it better, please do. Found a bug, hit a problem, or have an 
 
 LAN Orangutan is shaped by the people who use it. Nearly everything in recent releases started as somebody opening an issue or a discussion, and several of them went back and forth with us until the fix was right.
 
-Thank you to [@Bluesguy1984](https://github.com/Bluesguy1984), [@chraso](https://github.com/chraso), [@dax29](https://github.com/dax29), [@dbm26](https://github.com/dbm26), [@dcchillin46](https://github.com/dcchillin46), [@devra1](https://github.com/devra1), [@Extra-Citron-7630](https://github.com/Extra-Citron-7630), [@forke24x7](https://github.com/forke24x7), [@GrafDogi](https://github.com/GrafDogi), [@Louai199](https://github.com/Louai199), [@luciancelmare](https://github.com/luciancelmare), [@msanaullahsahar](https://github.com/msanaullahsahar), [@technoplayer](https://github.com/technoplayer), [@tolga-balci](https://github.com/tolga-balci), [@wmgordon3](https://github.com/wmgordon3) and [@y90ziv](https://github.com/y90ziv).
+Thank you to [@Bluesguy1984](https://github.com/Bluesguy1984), [@chraso](https://github.com/chraso), [@dao55](https://github.com/dao55), [@dax29](https://github.com/dax29), [@dbm26](https://github.com/dbm26), [@dcchillin46](https://github.com/dcchillin46), [@devra1](https://github.com/devra1), [@Extra-Citron-7630](https://github.com/Extra-Citron-7630), [@forke24x7](https://github.com/forke24x7), [@GrafDogi](https://github.com/GrafDogi), [@JanusHoi](https://github.com/JanusHoi), [@Louai199](https://github.com/Louai199), [@luciancelmare](https://github.com/luciancelmare), [@maurognx](https://github.com/maurognx), [@msanaullahsahar](https://github.com/msanaullahsahar), [@technoplayer](https://github.com/technoplayer), [@tolga-balci](https://github.com/tolga-balci), [@wmgordon3](https://github.com/wmgordon3) and [@y90ziv](https://github.com/y90ziv).
+
+For code contributions, thank you to [@katsugtgz](https://github.com/katsugtgz), [@dajiaohuang](https://github.com/dajiaohuang) and [@AdamMagued](https://github.com/AdamMagued).
 
 ## License
 

@@ -1,0 +1,21 @@
+{
+  "networkReport": "Звіт про мережу",
+  "generated": "Створено {date} о {time}",
+  "devices.one": "пристрій",
+  "devices.few": "пристрої",
+  "devices.many": "пристроїв",
+  "online": "онлайн",
+  "offline": "офлайн",
+  "networks.one": "мережа",
+  "networks.few": "мережі",
+  "networks.many": "мереж",
+  "ipAddress": "IP-адреса",
+  "hostname": "Ім’я вузла",
+  "type": "Тип",
+  "mac": "MAC",
+  "vendor": "Виробник",
+  "group": "Група",
+  "location": "Розташування",
+  "lastSeen": "Востаннє",
+  "generatedBy": "Створено за допомогою LAN Orangutan"
+}

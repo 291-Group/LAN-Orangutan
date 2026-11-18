@@ -2,56 +2,70 @@ package cli
 
 import (
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"sort"
 	"strings"
-	"text/tabwriter"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/291-Group/LAN-Orangutan/internal/scanner"
-	"github.com/291-Group/LAN-Orangutan/internal/storage"
 	"github.com/291-Group/LAN-Orangutan/internal/types"
 )
 
 var (
-	listOnline  bool
-	listOffline bool
-	listGroup   string
-	listType    string
-	listFormat  string
+	listOnline   bool
+	listOffline  bool
+	listGroup    string
+	listLocation string
+	listType     string
+	listFormat   string
 )
 
 var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List discovered devices",
-	Long:  `List all discovered devices with optional filtering by status, group, or type.`,
-	RunE:  runList,
+	Long: `List the discovered devices, sorted by IP address.
+
+Narrow the list with --online or --offline, or by --group, --location or
+--type (all matched regardless of case). A device is online when it was seen
+within the last hour, the same rule the web interface and the API use.
+
+The csv output has the same columns as "orangutan export"; the json output is
+an array with one object per device, with first_seen and last_seen in RFC 3339.`,
+	Args: cobra.NoArgs,
+	RunE: runList,
 }
 
 func init() {
 	listCmd.Flags().BoolVar(&listOnline, "online", false, "Show only online devices")
 	listCmd.Flags().BoolVar(&listOffline, "offline", false, "Show only offline devices")
 	listCmd.Flags().StringVar(&listGroup, "group", "", "Filter by group")
+	listCmd.Flags().StringVar(&listLocation, "location", "", "Filter by location")
 	listCmd.Flags().StringVar(&listType, "type", "", "Filter by device type")
 	listCmd.Flags().StringVar(&listFormat, "format", "table", "Output format (table, csv, json)")
 }
 
 func runList(cmd *cobra.Command, args []string) error {
-	// Initialize storage
-	store, err := storage.New(cfg.DevicesFile(), cfg.StateFile())
+	format, err := outputFormat(listFormat, "table", "csv", "json")
 	if err != nil {
-		return fmt.Errorf("failed to initialize storage: %w", err)
+		return err
+	}
+	if listOnline && listOffline {
+		return fmt.Errorf("choose one of --online or --offline")
 	}
 
-	devices := store.GetDevices()
+	store, err := openStore()
+	if err != nil {
+		return err
+	}
 
-	// Convert to slice and filter
 	var filtered []*types.Device
-	for _, d := range devices {
-		// Apply filters
+	for _, d := range store.GetDevices() {
 		if listOnline && !d.IsOnline() {
 			continue
 		}
@@ -61,23 +75,21 @@ func runList(cmd *cobra.Command, args []string) error {
 		if listGroup != "" && !strings.EqualFold(d.Group, listGroup) {
 			continue
 		}
+		if listLocation != "" && !strings.EqualFold(d.Location, listLocation) {
+			continue
+		}
 		if listType != "" && !strings.EqualFold(d.Type, listType) {
 			continue
 		}
 		filtered = append(filtered, d)
 	}
+	sortByIP(filtered)
 
-	// Sort by IP
-	sort.Slice(filtered, func(i, j int) bool {
-		return ipToSortKey(filtered[i].IP) < ipToSortKey(filtered[j].IP)
-	})
-
-	// Output based on format
-	switch listFormat {
+	switch format {
 	case "csv":
-		return outputCSV(filtered)
+		return writeDevicesCSV(os.Stdout, filtered)
 	case "json":
-		return outputJSON(filtered)
+		return writeDevicesJSON(os.Stdout, filtered)
 	default:
 		return outputTable(filtered)
 	}
@@ -89,76 +101,114 @@ func outputTable(devices []*types.Device) error {
 		return nil
 	}
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "IP\tMAC\tHOSTNAME\tVENDOR\tLABEL\tGROUP\tSTATUS")
-	fmt.Fprintln(w, "--\t---\t--------\t------\t-----\t-----\t------")
-
+	rows := make([][]string, 0, len(devices))
 	for _, d := range devices {
-		status := "offline"
-		if d.IsRecent() {
-			status = "online"
-		} else if d.IsOnline() {
-			status = "seen"
-		}
-
-		hostname := d.Hostname
-		if len(hostname) > 25 {
-			hostname = hostname[:22] + "..."
-		}
-
-		vendor := scanner.ResolveVendor(d.Vendor, d.MAC)
-		if len(vendor) > 20 {
-			vendor = vendor[:17] + "..."
-		}
-
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-			d.IP, d.MAC, hostname, vendor, d.Label, d.Group, status)
+		rows = append(rows, []string{
+			d.IP,
+			d.MAC,
+			truncate(d.DisplayHostname(), 25),
+			truncate(scanner.ResolveVendor(d.Vendor, d.MAC), 20),
+			d.Label,
+			d.Group,
+			d.Location,
+			deviceStatus(d),
+		})
 	}
-
-	return w.Flush()
+	return printTable(os.Stdout, []string{"IP", "MAC", "HOSTNAME", "VENDOR", "LABEL", "GROUP", "LOCATION", "STATUS"}, rows)
 }
 
-func outputCSV(devices []*types.Device) error {
-	w := csv.NewWriter(os.Stdout)
-	defer w.Flush()
-
-	// Header
-	if err := w.Write([]string{"IP", "MAC", "Hostname", "Vendor", "Label", "Notes", "Group", "First Seen", "Last Seen"}); err != nil {
-		return err
+// writeDevicesCSV writes devices with the same columns and header as
+// "orangutan export" and the browser's CSV download, so the three files are
+// interchangeable.
+func writeDevicesCSV(out io.Writer, devices []*types.Device) error {
+	w := csv.NewWriter(out)
+	if err := w.Write([]string{
+		"IP Address", "MAC Address", "Hostname", "Vendor", "Label",
+		"Notes", "Group", "Location", "First Seen", "Last Seen", "Status",
+	}); err != nil {
+		return fmt.Errorf("failed to write header: %w", err)
 	}
-
 	for _, d := range devices {
 		if err := w.Write([]string{
 			d.IP,
 			d.MAC,
-			d.Hostname,
+			d.DisplayHostname(),
 			scanner.ResolveVendor(d.Vendor, d.MAC),
 			d.Label,
 			d.Notes,
 			d.Group,
-			d.FirstSeen.Format("2006-01-02 15:04:05"),
-			d.LastSeen.Format("2006-01-02 15:04:05"),
+			d.Location,
+			d.FirstSeen.Local().Format(csvTimeLayout),
+			d.LastSeen.Local().Format(csvTimeLayout),
+			deviceStatus(d),
 		}); err != nil {
-			return err
+			return fmt.Errorf("failed to write row: %w", err)
 		}
 	}
-
-	return nil
+	w.Flush()
+	return w.Error()
 }
 
-func outputJSON(devices []*types.Device) error {
-	// Simple JSON output
-	fmt.Println("[")
-	for i, d := range devices {
-		comma := ","
-		if i == len(devices)-1 {
-			comma = ""
-		}
-		fmt.Printf("  {\"ip\": %q, \"mac\": %q, \"hostname\": %q, \"vendor\": %q, \"label\": %q, \"group\": %q}%s\n",
-			d.IP, d.MAC, d.Hostname, scanner.ResolveVendor(d.Vendor, d.MAC), d.Label, d.Group, comma)
+// deviceJSON is one device as "list --format json" and "export <file>.json"
+// print it: the fields a script filters on, with the hostname already resolved
+// to the one the web interface shows.
+type deviceJSON struct {
+	IP              string `json:"ip"`
+	MAC             string `json:"mac"`
+	Hostname        string `json:"hostname"`
+	ScannedHostname string `json:"scanned_hostname"`
+	CustomHostname  string `json:"custom_hostname"`
+	Vendor          string `json:"vendor"`
+	Type            string `json:"type"`
+	Group           string `json:"group"`
+	Location        string `json:"location"`
+	Label           string `json:"label"`
+	Notes           string `json:"notes"`
+	Expected        bool   `json:"expected"`
+	Online          bool   `json:"online"`
+	Status          string `json:"status"`
+	FirstSeen       string `json:"first_seen"`
+	LastSeen        string `json:"last_seen"`
+}
+
+func toDeviceJSON(d *types.Device) deviceJSON {
+	return deviceJSON{
+		IP:              d.IP,
+		MAC:             d.MAC,
+		Hostname:        d.DisplayHostname(),
+		ScannedHostname: d.Hostname,
+		CustomHostname:  d.CustomHostname,
+		Vendor:          scanner.ResolveVendor(d.Vendor, d.MAC),
+		Type:            d.Type,
+		Group:           d.Group,
+		Location:        d.Location,
+		Label:           d.Label,
+		Notes:           d.Notes,
+		Expected:        d.Expected,
+		Online:          d.IsOnline(),
+		Status:          deviceStatus(d),
+		FirstSeen:       d.FirstSeen.Format(time.RFC3339),
+		LastSeen:        d.LastSeen.Format(time.RFC3339),
 	}
-	fmt.Println("]")
-	return nil
+}
+
+func writeDevicesJSON(out io.Writer, devices []*types.Device) error {
+	// An empty list is "[]", not "null", so a script can always range over it.
+	list := make([]deviceJSON, 0, len(devices))
+	for _, d := range devices {
+		list = append(list, toDeviceJSON(d))
+	}
+	enc := json.NewEncoder(out)
+	enc.SetIndent("", "  ")
+	return enc.Encode(list)
+}
+
+// sortByIP orders devices numerically by IPv4 address, so 192.168.1.9 comes
+// before 192.168.1.10. Anything that is not an IPv4 address sorts last.
+func sortByIP(devices []*types.Device) {
+	sort.Slice(devices, func(i, j int) bool {
+		return ipToSortKey(devices[i].IP) < ipToSortKey(devices[j].IP)
+	})
 }
 
 // ipToSortKey converts an IP to a sortable integer

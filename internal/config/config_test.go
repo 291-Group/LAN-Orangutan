@@ -380,3 +380,31 @@ func TestNormalizeLeavesValidValuesAlone(t *testing.T) {
 		t.Error("Normalize changed already-valid values")
 	}
 }
+
+func TestNmapTimingFromEnv(t *testing.T) {
+	t.Setenv("ORANGUTAN_NMAP_MAX_RTT_TIMEOUT", "200ms")
+	t.Setenv("ORANGUTAN_NMAP_MAX_RETRIES", "1")
+	c := Default()
+	c.ApplyEnv()
+	if c.Scanning.NmapMaxRTTTimeout != 200*time.Millisecond || c.Scanning.NmapMaxRetries != 1 {
+		t.Errorf("got %v/%d, want 200ms/1", c.Scanning.NmapMaxRTTTimeout, c.Scanning.NmapMaxRetries)
+	}
+}
+
+func TestParseMillis(t *testing.T) {
+	for in, want := range map[string]time.Duration{"200ms": 200 * time.Millisecond, "1s": time.Second, "750": 750 * time.Millisecond} {
+		if got, ok := parseMillis(in); !ok || got != want {
+			t.Errorf("parseMillis(%q) = %v %v, want %v", in, got, ok, want)
+		}
+	}
+	for _, bad := range []string{"", "0", "-5", "fast"} {
+		if _, ok := parseMillis(bad); ok {
+			t.Errorf("parseMillis(%q) should be rejected", bad)
+		}
+	}
+	// nmap reads whole milliseconds, so anything finer must round up rather
+	// than reach it as 0 and switch the timeout off.
+	if got, ok := parseMillis("500us"); !ok || got != time.Millisecond {
+		t.Errorf("parseMillis(\"500us\") = %v %v, want 1ms", got, ok)
+	}
+}

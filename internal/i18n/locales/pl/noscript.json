@@ -1,0 +1,18 @@
+{
+  "heading": "JavaScript jest wyłączony",
+  "sub": "Panel internetowy wymaga JavaScriptu. Oto co oferuje i jak korzystać z LAN Orangutan bez niego. Wybierz, co wolisz.",
+  "webTitle": "Panel internetowy",
+  "webIntro": "Podgląd Twojej sieci na żywo. JavaScript obsługuje:",
+  "webLive": "Aktualizacje urządzeń na żywo podczas skanowania przez serwer",
+  "webScans": "Uruchamianie skanowania, sortowanie, filtrowanie i wyszukiwanie",
+  "webEditing": "Edycja etykiet i grup oraz kopiowanie adresów",
+  "webAction": "Zezwól na JavaScript dla tej witryny (w przeglądarce lub programie blokującym skrypty), a potem odśwież stronę.",
+  "cliTitle": "Albo wiersz poleceń",
+  "cliIntro": "To samo wykrywanie, bez przeglądarki i JavaScriptu, prosto z terminala:",
+  "cliScan": "skanuj swoje sieci",
+  "cliList": "wyświetl znalezione urządzenia",
+  "cliStatus": "stan usługi i sieci",
+  "cliHelp": "Uruchom {command}, aby zobaczyć wszystko.",
+  "safetyQuestion": "Czy panel jest bezpieczny?",
+  "safetyAnswer": "Tak. LAN Orangutan działa na Twoim własnym serwerze: jego JavaScript działa wyłącznie w Twojej przeglądarce i łączy się tylko z Twoim serwerem, bez żadnych zewnętrznych wywołań. Jest udostępniany z tego komputera pod adresem {path}."
+}

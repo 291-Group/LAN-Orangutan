@@ -6,16 +6,30 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/291-Group/LAN-Orangutan/internal/network"
-	"github.com/291-Group/LAN-Orangutan/internal/storage"
+	"github.com/291-Group/LAN-Orangutan/internal/types"
 )
+
+var networksFormat string
 
 var networksCmd = &cobra.Command{
 	Use:   "networks",
 	Short: "List detected network interfaces",
-	RunE:  runNetworks,
+	Long: `List the networks this machine is on, after the include and exclude lists
+from the config file or the Settings page. With --format json the output is
+the same array as GET /api/networks.`,
+	Args: cobra.NoArgs,
+	RunE: runNetworks,
+}
+
+func init() {
+	networksCmd.Flags().StringVar(&networksFormat, "format", "table", "Output format (table, json)")
 }
 
 func runNetworks(cmd *cobra.Command, args []string) error {
+	format, err := outputFormat(networksFormat, "table", "json")
+	if err != nil {
+		return err
+	}
 	networks, err := network.DetectNetworks()
 	if err != nil {
 		return fmt.Errorf("failed to detect networks: %w", err)
@@ -28,10 +42,17 @@ func runNetworks(cmd *cobra.Command, args []string) error {
 		Excluded:       cfg.Scanning.ExcludeNetworks,
 		OnlyConfigured: cfg.Scanning.OnlyConfiguredNetworks,
 	}
-	if store, serr := storage.New(cfg.DevicesFile(), cfg.StateFile()); serr == nil {
+	if store, serr := openStore(); serr == nil {
 		filter = networkFilter(store, cfg)
 	}
 	networks = network.WithConfigured(networks, filter)
+
+	if format == "json" {
+		if networks == nil {
+			networks = []types.Network{}
+		}
+		return printJSON(networks)
+	}
 
 	if len(networks) == 0 {
 		fmt.Println("No networks detected")

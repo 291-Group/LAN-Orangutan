@@ -1,10 +1,11 @@
 package storage
 
 import (
-	"fmt"
 	"sort"
 	"strings"
 	"unicode"
+
+	"github.com/291-Group/LAN-Orangutan/internal/uerr"
 )
 
 // defaultGroups is the built-in group list, in the order it is offered. It is
@@ -30,24 +31,21 @@ func DefaultGroups() []string {
 // from the list by hand, would leave devices carrying a value the UI cannot show
 // or select, and a later edit would silently drop it.
 func (s *Storage) GetGroups() []string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	defer s.readLock()()
 	return s.effectiveGroupsLocked()
 }
 
 // GroupsCustomised reports whether the user has replaced the built-in list, so
 // the UI can offer "reset to defaults" only when it would do something.
 func (s *Storage) GroupsCustomised() bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	defer s.readLock()()
 	return s.state.Groups != nil
 }
 
 // GroupCounts returns how many devices carry each group, so the UI can warn
 // before a delete or a rename that affects real devices.
 func (s *Storage) GroupCounts() map[string]int {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	defer s.readLock()()
 	counts := make(map[string]int)
 	for _, d := range s.devices {
 		if d.Group != "" {
@@ -89,6 +87,7 @@ func (s *Storage) effectiveGroupsLocked() []string {
 func (s *Storage) SetGroups(groups []string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.syncLocked()
 
 	if groups == nil {
 		s.state.Groups = nil
@@ -107,6 +106,7 @@ func (s *Storage) SetGroups(groups []string) error {
 func (s *Storage) AddGroup(name string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.syncLocked()
 
 	clean, err := validateGroupName(name)
 	if err != nil {
@@ -115,7 +115,7 @@ func (s *Storage) AddGroup(name string) error {
 	groups := s.effectiveGroupsLocked()
 	for _, g := range groups {
 		if strings.EqualFold(g, clean) {
-			return fmt.Errorf("group %q already exists", clean)
+			return uerr.Newf("group.exists", "group %q already exists", "name", clean)
 		}
 	}
 	groups = append(groups, clean)
@@ -133,6 +133,7 @@ func (s *Storage) AddGroup(name string) error {
 func (s *Storage) RenameGroup(oldName, newName string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.syncLocked()
 
 	clean, err := validateGroupName(newName)
 	if err != nil {
@@ -149,11 +150,11 @@ func (s *Storage) RenameGroup(oldName, newName string) error {
 		}
 	}
 	if idx < 0 {
-		return fmt.Errorf("group %q not found", oldName)
+		return uerr.Newf("group.notFound", "group %q not found", "name", oldName)
 	}
 	for i, g := range groups {
 		if i != idx && strings.EqualFold(g, clean) {
-			return fmt.Errorf("group %q already exists", clean)
+			return uerr.Newf("group.exists", "group %q already exists", "name", clean)
 		}
 	}
 
@@ -183,6 +184,7 @@ func (s *Storage) RenameGroup(oldName, newName string) error {
 func (s *Storage) DeleteGroup(name string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.syncLocked()
 
 	name = strings.TrimSpace(name)
 	groups := s.effectiveGroupsLocked()
@@ -196,7 +198,7 @@ func (s *Storage) DeleteGroup(name string) error {
 		kept = append(kept, g)
 	}
 	if !found {
-		return fmt.Errorf("group %q not found", name)
+		return uerr.Newf("group.notFound", "group %q not found", "name", name)
 	}
 
 	s.state.Groups = &kept
@@ -221,16 +223,16 @@ func (s *Storage) DeleteGroup(name string) error {
 func validateGroupName(name string) (string, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
-		return "", fmt.Errorf("group name cannot be empty")
+		return "", uerr.New("group.empty", "group name cannot be empty")
 	}
 	if len([]rune(name)) > maxGroupNameLen {
-		return "", fmt.Errorf("group name cannot be longer than %d characters", maxGroupNameLen)
+		return "", uerr.Newf("group.tooLong", "group name cannot be longer than %d characters", "max", maxGroupNameLen)
 	}
 	// Control characters would break the dropdown and the table without being
 	// visible to whoever typed them.
 	for _, r := range name {
 		if unicode.IsControl(r) {
-			return "", fmt.Errorf("group name cannot contain control characters")
+			return "", uerr.New("group.controlChars", "group name cannot contain control characters")
 		}
 	}
 	return name, nil
@@ -246,7 +248,7 @@ func validateGroupNames(names []string) ([]string, error) {
 			return nil, err
 		}
 		if seen[strings.ToLower(clean)] {
-			return nil, fmt.Errorf("duplicate group %q", clean)
+			return nil, uerr.Newf("group.duplicate", "duplicate group %q", "name", clean)
 		}
 		seen[strings.ToLower(clean)] = true
 		cleaned = append(cleaned, clean)

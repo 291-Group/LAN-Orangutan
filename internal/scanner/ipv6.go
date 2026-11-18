@@ -3,17 +3,11 @@ package scanner
 import (
 	"context"
 	"net"
-	"os/exec"
 	"runtime"
 	"strings"
-	"time"
 
 	"github.com/291-Group/LAN-Orangutan/internal/types"
 )
-
-// ipv6CommandTimeout bounds each helper command (a ping or a neighbor-table
-// read). Kept short; these answer locally in well under a second.
-const ipv6CommandTimeout = 3 * time.Second
 
 // DiscoverIPv6 finds IPv6 devices on the local links.
 //
@@ -45,9 +39,9 @@ func solicitIPv6Neighbors(ctx context.Context) {
 		target := "ff02::1%" + iface
 		switch runtime.GOOS {
 		case "linux":
-			_, _ = runIPv6Command(ctx, "ping", "-6", "-c", "1", "-W", "1", target)
+			_, _ = runNeighCommand(ctx, "ping", "-6", "-c", "1", "-W", "1", target)
 		case "darwin":
-			_, _ = runIPv6Command(ctx, "ping6", "-c", "1", target)
+			_, _ = runNeighCommand(ctx, "ping6", "-c", "1", target)
 		}
 	}
 }
@@ -56,13 +50,13 @@ func solicitIPv6Neighbors(ctx context.Context) {
 func readIPv6Neighbors(ctx context.Context) []types.Device {
 	switch runtime.GOOS {
 	case "linux":
-		out, err := runIPv6Command(ctx, "ip", "-6", "neigh", "show")
+		out, err := runNeighCommand(ctx, "ip", "-6", "neigh", "show")
 		if err != nil {
 			return nil
 		}
 		return parseIPNeigh(string(out))
 	case "darwin":
-		out, err := runIPv6Command(ctx, "ndp", "-an")
+		out, err := runNeighCommand(ctx, "ndp", "-an")
 		if err != nil {
 			return nil
 		}
@@ -70,12 +64,6 @@ func readIPv6Neighbors(ctx context.Context) []types.Device {
 	default:
 		return nil
 	}
-}
-
-func runIPv6Command(ctx context.Context, name string, args ...string) ([]byte, error) {
-	c, cancel := context.WithTimeout(ctx, ipv6CommandTimeout)
-	defer cancel()
-	return exec.CommandContext(c, name, args...).Output()
 }
 
 // ipv6Interfaces returns the names of up, non-loopback interfaces that hold an
@@ -104,33 +92,16 @@ func ipv6Interfaces() []string {
 	return names
 }
 
-// parseIPNeigh parses Linux `ip -6 neigh show` output. Each line looks like
-// "fe80::1 dev eth0 lladdr 00:11:22:33:44:55 router REACHABLE"; entries without
-// a link-layer address, or in a FAILED or INCOMPLETE state, are skipped.
+// parseIPNeigh parses Linux `ip -6 neigh show` output, keeping the entries
+// that carry a link-layer address, are routable, and whose state is current
+// evidence of presence (see neighStatePresent). The solicitation that runs
+// just before the read makes every answering host REACHABLE, so a STALE entry
+// here is a host that did not answer.
 func parseIPNeigh(output string) []types.Device {
 	var devices []types.Device
 	for _, line := range strings.Split(output, "\n") {
-		fields := strings.Fields(line)
-		if len(fields) < 2 {
-			continue
-		}
-		ip := fields[0]
-
-		mac := ""
-		for i, f := range fields {
-			if f == "lladdr" && i+1 < len(fields) {
-				mac = fields[i+1]
-				break
-			}
-		}
-		if mac == "" {
-			continue
-		}
-		state := fields[len(fields)-1]
-		if state == "FAILED" || state == "INCOMPLETE" {
-			continue
-		}
-		if !isUsableIPv6(ip) {
+		ip, mac, state, ok := parseIPNeighLine(line)
+		if !ok || mac == "" || !neighStatePresent(state) || !isUsableIPv6(ip) {
 			continue
 		}
 		devices = append(devices, types.Device{IP: ip, MAC: normalizeMAC(mac)})

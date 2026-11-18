@@ -15,7 +15,7 @@ import (
 // state), and every saved snapshot into a portable Backup. Maps are deep-copied
 // so the result can be marshalled without holding the lock.
 func (s *Storage) ExportBackup() types.Backup {
-	s.mu.RLock()
+	unlock := s.readLock()
 	devices := make(map[string]*types.Device, len(s.devices))
 	for ip, d := range s.devices {
 		dc := *d
@@ -30,7 +30,7 @@ func (s *Storage) ExportBackup() types.Backup {
 	for k, v := range s.state.LastDuration {
 		st.LastDuration[k] = v
 	}
-	s.mu.RUnlock()
+	unlock()
 
 	snaps := []types.Snapshot{}
 	if metas, err := s.ListSnapshots(); err == nil {
@@ -54,6 +54,8 @@ func (s *Storage) ExportBackup() types.Backup {
 // it is the "restore" half of a backup and overwrites what is there.
 func (s *Storage) ImportBackup(b types.Backup) error {
 	s.mu.Lock()
+	// The backup replaces what is in memory, so there is nothing to sync from
+	// disk first, except the state when the backup carries none of its own.
 	if b.Devices != nil {
 		s.devices = b.Devices
 	} else {
@@ -61,6 +63,8 @@ func (s *Storage) ImportBackup(b types.Backup) error {
 	}
 	if b.State != nil {
 		s.state = b.State
+	} else {
+		s.refreshStateLocked()
 	}
 	if s.state.LastScan == nil {
 		s.state.LastScan = make(map[string]time.Time)
@@ -109,7 +113,7 @@ func (s *Storage) replaceSnapshots(snaps []types.Snapshot) error {
 		if err != nil {
 			continue
 		}
-		if err := atomicWrite(path, data); err != nil {
+		if _, err := atomicWrite(path, data); err != nil {
 			return err
 		}
 	}

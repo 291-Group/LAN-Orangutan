@@ -141,6 +141,13 @@ type ScanningConfig struct {
 	// Networks (the allowlist): keep auto-detection but hide a few subnets.
 	ExcludeNetworks []string
 
+	// NmapMaxRTTTimeout and NmapMaxRetries override the nmap timing the scanner
+	// applies on its own to networks reached through a route or tunnel
+	// (WireGuard and the like), where there is no ARP. 0 and -1 mean automatic.
+	// Local networks are not affected.
+	NmapMaxRTTTimeout time.Duration
+	NmapMaxRetries    int
+
 	// Networks are CIDRs the user has declared explicitly, for cases where
 	// automatic detection cannot see the right network. A container only sees
 	// Docker's private network, so without this it can never scan the LAN.
@@ -192,6 +199,7 @@ func Default() *Config {
 			PortScanRange:          "1-1024",
 			ContinuousScan:         true,
 			EnableServiceDetection: false,
+			NmapMaxRetries:         -1,
 		},
 		Storage: StorageConfig{
 			MaxDevices:    1000,
@@ -299,6 +307,14 @@ func (c *Config) setValue(section, key, value string) {
 			c.Scanning.EnableServiceDetection = parseBool(value)
 		case "only_configured_networks":
 			c.Scanning.OnlyConfiguredNetworks = parseBool(value)
+		case "nmap_max_rtt_timeout":
+			if d, ok := parseMillis(value); ok {
+				c.Scanning.NmapMaxRTTTimeout = d
+			}
+		case "nmap_max_retries":
+			if v, err := strconv.Atoi(value); err == nil && v >= 0 {
+				c.Scanning.NmapMaxRetries = v
+			}
 		case "networks":
 			c.Scanning.Networks = network.ParseNetworkList(value)
 		case "exclude_networks":
@@ -374,6 +390,16 @@ func (c *Config) ApplyEnv() {
 	}
 	if v := os.Getenv("ORANGUTAN_ENABLE_SERVICE_DETECTION"); v != "" {
 		c.Scanning.EnableServiceDetection = parseBool(v)
+	}
+	if v := os.Getenv("ORANGUTAN_NMAP_MAX_RTT_TIMEOUT"); v != "" {
+		if d, ok := parseMillis(v); ok {
+			c.Scanning.NmapMaxRTTTimeout = d
+		}
+	}
+	if v := os.Getenv("ORANGUTAN_NMAP_MAX_RETRIES"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			c.Scanning.NmapMaxRetries = n
+		}
 	}
 	if v := os.Getenv("ORANGUTAN_ONLY_CONFIGURED_NETWORKS"); v != "" {
 		c.Scanning.OnlyConfiguredNetworks = parseBool(v)
@@ -473,6 +499,15 @@ func (c *Config) PasswordFile() string {
 	return filepath.Join(c.Storage.DataDir, "auth")
 }
 
+// APITokenFile is the path to the file holding the hash of the API token.
+//
+// Beside the password file and for the same reason: it is created by using the
+// app, not by editing configuration, so it must never live in a file the user
+// maintains by hand.
+func (c *Config) APITokenFile() string {
+	return filepath.Join(c.Storage.DataDir, "api-token")
+}
+
 // SessionTTL returns how long a login should remain valid.
 func (c *Config) SessionTTL() time.Duration {
 	if c.Server.SessionHours <= 0 {
@@ -495,4 +530,26 @@ func (c *Config) StateFile() string {
 func parseBool(s string) bool {
 	s = strings.ToLower(s)
 	return s == "true" || s == "yes" || s == "1" || s == "on"
+}
+
+// parseMillis reads a timeout written the way nmap writes one ("200ms", "1s")
+// or as a plain number of milliseconds ("200"). The result is never shorter
+// than a millisecond: nmap takes the value in whole milliseconds, so anything
+// finer ("500us") would reach it as 0 and turn the timeout off entirely.
+func parseMillis(v string) (time.Duration, bool) {
+	v = strings.TrimSpace(v)
+	if n, err := strconv.Atoi(v); err == nil {
+		if n <= 0 {
+			return 0, false
+		}
+		return time.Duration(n) * time.Millisecond, true
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil || d <= 0 {
+		return 0, false
+	}
+	if d < time.Millisecond {
+		d = time.Millisecond
+	}
+	return d, true
 }

@@ -1,0 +1,18 @@
+{
+  "heading": "O JavaScript está desativado",
+  "sub": "O painel web precisa de JavaScript para funcionar. Eis o que oferece, e como usar o LAN Orangutan sem ele. Escolha o que preferir.",
+  "webTitle": "O painel web",
+  "webIntro": "Uma vista visual e ao vivo da sua rede. Usa JavaScript para:",
+  "webLive": "Atualizar os dispositivos ao vivo enquanto o servidor analisa",
+  "webScans": "Fazer análises, e ordenar, filtrar e procurar",
+  "webEditing": "Editar etiquetas e grupos, e copiar endereços",
+  "webAction": "Permita o JavaScript neste site (no navegador ou no bloqueador de scripts) e recarregue a página.",
+  "cliTitle": "Ou a linha de comandos",
+  "cliIntro": "A mesma descoberta, sem navegador nem JavaScript, diretamente no seu terminal:",
+  "cliScan": "analisar as suas redes",
+  "cliList": "listar os dispositivos encontrados",
+  "cliStatus": "estado do serviço e da rede",
+  "cliHelp": "Execute {command} para ver tudo.",
+  "safetyQuestion": "O painel é seguro?",
+  "safetyAnswer": "Sim. O LAN Orangutan é auto-alojado: o seu JavaScript corre inteiramente no seu próprio navegador contra o seu próprio servidor, e não faz chamadas a terceiros nem externas. É servido a partir desta máquina em {path}."
+}

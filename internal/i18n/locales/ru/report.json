@@ -1,0 +1,21 @@
+{
+  "networkReport": "Отчёт о сети",
+  "generated": "Создан {date} в {time}",
+  "devices.one": "устройство",
+  "devices.few": "устройства",
+  "devices.many": "устройств",
+  "online": "в сети",
+  "offline": "не в сети",
+  "networks.one": "сеть",
+  "networks.few": "сети",
+  "networks.many": "сетей",
+  "ipAddress": "IP-адрес",
+  "hostname": "Имя узла",
+  "type": "Тип",
+  "mac": "MAC",
+  "vendor": "Производитель",
+  "group": "Группа",
+  "location": "Расположение",
+  "lastSeen": "Последний раз",
+  "generatedBy": "Создано в LAN Orangutan"
+}

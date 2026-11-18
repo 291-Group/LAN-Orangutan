@@ -6,6 +6,8 @@ orangutan-*
 # Data
 *.json
 !package.json
+# The interface translations are source, compiled into the binary.
+!internal/i18n/locales/**/*.json
 
 # Config with secrets
 config.ini

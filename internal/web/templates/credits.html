@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="{{.Lang}}" dir="{{.Dir}}" data-theme="{{.Theme}}">
+<head>
+    <script>(function(){try{var t=localStorage.getItem("theme");if(t)document.documentElement.setAttribute("data-theme",t);var a=localStorage.getItem("accent")||"blue";if(a!=="orange")document.documentElement.setAttribute("data-accent",a);}catch(e){}})();</script>
+    <meta charset="UTF-8">
+    <meta name="referrer" content="no-referrer">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{t $.Lang "common.thanks"}} - LAN Orangutan</title>
+    <link rel="stylesheet" href="/static/style.css?v={{.Version}}">
+    <link rel="icon" type="image/svg+xml" href="/static/orangutan.svg">
+</head>
+<body>
+    <header class="header">
+        <a href="/" class="header-brand">
+            <img src="/static/orangutan.svg" alt="" class="logo" width="32" height="32">
+            <h1>LAN Orangutan</h1>
+        </a>
+        <nav class="header-nav">
+            <a href="/" class="nav-link">{{t $.Lang "common.dashboard"}}</a>
+            <a href="/settings" class="nav-link">{{t $.Lang "common.settings"}}</a>
+            {{if .AuthEnabled}}<a href="/logout" class="nav-link">{{t $.Lang "common.signOut"}}</a>{{end}}
+            {{template "langpicker" (langPicker . false)}}
+            <a href="/credits" class="nav-icon active" title="{{t $.Lang "common.thanks"}}" aria-label="{{t $.Lang "common.thanks"}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></a>
+            <button class="theme-toggle" onclick="toggleTheme()" title="{{t $.Lang "common.toggleTheme"}}"><svg class="theme-icon theme-icon-light" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg><svg class="theme-icon theme-icon-dark" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg><svg class="theme-icon theme-icon-auto" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><text x="12" y="13.6" text-anchor="middle" font-size="9" font-weight="700" font-family="system-ui, sans-serif" fill="currentColor" stroke="none">A</text></svg></button>
+        </nav>
+    </header>
+
+    <main class="main credits">
+        <section class="section">
+            <h2 class="section-title">{{t $.Lang "common.thanks"}}</h2>
+            <div class="card">
+                <p>{{t $.Lang "credits.intro"}}</p>
+            </div>
+        </section>
+
+        {{if .Code}}
+        <section class="section">
+            <h2 class="section-title">{{t $.Lang "credits.code"}}</h2>
+            <div class="card">
+                <ul class="credits-list credits-code">
+                    {{range .Code}}<li>{{if .Handle}}<a href="https://github.com/{{.Handle}}" target="_blank" rel="noreferrer noopener">@{{.Handle}}</a>{{else}}<a href="{{.URL}}" target="_blank" rel="noreferrer noopener">{{.Name}}</a>{{end}}<span class="credits-for">{{t $.Lang .For}}</span></li>{{end}}
+                </ul>
+            </div>
+        </section>
+        {{end}}
+
+        <section class="section">
+            <h2 class="section-title">{{t $.Lang "credits.community"}}</h2>
+            <div class="card">
+                <ul class="credits-list credits-names">
+                    {{range .Community}}<li><a href="https://github.com/{{.}}" target="_blank" rel="noreferrer noopener">@{{.}}</a></li>{{end}}
+                </ul>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2 class="section-title">{{t $.Lang "credits.builtWith"}}</h2>
+            <div class="card">
+                <ul class="credits-list credits-code">
+                    {{range .BuiltWith}}<li><a href="{{.URL}}" target="_blank" rel="noreferrer noopener">{{.Name}}</a><span class="credits-for">{{t $.Lang .For}}</span></li>{{end}}
+                </ul>
+            </div>
+        </section>
+
+        <p class="form-help credits-join">{{th $.Lang "credits.join" "github" (raw `<a href="https://github.com/291-Group/LAN-Orangutan" target="_blank" rel="noreferrer noopener">GitHub</a>`)}}</p>
+    </main>
+
+    <footer class="footer">
+        <p>{{th $.Lang "common.byOrg" "org" (raw `<a href="https://291group.com" target="_blank" rel="noreferrer noopener">291 Group</a>`)}}</p>
+    </footer>
+
+    {{template "i18nscript" .}}
+    <script src="/static/app.js?v={{.Version}}"></script>
+</body>
+</html>

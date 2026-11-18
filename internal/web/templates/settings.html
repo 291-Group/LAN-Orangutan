@@ -1,11 +1,12 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="{{.Theme}}">
+<html lang="{{.Lang}}" dir="{{.Dir}}" data-theme="{{.Theme}}">
 <head>
     <script>(function(){try{var t=localStorage.getItem("theme");if(t)document.documentElement.setAttribute("data-theme",t);var a=localStorage.getItem("accent")||"blue";if(a!=="orange")document.documentElement.setAttribute("data-accent",a);}catch(e){}})();</script>
     <meta charset="UTF-8">
+    <meta name="referrer" content="no-referrer">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Settings - LAN Orangutan</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <title>{{t $.Lang "settings.pageTitle"}}</title>
+    <link rel="stylesheet" href="/static/style.css?v={{.Version}}">
     <link rel="icon" type="image/svg+xml" href="/static/orangutan.svg">
 </head>
 <body>
@@ -15,41 +16,41 @@
                 <div class="noscript-head">
                     <img src="/static/orangutan.svg" alt="LAN Orangutan" class="noscript-logo" width="60" height="60">
                     <div>
-                        <h1>JavaScript is switched off</h1>
-                        <p class="noscript-sub">The web dashboard needs JavaScript to run. Here's what it offers, and how to use LAN Orangutan without it. Pick whichever you prefer.</p>
+                        <h1>{{t $.Lang "noscript.heading"}}</h1>
+                        <p class="noscript-sub">{{t $.Lang "noscript.sub"}}</p>
                     </div>
                 </div>
 
                 <div class="noscript-cols">
                     <section class="noscript-panel">
-                        <h2>The web dashboard</h2>
-                        <p>A live, visual view of your network. It uses JavaScript for:</p>
+                        <h2>{{t $.Lang "noscript.webTitle"}}</h2>
+                        <p>{{t $.Lang "noscript.webIntro"}}</p>
                         <ul>
-                            <li>Live device updates as the server scans</li>
-                            <li>Running scans, and sorting, filtering, searching</li>
-                            <li>Editing labels and groups, and copying addresses</li>
+                            <li>{{t $.Lang "noscript.webLive"}}</li>
+                            <li>{{t $.Lang "noscript.webScans"}}</li>
+                            <li>{{t $.Lang "noscript.webEditing"}}</li>
                         </ul>
-                        <p class="noscript-action">Allow JavaScript for this site (in your browser or script blocker), then reload.</p>
+                        <p class="noscript-action">{{t $.Lang "noscript.webAction"}}</p>
                     </section>
 
                     <section class="noscript-panel">
-                        <h2>Or the command line</h2>
-                        <p>Same discovery, no browser or JavaScript needed, straight from your terminal:</p>
-                        <pre class="noscript-cli"><code>orangutan scan all      # scan your networks
-orangutan list          # list found devices
-orangutan status        # service &amp; network status
+                        <h2>{{t $.Lang "noscript.cliTitle"}}</h2>
+                        <p>{{t $.Lang "noscript.cliIntro"}}</p>
+                        <pre class="noscript-cli"><code>orangutan scan all      # {{t $.Lang "noscript.cliScan"}}
+orangutan list          # {{t $.Lang "noscript.cliList"}}
+orangutan status        # {{t $.Lang "noscript.cliStatus"}}
 orangutan export out.csv</code></pre>
-                        <p class="noscript-action-muted">Run <code>orangutan --help</code> to see everything.</p>
+                        <p class="noscript-action-muted">{{th $.Lang "noscript.cliHelp" "command" (raw `<code>orangutan --help</code>`)}}</p>
                     </section>
                 </div>
 
-                <p class="noscript-safety"><strong>Is the dashboard safe?</strong> Yes. LAN Orangutan is self-hosted: its JavaScript runs entirely in your own browser against your own server, and makes no third-party or external calls. It is served from this machine at <code>/static/app.js</code>.</p>
+                <p class="noscript-safety"><strong>{{t $.Lang "noscript.safetyQuestion"}}</strong> {{th $.Lang "noscript.safetyAnswer" "path" (raw `<code>/static/app.js</code>`)}}</p>
 
                 <footer class="noscript-footer">
                     <img src="/static/orangutan.svg" alt="" class="noscript-footer-logo" width="22" height="22">
-                    <span class="noscript-footer-name">LAN Orangutan by 291 Group</span>
+                    <span class="noscript-footer-name">{{t $.Lang "common.byOrg" "org" "291 Group"}}</span>
                     <span class="noscript-footer-sep">&bull;</span>
-                    <a href="https://github.com/291-Group/LAN-Orangutan" target="_blank" rel="noopener">github.com/291-Group/LAN-Orangutan</a>
+                    <a href="https://github.com/291-Group/LAN-Orangutan" target="_blank" rel="noreferrer noopener">github.com/291-Group/LAN-Orangutan</a>
                 </footer>
             </div>
         </div>
@@ -61,51 +62,109 @@ orangutan export out.csv</code></pre>
             <h1>LAN Orangutan</h1>
         </a>
         <nav class="header-nav">
-            <a href="/" class="nav-link">Dashboard</a>
-            <a href="/settings" class="nav-link active">Settings</a>
-            {{if .AuthEnabled}}<a href="/logout" class="nav-link">Sign out</a>{{end}}
-            <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">◐</button>
+            <a href="/" class="nav-link">{{t $.Lang "common.dashboard"}}</a>
+            <a href="/settings" class="nav-link active">{{t $.Lang "common.settings"}}</a>
+            {{if .AuthEnabled}}<a href="/logout" class="nav-link">{{t $.Lang "common.signOut"}}</a>{{end}}
+            {{template "langpicker" (langPicker . false)}}
+            <a href="/credits" class="nav-icon" title="{{t $.Lang "common.thanks"}}" aria-label="{{t $.Lang "common.thanks"}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></a>
+            <button class="theme-toggle" onclick="toggleTheme()" title="{{t $.Lang "common.toggleTheme"}}"><svg class="theme-icon theme-icon-light" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg><svg class="theme-icon theme-icon-dark" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg><svg class="theme-icon theme-icon-auto" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><text x="12" y="13.6" text-anchor="middle" font-size="9" font-weight="700" font-family="system-ui, sans-serif" fill="currentColor" stroke="none">A</text></svg></button>
         </nav>
     </header>
+
+    {{/* Settings are grouped under a few headings, with a row of links to
+         jump between them, so a long page stays easy to find your way
+         around without splitting it across pages: everything still
+         scrolls, and the browser's find still searches all of it. The row
+         sits outside <main> so its band runs the full width of the window,
+         like the header, while the links line up with the content. */}}
+    <nav class="settings-nav" aria-label="{{t $.Lang "common.settings"}}">
+        <div class="settings-nav-inner">
+            <a href="#settings-network">{{t $.Lang "settings.groupNav.network"}}</a>
+            <a href="#settings-devices">{{t $.Lang "settings.groupNav.devices"}}</a>
+            <a href="#settings-notifications">{{t $.Lang "settings.groupNav.notifications"}}</a>
+            {{if .AuthEnabled}}<a href="#settings-access">{{t $.Lang "settings.groupNav.access"}}</a>{{end}}
+            <a href="#settings-general">{{t $.Lang "settings.groupNav.general"}}</a>
+        </div>
+    </nav>
 
     <main class="main">
         {{if .Error}}
         <div class="alert alert-error">{{.Error}}</div>
         {{end}}
 
+
+        <div class="settings-group" id="settings-network">
+            <h2 class="settings-group-title">{{t $.Lang "settings.groupNav.network"}}</h2>
+
         <section class="section">
-            <h2 class="section-title">System Information</h2>
+            <h3 class="section-title">{{t $.Lang "settings.scanning.title"}}</h3>
             <div class="card">
-                <div class="status-row">
-                    <span class="status-label">Version:</span>
-                    <span class="status-value">{{if .Version}}{{.Version}}{{else}}dev{{end}}</span>
+                <div class="form-group" style="display: flex; align-items: flex-start; justify-content: space-between; gap: 1.5rem;">
+                    <div>
+                        <label style="margin-bottom: 0.35rem;">{{t $.Lang "settings.scanning.serviceDetection"}}</label>
+                        <p class="form-help" style="margin: 0;">{{t $.Lang "settings.scanning.serviceDetectionHelp"}}</p>
+                    </div>
+                    <div class="toggle-switch" id="service-detection-toggle" role="switch" aria-checked="false" tabindex="0" onclick="toggleServiceDetection()" data-tip="{{t $.Lang "settings.scanning.serviceDetectionTip"}}"></div>
                 </div>
-                <div class="status-row">
-                    <span class="status-label">Total Devices:</span>
-                    <span class="status-value">{{.Stats.Total}}</span>
-                </div>
-                <div class="status-row">
-                    <span class="status-label">Online:</span>
-                    <span class="status-value online">{{.Stats.Online}}</span>
-                </div>
-                <div class="status-row">
-                    <span class="status-label">Offline:</span>
-                    <span class="status-value">{{.Stats.Offline}}</span>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="set-scan-interval">{{t $.Lang "settings.scanning.interval"}}</label>
+                    <div style="display: flex; align-items: center; gap: 0.6rem;">
+                        <input type="number" id="set-scan-interval" class="input" min="10" max="86400" style="width: 160px;">
+                        <button class="btn btn-primary" onclick="saveScanInterval()">{{t $.Lang "common.save"}}</button>
+                        <span id="scan-interval-status" class="form-help" style="margin: 0;"></span>
+                    </div>
+                    <p class="form-help">{{th $.Lang "settings.scanning.intervalHelp" "default" (raw `<span id="def-scan-interval">300</span>`)}}</p>
                 </div>
             </div>
         </section>
 
         <section class="section">
-            <h2 class="section-title">Tailscale</h2>
+            <h3 class="section-title">{{t $.Lang "settings.networks.title"}}</h3>
+            <div class="card">
+                <div class="form-group" style="display: flex; align-items: flex-start; justify-content: space-between; gap: 1.5rem;">
+                    <div>
+                        <label style="margin-bottom: 0.35rem;">{{t $.Lang "settings.networks.onlyListed"}}</label>
+                        <p class="form-help" style="margin: 0;">{{t $.Lang "settings.networks.onlyListedHelp"}}</p>
+                    </div>
+                    <div class="toggle-switch" id="only-configured-toggle" role="switch" aria-checked="false" tabindex="0" onclick="toggleOnlyConfigured()" data-tip="{{t $.Lang "settings.networks.onlyListedTip"}}"></div>
+                </div>
+                <div class="form-group">
+                    <label>{{t $.Lang "settings.networks.include"}}</label>
+                    <div id="include-list" class="cidr-list"></div>
+                    <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                        <input type="text" id="include-input" class="input" placeholder="{{t $.Lang "settings.networks.example" "cidr" "192.168.10.0/24"}}" style="flex: 0 1 220px; min-width: 0;" onkeydown="if(event.key==='Enter'){event.preventDefault();addCidr('include');}">
+                        <button class="btn" onclick="addCidr('include')">{{t $.Lang "settings.networks.add"}}</button>
+                    </div>
+                    <p class="form-help" id="detected-suggestions" style="margin-top: 0.5rem;"></p>
+                </div>
+                <div class="form-group">
+                    <label>{{t $.Lang "settings.networks.exclude"}}</label>
+                    <div id="exclude-list" class="cidr-list"></div>
+                    <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                        <input type="text" id="exclude-input" class="input" placeholder="{{t $.Lang "settings.networks.example" "cidr" "10.99.0.0/16"}}" style="flex: 0 1 220px; min-width: 0;" onkeydown="if(event.key==='Enter'){event.preventDefault();addCidr('exclude');}">
+                        <button class="btn" onclick="addCidr('exclude')">{{t $.Lang "settings.networks.add"}}</button>
+                    </div>
+                </div>
+                <div class="form-group" style="display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0;">
+                    <button class="btn btn-primary" onclick="saveNetworks()">{{t $.Lang "common.save"}}</button>
+                    <button class="btn" onclick="resetNetworks()">{{t $.Lang "settings.resetDefaults"}}</button>
+                    <span id="networks-status" class="form-help" style="margin: 0;"></span>
+                </div>
+                <p class="form-help">{{t $.Lang "settings.networks.help"}}</p>
+            </div>
+        </section>
+
+        <section class="section">
+            <h3 class="section-title">Tailscale</h3>
             <div class="card">
                 <div class="status-row">
-                    <span class="status-label">Status:</span>
+                    <span class="status-label">{{t $.Lang "settings.tailscale.status"}}</span>
                     {{if .Tailscale.Connected}}
-                    <span class="status-value online">✓ {{.Tailscale.StatusLabel}}</span>
+                    <span class="status-value online">✓ {{tailscaleStatus $.Lang .Tailscale}}</span>
                     {{else if .Tailscale.Installed}}
-                    <span class="status-value offline">✗ {{.Tailscale.StatusLabel}}</span>
+                    <span class="status-value offline">✗ {{tailscaleStatus $.Lang .Tailscale}}</span>
                     {{else}}
-                    <span class="status-value warning">Not Installed</span>
+                    <span class="status-value warning">{{t $.Lang "settings.tailscale.notInstalled"}}</span>
                     {{end}}
                 </div>
                 {{/* These details are cached from the last session and go stale
@@ -113,18 +172,18 @@ orangutan export out.csv</code></pre>
                 {{if .Tailscale.Connected}}
                 {{if .Tailscale.SelfIP}}
                 <div class="status-row">
-                    <span class="status-label">IP:</span>
+                    <span class="status-label">{{t $.Lang "settings.tailscale.ip"}}</span>
                     <span class="status-value">{{.Tailscale.SelfIP}}</span>
                 </div>
                 {{end}}
                 {{if .Tailscale.SelfHostname}}
                 <div class="status-row">
-                    <span class="status-label">Hostname:</span>
+                    <span class="status-label">{{t $.Lang "settings.tailscale.hostname"}}</span>
                     <span class="status-value">{{.Tailscale.SelfHostname}}</span>
                 </div>
                 {{end}}
                 <div class="status-row">
-                    <span class="status-label">Peers:</span>
+                    <span class="status-label">{{t $.Lang "settings.tailscale.peers"}}</span>
                     <span class="status-value">{{.Tailscale.PeerCount}}</span>
                 </div>
                 {{end}}
@@ -132,201 +191,264 @@ orangutan export out.csv</code></pre>
                 {{if .Tailscale.Installed}}
                 <div class="form-group" style="margin-top: 1rem;">
                     {{if .Tailscale.Connected}}
-                    <button class="btn btn-primary" onclick="disconnectTailscale()">Disconnect</button>
-                    <p class="form-help">Disconnects this machine from your tailnet.</p>
+                    <button class="btn btn-primary" onclick="disconnectTailscale()">{{t $.Lang "settings.tailscale.disconnect"}}</button>
+                    <p class="form-help">{{t $.Lang "settings.tailscale.disconnectHelp"}}</p>
                     {{else}}
-                    <button class="btn btn-primary" onclick="connectTailscale()">Connect</button>
-                    <p class="form-help">Connects this machine to your tailnet.</p>
+                    <button class="btn btn-primary" onclick="connectTailscale()">{{t $.Lang "settings.tailscale.connect"}}</button>
+                    <p class="form-help">{{t $.Lang "settings.tailscale.connectHelp"}}</p>
                     {{end}}
                     <div id="tailscale-message" class="tailscale-message"></div>
                 </div>
                 {{end}}
             </div>
         </section>
+        </div>
+
+        <div class="settings-group" id="settings-devices">
+            <h2 class="settings-group-title">{{t $.Lang "settings.groupNav.devices"}}</h2>
 
         <section class="section">
-            <h2 class="section-title">Appearance</h2>
+            <h3 class="section-title">{{t $.Lang "settings.groups.title"}}</h3>
             <div class="card">
                 <div class="form-group">
-                    <label>Theme</label>
-                    <div class="radio-group">
-                        <label class="radio-label">
-                            <input type="radio" name="theme" value="light" {{if eq .Theme "light"}}checked{{end}} onchange="setTheme('light')"> Light
-                        </label>
-                        <label class="radio-label">
-                            <input type="radio" name="theme" value="dark" {{if eq .Theme "dark"}}checked{{end}} onchange="setTheme('dark')"> Dark
-                        </label>
-                        <label class="radio-label">
-                            <input type="radio" name="theme" value="auto" {{if eq .Theme "auto"}}checked{{end}} onchange="setTheme('auto')"> Auto
-                        </label>
-                    </div>
-                </div>
-                <div class="form-group" style="margin-top: 1rem;">
-                    <label>Accent color</label>
-                    <div class="accent-swatches">
-                        <button type="button" class="accent-swatch" data-accent="orange" style="background:#e0842c" onclick="setAccent('orange')" title="Orange" aria-label="Orange accent"></button>
-                        <button type="button" class="accent-swatch" data-accent="gold" style="background:#d9a227" onclick="setAccent('gold')" title="Gold" aria-label="Gold accent"></button>
-                        <button type="button" class="accent-swatch" data-accent="blue" style="background:#2f7fd4" onclick="setAccent('blue')" title="Blue" aria-label="Blue accent"></button>
-                        <button type="button" class="accent-swatch" data-accent="green" style="background:#2c9e6b" onclick="setAccent('green')" title="Green" aria-label="Green accent"></button>
-                        <button type="button" class="accent-swatch" data-accent="purple" style="background:#8b6fc4" onclick="setAccent('purple')" title="Purple" aria-label="Purple accent"></button>
-                    </div>
-                    <p class="form-help">Applies across the app, in both light and dark.</p>
-                </div>
-            </div>
-        </section>
-
-        <section class="section">
-            <h2 class="section-title">Scanning</h2>
-            <div class="card">
-                <div class="form-group" style="display: flex; align-items: flex-start; justify-content: space-between; gap: 1.5rem;">
-                    <div>
-                        <label style="margin-bottom: 0.35rem;">Service detection</label>
-                        <p class="form-help" style="margin: 0;">Also check each device on a short list of well-known ports (web, printer, NAS, and so on) to identify it more precisely and flag a web interface. Sends a little more traffic and takes a little longer, so it is off by default. Applies on the next scan.</p>
-                    </div>
-                    <div class="toggle-switch" id="service-detection-toggle" role="switch" aria-checked="false" tabindex="0" onclick="toggleServiceDetection()" data-tip="Deeper device identification via a light port probe"></div>
-                </div>
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label for="set-scan-interval">Automatic scan interval (seconds)</label>
-                    <div style="display: flex; align-items: center; gap: 0.6rem;">
-                        <input type="number" id="set-scan-interval" class="input" min="10" max="86400" style="width: 160px;">
-                        <button class="btn btn-primary" onclick="saveScanInterval()">Save</button>
-                        <span id="scan-interval-status" class="form-help" style="margin: 0;"></span>
-                    </div>
-                    <p class="form-help">How often the background scanner re-scans while continuous scan is on. Takes effect on the next cycle. Default: <span id="def-scan-interval">300</span> seconds.</p>
-                </div>
-            </div>
-        </section>
-
-        <section class="section">
-            <h2 class="section-title">Networks</h2>
-            <div class="card">
-                <div class="form-group" style="display: flex; align-items: flex-start; justify-content: space-between; gap: 1.5rem;">
-                    <div>
-                        <label style="margin-bottom: 0.35rem;">Scan only the networks I list</label>
-                        <p class="form-help" style="margin: 0;">Ignore the auto-detected interfaces and scan only the "Networks to scan" list below. Useful on a host with many Docker bridges, VLANs, or routed interfaces.</p>
-                    </div>
-                    <div class="toggle-switch" id="only-configured-toggle" role="switch" aria-checked="false" tabindex="0" onclick="toggleOnlyConfigured()" data-tip="Scan only the networks you list, not the detected ones"></div>
-                </div>
-                <div class="form-group">
-                    <label>Networks to scan</label>
-                    <div id="include-list" class="cidr-list"></div>
-                    <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
-                        <input type="text" id="include-input" class="input" placeholder="e.g. 192.168.10.0/24" style="width: 220px;" onkeydown="if(event.key==='Enter'){event.preventDefault();addCidr('include');}">
-                        <button class="btn" onclick="addCidr('include')">Add</button>
-                    </div>
-                    <p class="form-help" id="detected-suggestions" style="margin-top: 0.5rem;"></p>
-                </div>
-                <div class="form-group">
-                    <label>Networks to hide</label>
-                    <div id="exclude-list" class="cidr-list"></div>
-                    <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
-                        <input type="text" id="exclude-input" class="input" placeholder="e.g. 10.99.0.0/16" style="width: 220px;" onkeydown="if(event.key==='Enter'){event.preventDefault();addCidr('exclude');}">
-                        <button class="btn" onclick="addCidr('exclude')">Add</button>
-                    </div>
-                </div>
-                <div class="form-group" style="display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0;">
-                    <button class="btn btn-primary" onclick="saveNetworks()">Save</button>
-                    <button class="btn" onclick="resetNetworks()">Reset to defaults</button>
-                    <span id="networks-status" class="form-help" style="margin: 0;"></span>
-                </div>
-                <p class="form-help">A routed network (reached through a router, not on a local interface) is scanned but has no MAC addresses. Applies on the next scan. Saved to this instance, not your config file.</p>
-            </div>
-        </section>
-
-        <section class="section">
-            <h2 class="section-title">Device Groups</h2>
-            <div class="card">
-                <div class="form-group">
-                    <label>Your groups</label>
-                    <p class="form-help" style="margin-top: 0;">Rename a group to fit your own kit, or add ones that suit it better. Renaming updates every device already in that group. Deleting a group leaves its devices ungrouped, it never deletes a device.</p>
+                    <label>{{t $.Lang "settings.groups.yours"}}</label>
+                    <p class="form-help" style="margin-top: 0;">{{t $.Lang "settings.groups.intro"}}</p>
                     <div id="group-list" class="group-list"></div>
                     <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
-                        <input type="text" id="group-input" class="input" placeholder="e.g. Wearables" maxlength="32" style="width: 220px;" onkeydown="if(event.key==='Enter'){event.preventDefault();addGroup();}">
-                        <button class="btn" onclick="addGroup()">Add group</button>
+                        <input type="text" id="group-input" class="input" placeholder="{{t $.Lang "settings.groups.placeholder"}}" maxlength="32" style="flex: 0 1 220px; min-width: 0;" onkeydown="if(event.key==='Enter'){event.preventDefault();addGroup();}">
+                        <button class="btn" onclick="addGroup()">{{t $.Lang "settings.groups.add"}}</button>
                     </div>
                 </div>
                 <div class="form-group" style="display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0;">
-                    <button class="btn" onclick="resetGroups()">Reset to defaults</button>
+                    <button class="btn" onclick="resetGroups()">{{t $.Lang "settings.resetDefaults"}}</button>
                     <span id="groups-status" class="form-help" style="margin: 0;"></span>
                 </div>
-                <p class="form-help">Changes apply immediately. Saved to this instance, not your config file.</p>
+                <p class="form-help">{{t $.Lang "settings.groups.help"}}</p>
             </div>
         </section>
 
         <section class="section">
-            <h2 class="section-title">Storage</h2>
+            <h3 class="section-title">{{t $.Lang "settings.locations.title"}}</h3>
             <div class="card">
+                <div class="form-group" style="margin-bottom: 0.5rem;">
+                    <p class="form-help" style="margin-top: 0;">{{t $.Lang "settings.locations.intro"}}</p>
+                    <div id="location-list" class="group-list"></div>
+                    <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
+                        <input type="text" id="location-input" class="input" placeholder="{{t $.Lang "settings.locations.placeholder"}}" maxlength="32" style="flex: 0 1 220px; min-width: 0;" onkeydown="if(event.key==='Enter'){event.preventDefault();addLocation();}">
+                        <button class="btn" onclick="addLocation()">{{t $.Lang "settings.locations.add"}}</button>
+                    </div>
+                    <span id="locations-status" class="form-help" style="display: block; margin: 0.5rem 0 0;"></span>
+                </div>
+            </div>
+        </section>
+        </div>
+
+        <div class="settings-group" id="settings-notifications">
+            <h2 class="settings-group-title">{{t $.Lang "settings.groupNav.notifications"}}</h2>
+
+        <section class="section">
+            <h3 class="section-title">{{t $.Lang "settings.notifications.title"}}</h3>
+            <div class="card">
+                <p class="form-help" style="margin-top: 0;">{{t $.Lang "settings.notifications.help"}}</p>
                 <div class="form-group">
-                    <label for="set-retention">Days to keep offline devices</label>
-                    <input type="number" id="set-retention" class="input" min="0" max="36500" style="width: 160px;">
-                    <p class="form-help">A device not seen for this many days is removed. Devices you have labelled, grouped, or added notes to, and devices currently online, are always kept. 0 keeps them forever. Default: <span id="def-retention">90</span>.</p>
+                    <label>{{t $.Lang "settings.notifications.yours"}}</label>
+                    <div id="webhook-list" class="group-list"></div>
                 </div>
                 <div class="form-group">
-                    <label for="set-maxdevices">Maximum devices to track</label>
-                    <input type="number" id="set-maxdevices" class="input" min="0" max="1000000" style="width: 160px;">
-                    <p class="form-help">When the list grows past this, the devices seen longest ago are dropped first (labelled, grouped, noted, and online devices are kept). 0 means no cap. Default: <span id="def-maxdevices">1000</span>.</p>
+                    <label for="webhook-url">{{t $.Lang "settings.notifications.url"}}</label>
+                    <input type="url" id="webhook-url" class="input" placeholder="https://" maxlength="2048" autocomplete="off" spellcheck="false" style="width: 100%; max-width: 520px;">
+                    <p class="form-help">{{t $.Lang "settings.notifications.urlHelp"}}</p>
+                </div>
+                <div class="form-group">
+                    <label for="webhook-name">{{t $.Lang "settings.notifications.name"}}</label>
+                    <input type="text" id="webhook-name" class="input" maxlength="64" placeholder="{{t $.Lang "settings.notifications.namePlaceholder"}}" style="width: 100%; max-width: 320px;">
+                </div>
+                <div class="form-group">
+                    <label>{{t $.Lang "settings.notifications.events"}}</label>
+                    <div id="webhook-events" style="display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem;">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-weight: normal;"><input type="checkbox" value="device.new" checked><span data-event="device.new">{{t $.Lang "settings.notifications.eventNew"}}</span></label>
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-weight: normal;"><input type="checkbox" value="device.unexpected" checked><span data-event="device.unexpected">{{t $.Lang "settings.notifications.eventUnexpected"}}</span></label>
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-weight: normal;"><input type="checkbox" value="device.missing" checked><span data-event="device.missing">{{t $.Lang "settings.notifications.eventMissing"}}</span></label>
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-weight: normal;"><input type="checkbox" value="device.moved" checked><span data-event="device.moved">{{t $.Lang "settings.notifications.eventMoved"}}</span></label>
+                    </div>
                 </div>
                 <div class="form-group" style="display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0;">
-                    <button class="btn btn-primary" onclick="saveStorageSettings()">Save</button>
-                    <button class="btn" onclick="resetStorageSettings()">Reset to defaults</button>
-                    <span id="storage-status" class="form-help" style="margin: 0;"></span>
+                    <button class="btn btn-primary" onclick="addWebhook()">{{t $.Lang "settings.notifications.add"}}</button>
+                    <span id="webhooks-status" class="form-help" style="margin: 0;"></span>
                 </div>
-                <p class="form-help">Changes apply immediately: lowering these can remove stale devices right away. Saved to this instance, not your config file.</p>
+                <p class="form-help">{{th $.Lang "settings.notifications.telegramHelp" "url" (raw `<code>https://api.telegram.org/bot&lt;token&gt;/sendMessage?chat_id=&lt;chat id&gt;</code>`)}}</p>
             </div>
         </section>
+        </div>
 
+        {{/* Security and API access only apply when a password is set. */}}
         {{if .AuthEnabled}}
+        <div class="settings-group" id="settings-access">
+            <h2 class="settings-group-title">{{t $.Lang "settings.groupNav.access"}}</h2>
+
         <section class="section">
-            <h2 class="section-title">Security</h2>
+            <h3 class="section-title">{{t $.Lang "settings.security.title"}}</h3>
             <div class="card">
                 <div class="status-row">
-                    <span class="status-label">Password:</span>
-                    <span class="status-value online">✓ Enabled</span>
+                    <span class="status-label">{{t $.Lang "settings.security.password"}}</span>
+                    <span class="status-value online">✓ {{t $.Lang "settings.security.enabled"}}</span>
                 </div>
                 <div class="form-group" style="margin-top: 1rem;">
-                    <a href="/logout" class="btn btn-primary">Sign out</a>
-                    <p class="form-help">Ends this session on this browser.</p>
+                    <a href="/logout" class="btn btn-primary">{{t $.Lang "common.signOut"}}</a>
+                    <p class="form-help">{{t $.Lang "settings.security.signOutHelp"}}</p>
                 </div>
             </div>
         </section>
-        {{end}}
 
         <section class="section">
-            <h2 class="section-title">Data Management</h2>
+            <h3 class="section-title">{{t $.Lang "settings.api.title"}}</h3>
+            <div class="card">
+                {{if .TokenAccessOff}}
+                <p class="form-help" style="margin-top: 0;">{{th $.Lang "settings.api.accessOff" "setting" (raw `<code>enable_api = false</code>`)}}</p>
+                {{else}}
+                <div class="status-row">
+                    <span class="status-label">{{t $.Lang "settings.api.token"}}</span>
+                    <span class="status-value" id="token-state">{{t $.Lang "settings.api.checking"}}</span>
+                </div>
+                <p class="form-help" style="margin-top: 0.5rem;">
+                    {{t $.Lang "settings.api.intro"}}
+                    {{th $.Lang "settings.api.sendAs" "header" (raw `<span class="mono">Authorization: Bearer &lt;token&gt;</span>`)}}
+                    <a href="https://github.com/291-Group/LAN-Orangutan#api" target="_blank" rel="noreferrer noopener">{{t $.Lang "settings.api.docs"}}</a>
+                </p>
+                <div class="form-group" style="margin-top: 1rem;">
+                    <button class="btn btn-primary" onclick="createApiToken()" id="token-create">{{t $.Lang "settings.api.create"}}</button>
+                    <button class="btn" onclick="revokeApiToken()" id="token-revoke" style="display:none">{{t $.Lang "settings.api.revoke"}}</button>
+                    <span id="token-status" class="form-help" style="margin: 0;"></span>
+                </div>
+                <div class="form-group" id="token-reveal" style="display:none; margin-top: 0.5rem;">
+                    <label>{{t $.Lang "settings.api.newToken"}}</label>
+                    <input type="text" class="input mono" id="token-value" readonly onclick="this.select()">
+                    <p class="form-help">
+                        {{t $.Lang "settings.api.copyNow"}}
+                        {{t $.Lang "settings.api.replaces"}}
+                    </p>
+                </div>
+                {{end}}
+            </div>
+        </section>
+        </div>
+        {{end}}
+
+        <div class="settings-group" id="settings-general">
+            <h2 class="settings-group-title">{{t $.Lang "settings.groupNav.general"}}</h2>
+
+        <section class="section">
+            <h3 class="section-title">{{t $.Lang "settings.appearance.title"}}</h3>
             <div class="card">
                 <div class="form-group">
-                    <button class="btn btn-primary" onclick="exportDevices()">Export Devices (CSV)</button>
-                    <a class="btn" href="/api/report">Download report (HTML)</a>
-                    <p class="form-help">A CSV of the device list, or a shareable, self-contained HTML report of the whole network.</p>
+                    <label>{{t $.Lang "settings.appearance.theme"}}</label>
+                    <div class="radio-group">
+                        <label class="radio-label">
+                            <input type="radio" name="theme" value="light" {{if eq .Theme "light"}}checked{{end}} onchange="setTheme('light')"> {{t $.Lang "settings.appearance.light"}}
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="theme" value="dark" {{if eq .Theme "dark"}}checked{{end}} onchange="setTheme('dark')"> {{t $.Lang "settings.appearance.dark"}}
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="theme" value="auto" {{if eq .Theme "auto"}}checked{{end}} onchange="setTheme('auto')"> {{t $.Lang "settings.appearance.auto"}}
+                        </label>
+                    </div>
+                </div>
+                <div class="form-group" style="margin-top: 1rem;">
+                    <label>{{t $.Lang "settings.appearance.accent"}}</label>
+                    <div class="accent-swatches">
+                        <button type="button" class="accent-swatch" data-accent="orange" style="background:#e0842c" onclick="setAccent('orange')" title="{{t $.Lang "settings.appearance.orange"}}" aria-label="{{t $.Lang "settings.appearance.orangeLabel"}}"></button>
+                        <button type="button" class="accent-swatch" data-accent="gold" style="background:#d9a227" onclick="setAccent('gold')" title="{{t $.Lang "settings.appearance.gold"}}" aria-label="{{t $.Lang "settings.appearance.goldLabel"}}"></button>
+                        <button type="button" class="accent-swatch" data-accent="blue" style="background:#2f7fd4" onclick="setAccent('blue')" title="{{t $.Lang "settings.appearance.blue"}}" aria-label="{{t $.Lang "settings.appearance.blueLabel"}}"></button>
+                        <button type="button" class="accent-swatch" data-accent="green" style="background:#2c9e6b" onclick="setAccent('green')" title="{{t $.Lang "settings.appearance.green"}}" aria-label="{{t $.Lang "settings.appearance.greenLabel"}}"></button>
+                        <button type="button" class="accent-swatch" data-accent="purple" style="background:#8b6fc4" onclick="setAccent('purple')" title="{{t $.Lang "settings.appearance.purple"}}" aria-label="{{t $.Lang "settings.appearance.purpleLabel"}}"></button>
+                    </div>
+                    <p class="form-help">{{t $.Lang "settings.appearance.accentHelp"}}</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <h3 class="section-title">{{t $.Lang "settings.storage.title"}}</h3>
+            <div class="card">
+                <div class="form-group">
+                    <label for="set-retention">{{t $.Lang "settings.storage.retention"}}</label>
+                    <input type="number" id="set-retention" class="input" min="0" max="36500" style="width: 160px;">
+                    <p class="form-help">{{th $.Lang "settings.storage.retentionHelp" "default" (raw `<span id="def-retention">90</span>`)}}</p>
+                </div>
+                <div class="form-group">
+                    <label for="set-maxdevices">{{t $.Lang "settings.storage.maxDevices"}}</label>
+                    <input type="number" id="set-maxdevices" class="input" min="0" max="1000000" style="width: 160px;">
+                    <p class="form-help">{{th $.Lang "settings.storage.maxDevicesHelp" "default" (raw `<span id="def-maxdevices">1000</span>`)}}</p>
+                </div>
+                <div class="form-group" style="display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0;">
+                    <button class="btn btn-primary" onclick="saveStorageSettings()">{{t $.Lang "common.save"}}</button>
+                    <button class="btn" onclick="resetStorageSettings()">{{t $.Lang "settings.resetDefaults"}}</button>
+                    <span id="storage-status" class="form-help" style="margin: 0;"></span>
+                </div>
+                <p class="form-help">{{t $.Lang "settings.storage.help"}}</p>
+            </div>
+        </section>
+
+        <section class="section">
+            <h3 class="section-title">{{t $.Lang "settings.data.title"}}</h3>
+            <div class="card">
+                <div class="form-group">
+                    <button class="btn btn-primary" onclick="exportDevices()">{{t $.Lang "settings.data.exportCsv"}}</button>
+                    <a class="btn" href="/api/report">{{t $.Lang "settings.data.report"}}</a>
+                    <p class="form-help">{{t $.Lang "settings.data.exportHelp"}}</p>
                 </div>
                 <div class="form-group" style="margin-bottom: 0;">
-                    <label>Backup</label>
+                    <label>{{t $.Lang "settings.data.backup"}}</label>
                     <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-                        <a class="btn btn-primary" href="/api/backup">Back up everything</a>
+                        <a class="btn btn-primary" href="/api/backup">{{t $.Lang "settings.data.backupAll"}}</a>
                         <input type="file" id="restore-file" accept="application/json,.json" style="display:none" onchange="onRestoreFile()">
-                        <button class="btn" onclick="document.getElementById('restore-file').click()">Restore from backup…</button>
+                        <button class="btn" onclick="document.getElementById('restore-file').click()">{{t $.Lang "settings.data.restore"}}</button>
                         <span id="restore-status" class="form-help" style="margin: 0;"></span>
                     </div>
                     <div id="restore-confirm" style="display: none; margin-top: 0.6rem;">
-                        <p class="form-help" style="margin: 0 0 0.4rem;">Restore <strong id="restore-filename"></strong>? This <strong>replaces</strong> the current devices, settings, and snapshots on this instance.</p>
-                        <button class="btn btn-primary" onclick="doRestore()">Confirm restore</button>
-                        <button class="btn" onclick="cancelRestore()">Cancel</button>
+                        <p class="form-help" style="margin: 0 0 0.4rem;">{{th $.Lang "settings.data.restoreAsk" "file" (raw `<strong id="restore-filename"></strong>`) "strong" (raw `<strong>`) "strongEnd" (raw `</strong>`)}}</p>
+                        <button class="btn btn-primary" onclick="doRestore()">{{t $.Lang "settings.data.confirmRestore"}}</button>
+                        <button class="btn" onclick="cancelRestore()">{{t $.Lang "common.cancel"}}</button>
                     </div>
-                    <p class="form-help">Download a copy of your devices, settings, and snapshots (not your password) as a single file, or restore from one.</p>
+                    <p class="form-help">{{t $.Lang "settings.data.backupHelp"}}</p>
                 </div>
             </div>
         </section>
 
         <section class="section">
-            <h2 class="section-title">About</h2>
+            <h3 class="section-title">{{t $.Lang "settings.system.title"}}</h3>
             <div class="card">
-                <p>LAN Orangutan is a network discovery and monitoring tool that helps you keep track of devices on your local network.</p>
+                <div class="status-row">
+                    <span class="status-label">{{t $.Lang "settings.system.version"}}</span>
+                    <span class="status-value">{{if .Version}}{{.Version}}{{else}}dev{{end}}</span>
+                </div>
+                <div class="status-row">
+                    <span class="status-label">{{t $.Lang "settings.system.totalDevices"}}</span>
+                    <span class="status-value">{{.Stats.Total}}</span>
+                </div>
+                <div class="status-row">
+                    <span class="status-label">{{t $.Lang "settings.system.online"}}</span>
+                    <span class="status-value online">{{.Stats.Online}}</span>
+                </div>
+                <div class="status-row">
+                    <span class="status-label">{{t $.Lang "settings.system.offline"}}</span>
+                    <span class="status-value">{{.Stats.Offline}}</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <h3 class="section-title">{{t $.Lang "settings.about.title"}}</h3>
+            <div class="card">
+                <p>{{t $.Lang "settings.about.text"}}</p>
                 <p style="margin-top: 1rem;">
-                    <a href="https://github.com/291-Group/LAN-Orangutan" target="_blank">GitHub</a> ·
-                    <a href="https://291group.com" target="_blank">291 Group</a>
+                    <a href="https://github.com/291-Group/LAN-Orangutan" target="_blank" rel="noreferrer noopener">{{t $.Lang "common.github"}}</a> ·
+                    <a href="https://291group.com" target="_blank" rel="noreferrer noopener">291 Group</a>
                 </p>
             </div>
         </section>
+        </div>
     </main>
 
     {{/* A scan runs on the server, not in the page, so it can still be going
@@ -334,8 +456,8 @@ orangutan export out.csv</code></pre>
          would carry on invisibly and this page would never notice it finish. */}}
     <div id="scan-progress" class="scan-progress" style="display:none">
         <div class="scan-progress-head">
-            <span id="scan-title">Scanning network...</span>
-            <button type="button" class="btn btn-sm scan-cancel" id="scan-cancel" onclick="cancelScan()">Cancel</button>
+            <span id="scan-title">{{t $.Lang "settings.scan.title"}}</span>
+            <button type="button" class="btn btn-sm scan-cancel" id="scan-cancel" onclick="cancelScan()">{{t $.Lang "common.cancel"}}</button>
         </div>
         <div class="scan-bar" id="scan-bar">
             <div class="scan-bar-fill" id="scan-bar-fill"></div>
@@ -351,11 +473,27 @@ orangutan export out.csv</code></pre>
     <div id="toast" class="toast"></div>
 
     <footer class="footer">
-        <p>LAN Orangutan by <a href="https://291group.com" target="_blank">291 Group</a></p>
+        <p>{{th $.Lang "common.byOrg" "org" (raw `<a href="https://291group.com" target="_blank" rel="noreferrer noopener">291 Group</a>`)}} &bull; <a href="/credits">{{t $.Lang "common.thanks"}}</a></p>
     </footer>
 
-    <script src="/static/app.js"></script>
+    {{template "i18nscript" .}}
+    <script src="/static/app.js?v={{.Version}}"></script>
     <script>
+        // Jumps from the link row land just below it. The row wraps on narrow
+        // screens, so its height is measured rather than assumed, and
+        // re-measured when the window changes size.
+        (function () {
+            const nav = document.querySelector('.settings-nav');
+            const header = document.querySelector('.header');
+            if (!nav || !header) return;
+            function fit() {
+                const above = header.getBoundingClientRect().height + nav.getBoundingClientRect().height;
+                document.documentElement.style.scrollPaddingTop = Math.ceil(above + 16) + 'px';
+            }
+            fit();
+            window.addEventListener('resize', fit);
+        })();
+
         function setTheme(theme) {
             // Shared with the header toggle so the radios also switch without the
             // staggered transition. applyTheme is defined in app.js.
@@ -364,6 +502,33 @@ orangutan export out.csv</code></pre>
 
         function exportDevices() {
             window.location.href = '/api/devices?format=csv';
+        }
+
+        // Every save on this page posts JSON and reads JSON back. A refusal
+        // comes back as {error, code, args}; failText shows it in the page's
+        // language when the catalogue knows the code, else as the server's
+        // own words, and falls back to a generic message when there is none.
+        function postJSON(url, body) {
+            return fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            }).then(r => r.json());
+        }
+        function failText(res, fallback) {
+            return res ? errorText(apiError(res, fallback)) : fallback;
+        }
+        // A status line beside a Save button: green for success, red for a
+        // problem, cleared after a moment.
+        function flashStatus(el, text, ok, ms) {
+            el.textContent = text;
+            el.style.color = ok ? 'var(--success)' : 'var(--danger)';
+            setTimeout(() => { el.textContent = ''; }, ms || 2500);
+        }
+        // "Saved", or "Saved (adjusted to N)" when the server clamped a value
+        // the user typed to its allowed range.
+        function savedText(adjusted) {
+            return adjusted.length ? t('settings.savedAdjusted', { value: adjusted.join(', ') }) : t('settings.saved');
         }
 
         // Storage settings (retention window + device cap). These are stored as
@@ -398,27 +563,25 @@ orangutan export out.csv</code></pre>
         async function postStorageSettings(body) {
             const status = document.getElementById('storage-status');
             try {
-                const res = await fetch('/api/settings', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(body)
-                }).then(r => r.json());
+                const res = await postJSON('/api/settings', body);
                 if (res.success) {
                     // Reflect what the server actually applied (it clamps out-of-range
-                    // values), so the fields never disagree with the stored setting.
-                    document.getElementById('set-retention').value = res.data.retention_days.value;
-                    document.getElementById('set-maxdevices').value = res.data.max_devices.value;
-                    status.textContent = 'Saved';
-                    status.style.color = 'var(--success)';
+                    // values), so the fields never disagree with the stored setting,
+                    // and say so when it differs from what was typed.
+                    const r = res.data.retention_days.value;
+                    const m = res.data.max_devices.value;
+                    document.getElementById('set-retention').value = r;
+                    document.getElementById('set-maxdevices').value = m;
+                    const adjusted = [];
+                    if (body.retention_days != null && body.retention_days !== r) adjusted.push(r);
+                    if (body.max_devices != null && body.max_devices !== m) adjusted.push(m);
+                    flashStatus(status, savedText(adjusted), true);
                 } else {
-                    status.textContent = res.error || 'Could not save';
-                    status.style.color = 'var(--danger)';
+                    flashStatus(status, failText(res, t('settings.couldNotSave')), false);
                 }
             } catch (e) {
-                status.textContent = 'Could not save';
-                status.style.color = 'var(--danger)';
+                flashStatus(status, t('settings.couldNotSave'), false);
             }
-            setTimeout(() => { status.textContent = ''; }, 2500);
         }
 
         loadStorageSettings();
@@ -444,11 +607,7 @@ orangutan export out.csv</code></pre>
             const next = t.getAttribute('aria-checked') !== 'true';
             setServiceDetectionToggle(next); // optimistic
             try {
-                const res = await fetch('/api/scan/service-detection', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ enabled: next })
-                }).then(r => r.json());
+                const res = await postJSON('/api/scan/service-detection', { enabled: next });
                 setServiceDetectionToggle(res.success ? res.data.enabled : !next);
             } catch (e) {
                 setServiceDetectionToggle(!next); // revert on failure
@@ -472,31 +631,22 @@ orangutan export out.csv</code></pre>
             const status = document.getElementById('scan-interval-status');
             const secs = parseInt(document.getElementById('set-scan-interval').value, 10);
             if (isNaN(secs)) {
-                status.textContent = 'Enter a number';
-                status.style.color = 'var(--danger)';
-                setTimeout(() => { status.textContent = ''; }, 2500);
+                flashStatus(status, t('settings.enterNumber'), false);
                 return;
             }
             try {
-                const res = await fetch('/api/scan/interval', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ seconds: secs })
-                }).then(r => r.json());
+                const res = await postJSON('/api/scan/interval', { seconds: secs });
                 if (res.success) {
-                    // Reflect the clamped value the server actually applied.
+                    // Reflect the clamped value the server actually applied, and
+                    // say so when it is not the one typed.
                     document.getElementById('set-scan-interval').value = res.data.seconds;
-                    status.textContent = 'Saved';
-                    status.style.color = 'var(--success)';
+                    flashStatus(status, savedText(res.data.seconds !== secs ? [res.data.seconds] : []), true);
                 } else {
-                    status.textContent = res.error || 'Could not save';
-                    status.style.color = 'var(--danger)';
+                    flashStatus(status, failText(res, t('settings.couldNotSave')), false);
                 }
             } catch (e) {
-                status.textContent = 'Could not save';
-                status.style.color = 'var(--danger)';
+                flashStatus(status, t('settings.couldNotSave'), false);
             }
-            setTimeout(() => { status.textContent = ''; }, 2500);
         }
 
         loadScanInterval();
@@ -526,7 +676,7 @@ orangutan export out.csv</code></pre>
                 const none = document.createElement('span');
                 none.className = 'form-help';
                 none.style.margin = '0';
-                none.textContent = 'None yet.';
+                none.textContent = t('settings.noneYet');
                 el.appendChild(none);
                 return;
             }
@@ -536,7 +686,7 @@ orangutan export out.csv</code></pre>
                 chip.textContent = c;
                 const btn = document.createElement('button');
                 btn.type = 'button';
-                btn.setAttribute('aria-label', 'Remove ' + c);
+                btn.setAttribute('aria-label', t('settings.removeCidr', { cidr: c }));
                 btn.innerHTML = '&times;';
                 btn.onclick = () => removeCidr(kind, i);
                 chip.appendChild(btn);
@@ -547,7 +697,11 @@ orangutan export out.csv</code></pre>
         function addCidr(kind) {
             const input = document.getElementById(kind + '-input');
             const v = input.value.trim();
-            if (!v) return;
+            if (!v) {
+                flashStatus(document.getElementById('networks-status'), t('settings.enterCidr'), false, 3500);
+                input.focus();
+                return;
+            }
             const arr = kind === 'include' ? includeList : excludeList;
             if (!arr.includes(v)) arr.push(v);
             input.value = '';
@@ -573,7 +727,7 @@ orangutan export out.csv</code></pre>
             sug.textContent = '';
             const det = lastDetected.filter(c => !includeList.includes(c) && !excludeList.includes(c));
             if (det.length === 0) return;
-            sug.appendChild(document.createTextNode('Detected: '));
+            sug.appendChild(document.createTextNode(t('settings.detected') + ' '));
             det.forEach((c, idx) => {
                 if (idx) sug.appendChild(document.createTextNode(' · '));
                 const a = document.createElement('a');
@@ -606,201 +760,476 @@ orangutan export out.csv</code></pre>
             const body = reset ? { reset: true } :
                 { networks: includeList, exclude_networks: excludeList, only_configured: only };
             try {
-                const res = await fetch('/api/scan/networks', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(body)
-                }).then(r => r.json());
+                const res = await postJSON('/api/scan/networks', body);
                 if (res.success) {
                     applyNetworksData(res.data);
-                    status.textContent = 'Saved';
-                    status.style.color = 'var(--success)';
+                    flashStatus(status, t('settings.saved'), true, 3500);
                 } else {
-                    status.textContent = res.error || 'Could not save';
-                    status.style.color = 'var(--danger)';
+                    flashStatus(status, failText(res, t('settings.couldNotSave')), false, 3500);
                 }
             } catch (e) {
-                status.textContent = 'Could not save';
-                status.style.color = 'var(--danger)';
+                flashStatus(status, t('settings.couldNotSave'), false, 3500);
             }
-            setTimeout(() => { status.textContent = ''; }, 3500);
         }
         function resetNetworks() { saveNetworks(true); }
 
         loadNetworks();
 
-        // Device groups. The list is built with the DOM (textContent), never by
-        // string-concatenating markup, so a group name can never inject anything.
-        // Rename edits in place; delete asks first when devices would be affected.
-        let groupCounts = {};
+        // Device groups and locations are the same kind of list: add, rename in
+        // place, delete with a confirm when devices would be affected. One editor
+        // serves both. Lists are built with the DOM (textContent), never by
+        // string-concatenating markup, so a name can never inject anything.
+        function listEditor(opts) {
+            let counts = {};
 
-        function renderGroups(data) {
-            groupCounts = data.counts || {};
-            const el = document.getElementById('group-list');
+            function render(data) {
+                counts = data.counts || {};
+                const el = document.getElementById(opts.listId);
+                el.textContent = '';
+                const items = data[opts.dataKey] || [];
+                if (items.length === 0) {
+                    const none = document.createElement('span');
+                    none.className = 'form-help';
+                    none.style.margin = '0';
+                    none.textContent = t(opts.keys.none);
+                    el.appendChild(none);
+                    return;
+                }
+                items.forEach(name => el.appendChild(itemRow(name)));
+            }
+
+            function itemRow(name) {
+                const row = document.createElement('div');
+                row.className = 'group-row';
+
+                const label = document.createElement('span');
+                label.className = 'group-name';
+                label.textContent = name;
+                row.appendChild(label);
+
+                const count = counts[name] || 0;
+                const meta = document.createElement('span');
+                meta.className = 'group-count';
+                meta.textContent = tn(opts.keys.devices, count);
+                row.appendChild(meta);
+
+                const actions = document.createElement('span');
+                actions.className = 'group-actions';
+
+                const rename = document.createElement('button');
+                rename.type = 'button';
+                rename.className = 'btn btn-sm';
+                rename.textContent = t('settings.rename');
+                rename.onclick = () => startRename(row, name);
+                actions.appendChild(rename);
+
+                const del = document.createElement('button');
+                del.type = 'button';
+                del.className = 'btn btn-sm danger';
+                del.textContent = t('settings.delete');
+                del.onclick = () => confirmDelete(row, name, count);
+                actions.appendChild(del);
+
+                row.appendChild(actions);
+                return row;
+            }
+
+            // Rename in place: swap the row for an input seeded with the current
+            // name, so the user edits the name rather than retyping it.
+            function startRename(row, name) {
+                row.textContent = '';
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.className = 'input';
+                input.value = name;
+                input.maxLength = 32;
+                input.style.width = '220px';
+                input.style.maxWidth = '100%';
+                input.onkeydown = (e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); commit(); }
+                    if (e.key === 'Escape') { e.preventDefault(); load(); }
+                };
+                row.appendChild(input);
+
+                const save = document.createElement('button');
+                save.type = 'button';
+                save.className = 'btn btn-sm btn-primary';
+                save.textContent = t('settings.save');
+                save.onclick = commit;
+                row.appendChild(save);
+
+                const cancel = document.createElement('button');
+                cancel.type = 'button';
+                cancel.className = 'btn btn-sm';
+                cancel.textContent = t('settings.cancel');
+                cancel.onclick = () => load();
+                row.appendChild(cancel);
+
+                input.focus();
+                input.select();
+
+                function commit() {
+                    const next = input.value.trim();
+                    if (!next || next === name) { load(); return; }
+                    action({ action: 'rename', name: name, new_name: next });
+                }
+            }
+
+            // Deleting an entry that devices are using is worth a confirm, since
+            // it clears it from all of them. An unused one just goes.
+            function confirmDelete(row, name, count) {
+                if (count === 0) {
+                    action({ action: 'delete', name: name });
+                    return;
+                }
+                row.textContent = '';
+                const msg = document.createElement('span');
+                msg.className = 'group-name';
+                msg.textContent = tn(opts.keys.remove, count, { name: name });
+                row.appendChild(msg);
+
+                const yes = document.createElement('button');
+                yes.type = 'button';
+                yes.className = 'btn btn-sm danger';
+                yes.textContent = t(opts.keys.confirmDelete);
+                yes.onclick = () => action({ action: 'delete', name: name });
+                row.appendChild(yes);
+
+                const no = document.createElement('button');
+                no.type = 'button';
+                no.className = 'btn btn-sm';
+                no.textContent = t('settings.cancel');
+                no.onclick = () => load();
+                row.appendChild(no);
+            }
+
+            async function load() {
+                try {
+                    const res = await fetch(opts.endpoint).then(r => r.json());
+                    if (res.success) render(res.data);
+                } catch (e) { /* leave empty if unreachable */ }
+            }
+
+            async function action(body, onOk) {
+                const status = document.getElementById(opts.statusId);
+                try {
+                    const res = await postJSON(opts.endpoint, body);
+                    if (res.success) {
+                        render(res.data);
+                        if (onOk) onOk();
+                        flashStatus(status, t('settings.saved'), true, 3500);
+                    } else {
+                        // The server rejected it (duplicate, empty, too long).
+                        // Show its message and put the list back as it was.
+                        flashStatus(status, failText(res, t('settings.couldNotSave')), false, 3500);
+                        load();
+                    }
+                } catch (e) {
+                    flashStatus(status, t('settings.couldNotSave'), false, 3500);
+                    load();
+                }
+            }
+
+            // An empty name is sent as it is: the server's answer ("group name
+            // cannot be empty") is the message to show, in the page's language.
+            function add() {
+                const input = document.getElementById(opts.inputId);
+                action({ action: 'add', name: input.value.trim() }, () => { input.value = ''; });
+            }
+
+            load();
+            return { add, action, load };
+        }
+
+        const groupsEditor = listEditor({
+            endpoint: '/api/groups', dataKey: 'groups',
+            listId: 'group-list', statusId: 'groups-status', inputId: 'group-input',
+            keys: { none: 'settings.noGroups', devices: 'settings.groupDevices', remove: 'settings.removeGroup', confirmDelete: 'settings.deleteGroup' },
+        });
+        function addGroup() { groupsEditor.add(); }
+        function resetGroups() { groupsEditor.action({ action: 'reset' }); }
+
+        const locationsEditor = listEditor({
+            endpoint: '/api/locations', dataKey: 'locations',
+            listId: 'location-list', statusId: 'locations-status', inputId: 'location-input',
+            keys: { none: 'settings.noLocations', devices: 'settings.locationDevices', remove: 'settings.removeLocation', confirmDelete: 'settings.deleteLocation' },
+        });
+        function addLocation() { locationsEditor.add(); }
+
+        // Notifications: webhooks posted to when a device event happens. The
+        // server only ever returns a webhook's URL masked to its host (the rest
+        // can hold a token), so the list shows that and never the full URL. Rows
+        // are built with the DOM (textContent), like the group list. Event names
+        // are read from the checkbox labels so they are translated in one place.
+        function webhookEventName(ev) {
+            const el = document.querySelector('#webhook-events [data-event="' + ev + '"]');
+            return el ? el.textContent : ev;
+        }
+
+        function describeWebhookResult(r) {
+            if (!r) return t('settings.notifications.neverSent');
+            const when = new Date(r.time).toLocaleString(window.I18N_LANG || undefined);
+            if (r.success) return t('settings.notifications.lastOk', { time: when, status: r.status });
+            return t('settings.notifications.lastFailed', { time: when, error: r.error || '' });
+        }
+
+        function renderWebhooks(data) {
+            const el = document.getElementById('webhook-list');
             el.textContent = '';
-            const groups = data.groups || [];
-            if (groups.length === 0) {
+            const hooks = data.webhooks || [];
+            if (hooks.length === 0) {
                 const none = document.createElement('span');
                 none.className = 'form-help';
                 none.style.margin = '0';
-                none.textContent = 'No groups. Add one below, or reset to the defaults.';
+                none.textContent = t('settings.notifications.none');
                 el.appendChild(none);
                 return;
             }
-            groups.forEach(name => el.appendChild(groupRow(name)));
+            hooks.forEach(h => el.appendChild(webhookRow(h)));
         }
 
-        function groupRow(name) {
+        function webhookRow(h) {
             const row = document.createElement('div');
-            row.className = 'group-row';
+            row.className = 'group-row webhook-row';
 
-            const label = document.createElement('span');
-            label.className = 'group-name';
-            label.textContent = name;
-            row.appendChild(label);
-
-            const count = groupCounts[name] || 0;
-            const meta = document.createElement('span');
-            meta.className = 'group-count';
-            meta.textContent = count === 1 ? '1 device' : count + ' devices';
-            row.appendChild(meta);
+            const info = document.createElement('div');
+            info.className = 'webhook-info';
+            const title = document.createElement('div');
+            title.className = 'group-name webhook-title';
+            title.textContent = h.name ? h.name + ' (' + h.url + ')' : h.url;
+            info.appendChild(title);
+            const events = document.createElement('div');
+            events.className = 'group-count';
+            events.textContent = (h.events || []).map(webhookEventName).join(', ');
+            info.appendChild(events);
+            const last = document.createElement('div');
+            last.className = 'group-count webhook-last' + (h.last_result ? (h.last_result.success ? ' ok' : ' failed') : '');
+            last.textContent = describeWebhookResult(h.last_result);
+            info.appendChild(last);
+            row.appendChild(info);
 
             const actions = document.createElement('span');
-            actions.className = 'group-actions';
+            actions.className = 'group-actions webhook-actions';
 
-            const rename = document.createElement('button');
-            rename.type = 'button';
-            rename.className = 'btn btn-sm';
-            rename.textContent = 'Rename';
-            rename.onclick = () => startRename(row, name);
-            actions.appendChild(rename);
+            const toggle = document.createElement('div');
+            toggle.className = 'toggle-switch webhook-toggle' + (h.enabled ? ' active' : '');
+            toggle.setAttribute('role', 'switch');
+            toggle.setAttribute('tabindex', '0');
+            toggle.setAttribute('aria-checked', h.enabled ? 'true' : 'false');
+            toggle.setAttribute('aria-label', t('settings.notifications.enabled'));
+            toggle.title = t('settings.notifications.enabled');
+            const flip = () => webhookAction({ action: 'update', id: h.id, enabled: !h.enabled });
+            toggle.onclick = flip;
+            toggle.onkeydown = (e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); flip(); } };
+            actions.appendChild(toggle);
+
+            const test = document.createElement('button');
+            test.type = 'button';
+            test.className = 'btn btn-sm';
+            test.textContent = t('settings.notifications.sendTest');
+            test.onclick = () => testWebhook(h.id, test);
+            actions.appendChild(test);
+
+            const edit = document.createElement('button');
+            edit.type = 'button';
+            edit.className = 'btn btn-sm';
+            edit.textContent = t('settings.edit');
+            edit.onclick = () => startEditWebhook(row, h);
+            actions.appendChild(edit);
 
             const del = document.createElement('button');
             del.type = 'button';
             del.className = 'btn btn-sm danger';
-            del.textContent = 'Delete';
-            del.onclick = () => confirmDeleteGroup(row, name, count);
+            del.textContent = t('settings.delete');
+            del.onclick = () => confirmDeleteWebhook(row, h);
             actions.appendChild(del);
 
             row.appendChild(actions);
             return row;
         }
 
-        // Rename in place: swap the row for an input seeded with the current
-        // name, so the user edits the name rather than retyping it.
-        function startRename(row, name) {
+        // Edit in place, like a group rename: the row becomes a small form with
+        // the name, the URL and the events. The stored URL is never shown in
+        // full (it may hold a token), so its field starts blank and only a value
+        // typed there replaces it.
+        function startEditWebhook(row, h) {
             row.textContent = '';
-            const input = document.createElement('input');
-            input.type = 'text';
-            input.className = 'input';
-            input.value = name;
-            input.maxLength = 32;
-            input.style.width = '220px';
-            input.onkeydown = (e) => {
-                if (e.key === 'Enter') { e.preventDefault(); commit(); }
-                if (e.key === 'Escape') { e.preventDefault(); loadGroups(); }
-            };
-            row.appendChild(input);
+            const form = document.createElement('div');
+            form.className = 'webhook-edit';
 
+            // Field names are read from the add form below the list, where
+            // the server rendered them in the page's language.
+            function field(labelFor, input) {
+                const wrap = document.createElement('div');
+                const label = document.createElement('label');
+                const src = document.querySelector('label[for="' + labelFor + '"]') ||
+                    document.getElementById(labelFor).previousElementSibling;
+                label.textContent = src ? src.textContent.trim() : '';
+                wrap.appendChild(label);
+                wrap.appendChild(input);
+                return wrap;
+            }
+
+            const name = document.createElement('input');
+            name.type = 'text';
+            name.className = 'input';
+            name.maxLength = 64;
+            name.value = h.name || '';
+            form.appendChild(field('webhook-name', name));
+
+            const url = document.createElement('input');
+            url.type = 'url';
+            url.className = 'input';
+            url.maxLength = 2048;
+            url.autocomplete = 'off';
+            url.spellcheck = false;
+            url.placeholder = h.url;
+            const urlField = field('webhook-url', url);
+            const urlHelp = document.createElement('p');
+            urlHelp.className = 'form-help';
+            urlHelp.textContent = t('settings.notifications.urlKeep');
+            urlField.appendChild(urlHelp);
+            form.appendChild(urlField);
+
+            const events = document.createElement('div');
+            events.className = 'webhook-edit-events';
+            const chosen = new Set(h.events || []);
+            document.querySelectorAll('#webhook-events input').forEach(src => {
+                const label = document.createElement('label');
+                const box = document.createElement('input');
+                box.type = 'checkbox';
+                box.value = src.value;
+                box.checked = chosen.has(src.value);
+                label.appendChild(box);
+                label.appendChild(document.createTextNode(webhookEventName(src.value)));
+                events.appendChild(label);
+            });
+            form.appendChild(field('webhook-events', events));
+
+            const actions = document.createElement('div');
+            actions.className = 'webhook-edit-actions';
             const save = document.createElement('button');
             save.type = 'button';
             save.className = 'btn btn-sm btn-primary';
-            save.textContent = 'Save';
+            save.textContent = t('settings.save');
             save.onclick = commit;
-            row.appendChild(save);
-
+            actions.appendChild(save);
             const cancel = document.createElement('button');
             cancel.type = 'button';
             cancel.className = 'btn btn-sm';
-            cancel.textContent = 'Cancel';
-            cancel.onclick = () => loadGroups();
-            row.appendChild(cancel);
+            cancel.textContent = t('settings.cancel');
+            cancel.onclick = () => loadWebhooks();
+            actions.appendChild(cancel);
+            form.appendChild(actions);
 
-            input.focus();
-            input.select();
+            form.onkeydown = (e) => {
+                if (e.key === 'Enter' && e.target.tagName === 'INPUT' && e.target.type !== 'checkbox') { e.preventDefault(); commit(); }
+                if (e.key === 'Escape') { e.preventDefault(); loadWebhooks(); }
+            };
+
+            row.appendChild(form);
+            name.focus();
 
             function commit() {
-                const next = input.value.trim();
-                if (!next || next === name) { loadGroups(); return; }
-                groupAction({ action: 'rename', name: name, new_name: next });
+                const picked = Array.from(events.querySelectorAll('input:checked')).map(c => c.value);
+                if (picked.length === 0) {
+                    flashStatus(document.getElementById('webhooks-status'), t('settings.notifications.chooseEvent'), false, 3500);
+                    return;
+                }
+                const body = { action: 'update', id: h.id, name: name.value.trim(), events: picked };
+                if (url.value.trim()) body.url = url.value.trim();
+                webhookAction(body, () => showToast(t('settings.notifications.updated'), 'success'));
             }
         }
 
-        // Deleting a group that devices are using is worth a confirm, since it
-        // clears the group from all of them. An empty group just goes.
-        function confirmDeleteGroup(row, name, count) {
-            if (count === 0) {
-                groupAction({ action: 'delete', name: name });
-                return;
-            }
+        function confirmDeleteWebhook(row, h) {
             row.textContent = '';
+            row.classList.add('confirming');
             const msg = document.createElement('span');
-            msg.className = 'group-name';
-            msg.textContent = 'Remove "' + name + '" from ' + (count === 1 ? '1 device' : count + ' devices') + '?';
+            msg.className = 'group-name confirm-text';
+            msg.textContent = t('settings.notifications.deleteConfirm', { name: h.name || h.url });
             row.appendChild(msg);
 
             const yes = document.createElement('button');
             yes.type = 'button';
             yes.className = 'btn btn-sm danger';
-            yes.textContent = 'Delete group';
-            yes.onclick = () => groupAction({ action: 'delete', name: name });
+            yes.textContent = t('settings.delete');
+            yes.onclick = () => webhookAction({ action: 'delete', id: h.id });
             row.appendChild(yes);
 
             const no = document.createElement('button');
             no.type = 'button';
             no.className = 'btn btn-sm';
-            no.textContent = 'Cancel';
-            no.onclick = () => loadGroups();
+            no.textContent = t('settings.cancel');
+            no.onclick = () => loadWebhooks();
             row.appendChild(no);
         }
 
-        function addGroup() {
-            const input = document.getElementById('group-input');
-            const v = input.value.trim();
-            if (!v) return;
-            groupAction({ action: 'add', name: v }, () => { input.value = ''; });
+        function addWebhook() {
+            const url = document.getElementById('webhook-url');
+            const name = document.getElementById('webhook-name');
+            const events = Array.from(document.querySelectorAll('#webhook-events input:checked')).map(c => c.value);
+            const status = document.getElementById('webhooks-status');
+            let problem = '';
+            if (!url.value.trim()) problem = t('settings.notifications.enterUrl');
+            else if (events.length === 0) problem = t('settings.notifications.chooseEvent');
+            if (problem) {
+                flashStatus(status, problem, false, 3500);
+                return;
+            }
+            webhookAction({ action: 'add', url: url.value.trim(), name: name.value.trim(), events: events }, () => {
+                url.value = '';
+                name.value = '';
+                document.querySelectorAll('#webhook-events input').forEach(c => { c.checked = true; });
+                showToast(t('settings.notifications.added'), 'success');
+            });
         }
 
-        function resetGroups() {
-            groupAction({ action: 'reset' });
-        }
-
-        async function loadGroups() {
+        async function testWebhook(id, btn) {
+            btn.disabled = true;
+            btn.textContent = t('settings.notifications.testing');
             try {
-                const res = await fetch('/api/groups').then(r => r.json());
-                if (res.success) renderGroups(res.data);
+                const res = await postJSON('/api/webhooks/test', { id: id });
+                if (res.success) {
+                    renderWebhooks(res.data);
+                    const r = res.data.result;
+                    if (r.success) showToast(t('settings.notifications.testOk'), 'success');
+                    else showToast(t('settings.notifications.testFailed', { error: r.error || '' }), 'error', 6000);
+                    return;
+                }
+                showToast(failText(res, t('settings.notifications.testFailed', { error: '' })), 'error', 6000);
+            } catch (e) {
+                showToast(t('settings.notifications.testFailed', { error: '' }), 'error', 6000);
+            }
+            loadWebhooks();
+        }
+
+        async function loadWebhooks() {
+            try {
+                const res = await fetch('/api/webhooks').then(r => r.json());
+                if (res.success) renderWebhooks(res.data);
             } catch (e) { /* leave empty if unreachable */ }
         }
 
-        async function groupAction(body, onOk) {
-            const status = document.getElementById('groups-status');
+        async function webhookAction(body, onOk) {
+            const status = document.getElementById('webhooks-status');
             try {
-                const res = await fetch('/api/groups', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(body)
-                }).then(r => r.json());
+                const res = await postJSON('/api/webhooks', body);
                 if (res.success) {
-                    renderGroups(res.data);
+                    renderWebhooks(res.data);
                     if (onOk) onOk();
-                    status.textContent = 'Saved';
-                    status.style.color = 'var(--success)';
-                } else {
-                    // The server rejected it (duplicate, empty, too long). Show
-                    // its message and put the list back the way it was.
-                    status.textContent = res.error || 'Could not save';
-                    status.style.color = 'var(--danger)';
-                    loadGroups();
+                    return;
                 }
+                // The server rejected it (bad URL, too many webhooks). Show its
+                // message and put the list back the way it was.
+                flashStatus(status, failText(res, t('settings.couldNotSave')), false, 5000);
             } catch (e) {
-                status.textContent = 'Could not save';
-                status.style.color = 'var(--danger)';
-                loadGroups();
+                flashStatus(status, t('settings.couldNotSave'), false, 5000);
             }
-            setTimeout(() => { status.textContent = ''; }, 3500);
+            loadWebhooks();
         }
 
-        loadGroups();
+        loadWebhooks();
 
         // Backup / restore. Backup is a plain download link. Restore reads the
         // chosen file, shows an inline confirm (destructive), then POSTs it.
@@ -815,7 +1244,7 @@ orangutan export out.csv</code></pre>
                 try {
                     restoreData = JSON.parse(reader.result);
                 } catch (e) {
-                    status.textContent = 'That file is not valid JSON.';
+                    status.textContent = t('settings.invalidJson');
                     status.style.color = 'var(--danger)';
                     input.value = '';
                     return;
@@ -835,21 +1264,17 @@ orangutan export out.csv</code></pre>
             if (!restoreData) return;
             const status = document.getElementById('restore-status');
             try {
-                const res = await fetch('/api/backup/restore', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(restoreData)
-                }).then(r => r.json());
+                const res = await postJSON('/api/backup/restore', restoreData);
                 if (res.success) {
-                    status.textContent = 'Restored. Reloading…';
+                    status.textContent = t('settings.restored');
                     status.style.color = 'var(--success)';
                     setTimeout(() => location.reload(), 900);
                 } else {
-                    status.textContent = res.error || 'Restore failed';
+                    status.textContent = failText(res, t('settings.restoreFailed'));
                     status.style.color = 'var(--danger)';
                 }
             } catch (e) {
-                status.textContent = 'Restore failed';
+                status.textContent = t('settings.restoreFailed');
                 status.style.color = 'var(--danger)';
             }
             document.getElementById('restore-confirm').style.display = 'none';

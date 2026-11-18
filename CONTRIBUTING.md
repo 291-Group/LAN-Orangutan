@@ -19,7 +19,7 @@ Open an issue using the feature request form before writing code. That way we ca
 - Open an issue first for anything beyond a small fix, so the direction is agreed.
 - Keep a pull request to one change. Small and focused is much easier to review and much more likely to merge.
 - Match the surrounding code. Comments explain why, not what.
-- Run `go build ./...`, `go vet ./...` and `go test -race ./...` before you push. All three must be clean.
+- Run `gofmt -l .`, `go build ./...`, `go vet ./...` and `go test -race ./...` before you push. All four must be clean, and `gofmt -l .` must print nothing.
 - Do not add dependencies without saying why in the pull request.
 
 ## Security

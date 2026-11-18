@@ -2,7 +2,6 @@ package storage
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -11,6 +10,7 @@ import (
 	"time"
 
 	"github.com/291-Group/LAN-Orangutan/internal/types"
+	"github.com/291-Group/LAN-Orangutan/internal/uerr"
 )
 
 // snapshotDir is where saved snapshots live: a "snapshots" subdirectory of the
@@ -23,7 +23,7 @@ func (s *Storage) snapshotDir() string {
 // plain numeric id so a crafted id cannot escape the snapshots directory.
 func (s *Storage) snapshotPath(id string) (string, error) {
 	if id == "" || strings.IndexFunc(id, func(r rune) bool { return r < '0' || r > '9' }) >= 0 {
-		return "", fmt.Errorf("invalid snapshot id")
+		return "", uerr.New("snapshot.invalidId", "invalid snapshot id")
 	}
 	return filepath.Join(s.snapshotDir(), id+".json"), nil
 }
@@ -43,12 +43,12 @@ func readSnapshotFile(path string) (*types.Snapshot, error) {
 // SaveSnapshot captures the current device list under the given name and returns
 // its metadata. A blank name defaults to the current date and time.
 func (s *Storage) SaveSnapshot(name string) (types.SnapshotMeta, error) {
-	s.mu.RLock()
+	unlock := s.readLock()
 	devices := make([]types.Device, 0, len(s.devices))
 	for _, d := range s.devices {
 		devices = append(devices, *d)
 	}
-	s.mu.RUnlock()
+	unlock()
 
 	now := time.Now()
 	name = strings.TrimSpace(name)
@@ -69,7 +69,7 @@ func (s *Storage) SaveSnapshot(name string) (types.SnapshotMeta, error) {
 	if err != nil {
 		return types.SnapshotMeta{}, err
 	}
-	if err := atomicWrite(filepath.Join(s.snapshotDir(), snap.ID+".json"), data); err != nil {
+	if _, err := atomicWrite(filepath.Join(s.snapshotDir(), snap.ID+".json"), data); err != nil {
 		return types.SnapshotMeta{}, err
 	}
 	return types.SnapshotMeta{

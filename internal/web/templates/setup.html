@@ -1,11 +1,12 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="{{.Theme}}">
+<html lang="{{.Lang}}" dir="{{.Dir}}" data-theme="{{.Theme}}">
 <head>
     <script>(function(){try{var t=localStorage.getItem("theme");if(t)document.documentElement.setAttribute("data-theme",t);var a=localStorage.getItem("accent")||"blue";if(a!=="orange")document.documentElement.setAttribute("data-accent",a);}catch(e){}})();</script>
     <meta charset="UTF-8">
+    <meta name="referrer" content="no-referrer">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Welcome - LAN Orangutan</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <title>{{t $.Lang "auth.welcome"}} - LAN Orangutan</title>
+    <link rel="stylesheet" href="/static/style.css?v={{.Version}}">
     <link rel="icon" type="image/svg+xml" href="/static/orangutan.svg">
 </head>
 <body class="login-body">
@@ -16,8 +17,8 @@
                 <h1>LAN Orangutan</h1>
             </div>
 
-            <p class="setup-welcome">Welcome</p>
-            <p class="setup-intro">Create a password to secure your dashboard.</p>
+            <p class="setup-welcome">{{t $.Lang "auth.welcome"}}</p>
+            <p class="setup-intro">{{t $.Lang "auth.setupIntro"}}</p>
 
             {{if .Error}}
             <div class="alert alert-error">{{.Error}}</div>
@@ -25,7 +26,7 @@
 
             <form method="POST" action="/setup" class="login-form">
                 <div class="form-group">
-                    <label for="password">Password</label>
+                    <label for="password">{{t $.Lang "auth.password"}}</label>
                     <input
                         type="password"
                         id="password"
@@ -35,11 +36,11 @@
                         minlength="{{.MinPasswordLength}}"
                         autofocus
                         required>
-                    <p class="form-help">At least {{.MinPasswordLength}} characters.</p>
+                    <p class="form-help">{{tn $.Lang "auth.minLength" .MinPasswordLength}}</p>
                 </div>
 
                 <div class="form-group">
-                    <label for="confirm">Confirm password</label>
+                    <label for="confirm">{{t $.Lang "auth.confirmPassword"}}</label>
                     <input
                         type="password"
                         id="confirm"
@@ -50,14 +51,12 @@
                         required>
                 </div>
 
-                <button type="submit" class="btn btn-primary login-submit">Get started</button>
+                <button type="submit" class="btn btn-primary login-submit">{{t $.Lang "auth.getStarted"}}</button>
             </form>
 
-            <p class="setup-note">
-                This dashboard can be reached by other machines on your network,
-                which is why it needs a password.
-            </p>
+            <p class="setup-note">{{t $.Lang "auth.setupNote"}}</p>
         </div>
+        {{template "langpicker" (langPicker . true)}}
     </main>
 
     <script>
@@ -70,5 +69,6 @@
             }
         })();
     </script>
+    {{template "i18nscript" .}}
 </body>
 </html>

@@ -61,14 +61,45 @@ func TestCompareNoMACMatchesByIP(t *testing.T) {
 	}
 }
 
-func TestCompareIgnoresUserFieldsAndLastSeen(t *testing.T) {
-	// Label/notes/group and LastSeen are not network changes, so a device that
-	// only differs in those is not reported as changed.
+func TestCompareReportsUserFields(t *testing.T) {
+	// What the user set on a device is part of the inventory, so a comparison
+	// shows it changing, in a stable order.
 	before := []types.Device{{IP: "10.0.0.5", MAC: "aa:bb:cc:dd:ee:01", Label: "old"}}
-	after := []types.Device{{IP: "10.0.0.5", MAC: "aa:bb:cc:dd:ee:01", Label: "new", Group: "Server"}}
+	after := []types.Device{{
+		IP: "10.0.0.5", MAC: "aa:bb:cc:dd:ee:01",
+		Label: "new", Group: "Server", Location: "Office", CustomHostname: "nas", Expected: true,
+	}}
+	d := Compare(before, after)
+	if len(d.Changed) != 1 {
+		t.Fatalf("want one changed device, got %+v", d.Changed)
+	}
+	want := []string{"custom_hostname", "label", "group", "location", "expected"}
+	got := d.Changed[0].Fields
+	if len(got) != len(want) {
+		t.Fatalf("fields = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("fields = %v, want %v", got, want)
+			break
+		}
+	}
+	if FieldValue(d.Changed[0].After, "expected") != "yes" || FieldValue(d.Changed[0].Before, "expected") != "no" {
+		t.Error("expected should print as yes/no")
+	}
+	if FieldValue(d.Changed[0].After, "label") != "new" {
+		t.Error("FieldValue(label) should return the label")
+	}
+}
+
+func TestCompareIgnoresNotesAndLastSeen(t *testing.T) {
+	// Notes are free text and LastSeen always moves, so neither counts as a
+	// change on its own.
+	before := []types.Device{{IP: "10.0.0.5", MAC: "aa:bb:cc:dd:ee:01", Notes: "a"}}
+	after := []types.Device{{IP: "10.0.0.5", MAC: "aa:bb:cc:dd:ee:01", Notes: "b"}}
 	d := Compare(before, after)
 	if len(d.Changed) != 0 {
-		t.Errorf("label/group-only differences should not count as changed, got %+v", d.Changed)
+		t.Errorf("notes-only differences should not count as changed, got %+v", d.Changed)
 	}
 }
 

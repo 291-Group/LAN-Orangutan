@@ -8,11 +8,14 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/291-Group/LAN-Orangutan/internal/scanner"
 	"github.com/291-Group/LAN-Orangutan/internal/types"
+	"github.com/291-Group/LAN-Orangutan/internal/uerr"
 )
 
 // Storage manages device data persistence
@@ -29,6 +32,122 @@ type Storage struct {
 	// never dropped).
 	retentionDays int
 	maxDevices    int
+
+	// devicesStamp identifies the copy of the devices file this process last
+	// read or wrote. The server and a CLI command (scan, device set) can share
+	// one data directory, so before each use the store checks whether another
+	// process has written the file since, and reloads it if so. Without this, a
+	// running server would overwrite a CLI edit with its stale copy on its next
+	// save.
+	devicesStamp fileStamp
+	// stateStamp does the same for the state file (groups, settings changed in
+	// the UI or the CLI, scan history).
+	stateStamp fileStamp
+}
+
+// fileStamp is the modification time and size of a file, enough to tell that
+// another process has replaced it (writes are atomic renames).
+type fileStamp struct {
+	mod  time.Time
+	size int64
+}
+
+func statStamp(path string) (fileStamp, bool) {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return fileStamp{}, false
+	}
+	return fileStamp{mod: fi.ModTime(), size: fi.Size()}, true
+}
+
+// syncLocked picks up anything another process (the server, or a CLI command)
+// has written to the devices or state file since this one last read or wrote
+// it. Every method that writes calls it first; readers go through readLock.
+// Callers hold s.mu for writing.
+func (s *Storage) syncLocked() {
+	s.refreshDevicesLocked()
+	s.refreshStateLocked()
+}
+
+// staleLocked reports whether another process has replaced either file since
+// this one last read or wrote it. Callers hold s.mu, for reading at least.
+func (s *Storage) staleLocked() bool {
+	if st, ok := statStamp(s.devicesFile); ok && st != s.devicesStamp {
+		return true
+	}
+	if st, ok := statStamp(s.stateFile); ok && st != s.stateStamp {
+		return true
+	}
+	return false
+}
+
+// readLock takes the lock for a method that only reads, and returns the
+// function that releases it. Readers normally share the lock: they check the
+// file stamps under the read lock and proceed when nothing has changed, which
+// is nearly always. Only when another process has written a file does the
+// reader take the write lock to reload it, so readers do not serialise behind
+// each other for the sake of a check that almost never finds anything.
+//
+//	defer s.readLock()()
+func (s *Storage) readLock() (unlock func()) {
+	s.mu.RLock()
+	if !s.staleLocked() {
+		return s.mu.RUnlock
+	}
+	s.mu.RUnlock()
+	s.mu.Lock()
+	s.syncLocked()
+	return s.mu.Unlock
+}
+
+// refreshStateLocked reloads the state file if another process changed it,
+// keeping the in-memory copy when the file cannot be read or parsed.
+func (s *Storage) refreshStateLocked() {
+	st, ok := statStamp(s.stateFile)
+	if !ok || st == s.stateStamp {
+		return
+	}
+	data, err := os.ReadFile(s.stateFile)
+	if err != nil {
+		return
+	}
+	fresh := &types.ScanState{}
+	if len(data) > 0 {
+		if err := json.Unmarshal(data, fresh); err != nil {
+			return
+		}
+	}
+	if fresh.LastScan == nil {
+		fresh.LastScan = make(map[string]time.Time)
+	}
+	if fresh.LastDuration == nil {
+		fresh.LastDuration = make(map[string]float64)
+	}
+	s.state = fresh
+	s.stateStamp = st
+}
+
+// refreshDevicesLocked reloads the device list if the file on disk is not the
+// one this process last read or wrote. A file that cannot be read or parsed is
+// ignored and the in-memory list kept, so a half-written or damaged file never
+// empties the store. Callers hold s.mu for writing.
+func (s *Storage) refreshDevicesLocked() {
+	st, ok := statStamp(s.devicesFile)
+	if !ok || st == s.devicesStamp {
+		return
+	}
+	data, err := os.ReadFile(s.devicesFile)
+	if err != nil {
+		return
+	}
+	fresh := make(map[string]*types.Device)
+	if len(data) > 0 {
+		if err := json.Unmarshal(data, &fresh); err != nil {
+			return
+		}
+	}
+	s.devices = fresh
+	s.devicesStamp = st
 }
 
 // New creates a new Storage instance
@@ -76,6 +195,9 @@ func (s *Storage) loadDevices() error {
 		return err
 	}
 
+	if st, ok := statStamp(s.devicesFile); ok {
+		s.devicesStamp = st
+	}
 	if len(data) == 0 {
 		return nil
 	}
@@ -90,6 +212,9 @@ func (s *Storage) loadState() error {
 		return err
 	}
 
+	if st, ok := statStamp(s.stateFile); ok {
+		s.stateStamp = st
+	}
 	if len(data) == 0 {
 		return nil
 	}
@@ -116,7 +241,12 @@ func (s *Storage) saveDevices() error {
 		return fmt.Errorf("failed to marshal devices: %w", err)
 	}
 
-	return atomicWrite(s.devicesFile, data)
+	st, err := atomicWrite(s.devicesFile, data)
+	if err != nil {
+		return err
+	}
+	s.devicesStamp = st
+	return nil
 }
 
 // saveState writes scan state to the JSON file atomically
@@ -126,15 +256,25 @@ func (s *Storage) saveState() error {
 		return fmt.Errorf("failed to marshal state: %w", err)
 	}
 
-	return atomicWrite(s.stateFile, data)
+	st, err := atomicWrite(s.stateFile, data)
+	if err != nil {
+		return err
+	}
+	s.stateStamp = st
+	return nil
 }
 
-// atomicWrite writes data to a file atomically using a temp file
-func atomicWrite(path string, data []byte) error {
+// atomicWrite writes data to a file atomically using a temp file. It returns
+// the stamp of what it wrote, taken from the temp file before the rename: a
+// stat of the final path afterwards could land on a file another process
+// renamed into place in between, and recording that as our own write would
+// hide that process's changes from the next sync. A rename keeps the inode's
+// modification time and size, so the stamp still describes the final file.
+func atomicWrite(path string, data []byte) (fileStamp, error) {
 	dir := filepath.Dir(path)
 	tempFile, err := os.CreateTemp(dir, ".tmp-*")
 	if err != nil {
-		return fmt.Errorf("failed to create temp file: %w", err)
+		return fileStamp{}, fmt.Errorf("failed to create temp file: %w", err)
 	}
 	tempPath := tempFile.Name()
 
@@ -147,24 +287,29 @@ func atomicWrite(path string, data []byte) error {
 
 	if _, err := tempFile.Write(data); err != nil {
 		tempFile.Close()
-		return fmt.Errorf("failed to write temp file: %w", err)
+		return fileStamp{}, fmt.Errorf("failed to write temp file: %w", err)
 	}
 
 	if err := tempFile.Sync(); err != nil {
 		tempFile.Close()
-		return fmt.Errorf("failed to sync temp file: %w", err)
+		return fileStamp{}, fmt.Errorf("failed to sync temp file: %w", err)
 	}
 
 	if err := tempFile.Close(); err != nil {
-		return fmt.Errorf("failed to close temp file: %w", err)
+		return fileStamp{}, fmt.Errorf("failed to close temp file: %w", err)
+	}
+
+	st, ok := statStamp(tempPath)
+	if !ok {
+		return fileStamp{}, fmt.Errorf("failed to stat temp file %s", tempPath)
 	}
 
 	if err := os.Rename(tempPath, path); err != nil {
-		return fmt.Errorf("failed to rename temp file: %w", err)
+		return fileStamp{}, fmt.Errorf("failed to rename temp file: %w", err)
 	}
 
 	tempPath = "" // Prevent cleanup of renamed file
-	return nil
+	return st, nil
 }
 
 // GetDevices returns all devices.
@@ -174,8 +319,7 @@ func atomicWrite(path string, data []byte) error {
 // caller read a field while it is being written. The copies are snapshots the
 // caller can read freely.
 func (s *Storage) GetDevices() map[string]*types.Device {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	defer s.readLock()()
 
 	result := make(map[string]*types.Device, len(s.devices))
 	for k, v := range s.devices {
@@ -190,8 +334,7 @@ func (s *Storage) GetDevices() map[string]*types.Device {
 // The returned device is a copy, for the same reason as GetDevices: the stored
 // struct is mutated in place by later scans.
 func (s *Storage) GetDevice(ip string) *types.Device {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	defer s.readLock()()
 	d, ok := s.devices[ip]
 	if !ok {
 		return nil
@@ -204,6 +347,7 @@ func (s *Storage) GetDevice(ip string) *types.Device {
 func (s *Storage) UpdateDevice(device *types.Device) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.syncLocked()
 
 	// Preserve existing user data if device exists
 	if existing, ok := s.devices[device.IP]; ok {
@@ -215,6 +359,12 @@ func (s *Storage) UpdateDevice(device *types.Device) error {
 		}
 		if device.Group == "" {
 			device.Group = existing.Group
+		}
+		if device.CustomHostname == "" {
+			device.CustomHostname = existing.CustomHostname
+		}
+		if device.Location == "" {
+			device.Location = existing.Location
 		}
 		if device.Type == "" {
 			device.Type = existing.Type
@@ -231,33 +381,100 @@ func (s *Storage) UpdateDevice(device *types.Device) error {
 	return s.saveDevices()
 }
 
-// UpdateDeviceFields updates specific fields of a device
-func (s *Storage) UpdateDeviceFields(ip string, label, notes, group *string, expected *bool, deviceType *string, customType *bool) error {
+// UpdateDeviceFields updates specific fields of a device. A nil pointer leaves
+// that field alone. Every value is checked before anything is changed, so a
+// request with one bad field changes nothing at all rather than half of it.
+func (s *Storage) UpdateDeviceFields(ip string, label, notes, group *string, expected *bool, deviceType *string, customType *bool, customHostname, location *string) error {
+	// What does not depend on stored state is checked before taking the lock.
+	var cleanLabel, cleanNotes, cleanGroup, cleanHostname, cleanType string
+	var err error
+	if label != nil {
+		if cleanLabel, err = validateLabel(*label); err != nil {
+			return err
+		}
+	}
+	if notes != nil {
+		if cleanNotes, err = validateNotes(*notes); err != nil {
+			return err
+		}
+	}
+	if group != nil {
+		if cleanGroup, err = validateDeviceGroup(*group); err != nil {
+			return err
+		}
+	}
+	if customHostname != nil {
+		if cleanHostname, err = validateCustomHostname(*customHostname); err != nil {
+			return err
+		}
+	}
+	if deviceType != nil {
+		if cleanType, err = scanner.ValidateType(*deviceType); err != nil {
+			return err
+		}
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.syncLocked()
 
 	device, ok := s.devices[ip]
 	if !ok {
-		return fmt.Errorf("device not found: %s", ip)
+		return uerr.Newf("device.notFound", "no device at %s", "ip", ip)
 	}
 
+	// A group or location that matches a listed one apart from case takes the
+	// listed spelling, so "office" and "Office" do not become two places.
+	if cleanGroup != "" {
+		for _, g := range s.effectiveGroupsLocked() {
+			if strings.EqualFold(g, cleanGroup) {
+				cleanGroup = g
+				break
+			}
+		}
+	}
+	var cleanLocation string
+	var locations []string
+	addLocation := false
+	if location != nil {
+		cleanLocation = strings.TrimSpace(*location)
+		if cleanLocation != "" {
+			if cleanLocation, err = validateLocationName(cleanLocation); err != nil {
+				return err
+			}
+			// Setting a device to a place not on the list yet adds it, the
+			// way typing a new place in the CLI should just work.
+			locations = s.effectiveLocationsLocked()
+			addLocation = true
+			for _, l := range locations {
+				if strings.EqualFold(l, cleanLocation) {
+					cleanLocation, addLocation = l, false
+					break
+				}
+			}
+		}
+	}
+
+	// Everything checked out; only now does anything change.
 	if label != nil {
-		device.Label = *label
+		device.Label = cleanLabel
 	}
 	if notes != nil {
-		device.Notes = *notes
+		device.Notes = cleanNotes
 	}
 	if group != nil {
-		device.Group = *group
+		device.Group = cleanGroup
 	}
 	if expected != nil {
 		device.Expected = *expected
 	}
+	if location != nil {
+		device.Location = cleanLocation
+	}
+	if customHostname != nil {
+		device.CustomHostname = cleanHostname
+	}
 	if deviceType != nil {
-		cleanType, err := scanner.ValidateType(*deviceType)
-		if err != nil {
-			return err
-		}
 		device.Type = cleanType
 		if customType != nil {
 			device.CustomType = *customType
@@ -268,7 +485,77 @@ func (s *Storage) UpdateDeviceFields(ip string, label, notes, group *string, exp
 		device.CustomType = *customType
 	}
 
+	if addLocation {
+		s.state.Locations = append(locations, cleanLocation)
+		if err := s.saveState(); err != nil {
+			return err
+		}
+	}
 	return s.saveDevices()
+}
+
+// Limits on the free-text fields a user can put on a device. A label is a
+// short name for the table; notes are a paragraph, not a document.
+const (
+	MaxLabelLen = 64
+	MaxNotesLen = 1000
+)
+
+// validateLabel trims a label and checks it is short enough and free of
+// control characters, which would break the table without being visible.
+func validateLabel(label string) (string, error) {
+	label = strings.TrimSpace(label)
+	for _, r := range label {
+		if unicode.IsControl(r) {
+			return "", uerr.New("label.controlChars", "label cannot contain control characters")
+		}
+	}
+	if len([]rune(label)) > MaxLabelLen {
+		return "", uerr.Newf("label.tooLong", "label cannot be longer than %d characters", "max", MaxLabelLen)
+	}
+	return label, nil
+}
+
+// validateNotes bounds the notes. Line breaks are part of what notes are for,
+// so there is no control-character check here.
+func validateNotes(notes string) (string, error) {
+	if len([]rune(notes)) > MaxNotesLen {
+		return "", uerr.Newf("notes.tooLong", "notes cannot be longer than %d characters", "max", MaxNotesLen)
+	}
+	return notes, nil
+}
+
+// validateDeviceGroup checks a group as set on a device. An empty value clears
+// the group; anything else must be a usable group name, so "  Office  " cannot
+// be stored verbatim and show up as a second, phantom group.
+func validateDeviceGroup(group string) (string, error) {
+	if strings.TrimSpace(group) == "" {
+		return "", nil
+	}
+	return validateGroupName(group)
+}
+
+// MaxCustomHostnameLen caps a user-set hostname. It borrows the longest name
+// DNS allows as a familiar bound; the name itself is never resolved, so the
+// DNS character rules do not apply.
+const MaxCustomHostnameLen = 253
+
+// validateCustomHostname trims a user-set hostname and checks it is short
+// enough and free of control characters. An empty result clears the custom
+// name, so the scanned hostname shows again. Any other printable text is
+// allowed, because this is a display name ("Living Room TV"), not something
+// resolved on the network.
+func validateCustomHostname(h string) (string, error) {
+	h = strings.TrimSpace(h)
+	for _, r := range h {
+		if unicode.IsControl(r) {
+			return "", uerr.New("hostname.controlChars", "hostname cannot contain control characters")
+		}
+	}
+	if len([]rune(h)) > MaxCustomHostnameLen {
+		return "", uerr.Newf("hostname.tooLong", "hostname cannot be longer than %d characters", "max", MaxCustomHostnameLen)
+	}
+	return h, nil
 }
 
 // MarkAllExpected sets (or clears) the Expected flag on every stored device, so a
@@ -277,6 +564,7 @@ func (s *Storage) UpdateDeviceFields(ip string, label, notes, group *string, exp
 func (s *Storage) MarkAllExpected(expected bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.syncLocked()
 	for _, d := range s.devices {
 		d.Expected = expected
 	}
@@ -287,9 +575,10 @@ func (s *Storage) MarkAllExpected(expected bool) error {
 func (s *Storage) DeleteDevice(ip string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.syncLocked()
 
 	if _, ok := s.devices[ip]; !ok {
-		return fmt.Errorf("device not found: %s", ip)
+		return uerr.Newf("device.notFound", "no device at %s", "ip", ip)
 	}
 
 	delete(s.devices, ip)
@@ -300,6 +589,7 @@ func (s *Storage) DeleteDevice(ip string) error {
 func (s *Storage) MergeDevices(discovered []types.Device) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.syncLocked()
 
 	now := time.Now()
 	for _, d := range discovered {
@@ -337,6 +627,18 @@ func (s *Storage) MergeDevices(discovered []types.Device) error {
 	return s.saveDevices()
 }
 
+// MergeScan saves the devices a scan of cidr found. A scan of an IPv6 network
+// reads the neighbour cache, the same source as the IPv6 pass after an IPv4
+// scan, so it goes through MergeIPv6Neighbors and its guards: otherwise every
+// short-lived privacy address would be stored as a new device, only to be
+// pruned again the next time the list is loaded.
+func (s *Storage) MergeScan(cidr string, devices []types.Device) error {
+	if ip, _, err := net.ParseCIDR(cidr); err == nil && ip.To4() == nil {
+		return s.MergeIPv6Neighbors(devices)
+	}
+	return s.MergeDevices(devices)
+}
+
 // MergeSupplemental folds in devices from a secondary source, such as mDNS or
 // IPv6 neighbor discovery, that carries only part of a device's picture. It
 // fills gaps on a known device but never clobbers what the primary scan found,
@@ -345,6 +647,7 @@ func (s *Storage) MergeDevices(discovered []types.Device) error {
 func (s *Storage) MergeSupplemental(discovered []types.Device) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.syncLocked()
 
 	now := time.Now()
 	for _, d := range discovered {
@@ -391,6 +694,7 @@ func (s *Storage) MergeSupplemental(discovered []types.Device) error {
 func (s *Storage) MergeIPv6Neighbors(discovered []types.Device) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.syncLocked()
 
 	now := time.Now()
 	changed := false
@@ -449,6 +753,8 @@ func (s *Storage) addNewDeviceLocked(d *types.Device, now time.Time) {
 			d.Label = old.Label
 			d.Notes = old.Notes
 			d.Group = old.Group
+			d.CustomHostname = old.CustomHostname
+			d.Location = old.Location
 			d.Expected = old.Expected
 			d.FirstSeen = old.FirstSeen
 			if old.CustomType || d.Type == "" {
@@ -545,12 +851,12 @@ func (s *Storage) pruneEphemeralIPv6Locked() bool {
 }
 
 // isCurated reports whether the user has personalised a device with a label,
-// notes, a group, expected status, or a custom device type. Curated devices
-// are never removed by any automatic cleanup: the user told us this one
-// matters, so retention, the device cap, and the IPv6 phantom prune all
-// leave it alone.
+// notes, a group, a location, expected status, a custom hostname, or a custom
+// device type. Curated devices are never removed by any automatic cleanup: the
+// user told us this one matters, so retention, the device cap, and the IPv6
+// phantom prune all leave it alone.
 func isCurated(d *types.Device) bool {
-	return d.Label != "" || d.Notes != "" || d.Group != "" || d.Expected || d.CustomType
+	return d.Label != "" || d.Notes != "" || d.Group != "" || d.Expected || d.CustomType || d.CustomHostname != "" || d.Location != ""
 }
 
 // SetLimits records the retention window (in days) and the maximum device count,
@@ -561,6 +867,7 @@ func isCurated(d *types.Device) bool {
 func (s *Storage) SetLimits(retentionDays, maxDevices int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.syncLocked()
 	s.retentionDays = retentionDays
 	s.maxDevices = maxDevices
 	if s.enforceLimitsLocked(time.Now()) {
@@ -636,8 +943,7 @@ func appendAddressChange(history []types.AddressChange, ip string, at time.Time)
 
 // GetLastScan returns the last scan time for a network
 func (s *Storage) GetLastScan(network string) time.Time {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	defer s.readLock()()
 	return s.state.LastScan[network]
 }
 
@@ -649,8 +955,7 @@ func (s *Storage) GetLastScan(network string) time.Time {
 //
 // The zero time means nothing has ever been scanned.
 func (s *Storage) GetMostRecentScan() time.Time {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	defer s.readLock()()
 
 	var latest time.Time
 	for _, t := range s.state.LastScan {
@@ -665,6 +970,7 @@ func (s *Storage) GetMostRecentScan() time.Time {
 func (s *Storage) SetLastScan(network string, t time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.syncLocked()
 
 	s.state.LastScan[network] = t
 	return s.saveState()
@@ -673,8 +979,7 @@ func (s *Storage) SetLastScan(network string, t time.Time) error {
 // GetLastDuration returns how long the previous scan of a network took, in
 // seconds. It returns 0 when the network has not been scanned before.
 func (s *Storage) GetLastDuration(network string) float64 {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	defer s.readLock()()
 	return s.state.LastDuration[network]
 }
 
@@ -682,6 +987,7 @@ func (s *Storage) GetLastDuration(network string) float64 {
 func (s *Storage) SetLastDuration(network string, seconds float64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.syncLocked()
 
 	if s.state.LastDuration == nil {
 		s.state.LastDuration = make(map[string]float64)
@@ -694,8 +1000,7 @@ func (s *Storage) SetLastDuration(network string, seconds float64) error {
 // honours a runtime override the user set from the UI, and falls back to the
 // configured default when no override has been saved.
 func (s *Storage) ContinuousScanEnabled(configDefault bool) bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	defer s.readLock()()
 	if s.state.ContinuousScan != nil {
 		return *s.state.ContinuousScan
 	}
@@ -707,6 +1012,7 @@ func (s *Storage) ContinuousScanEnabled(configDefault bool) bool {
 func (s *Storage) SetContinuousScan(enabled bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.syncLocked()
 	s.state.ContinuousScan = &enabled
 	return s.saveState()
 }
@@ -714,8 +1020,7 @@ func (s *Storage) SetContinuousScan(enabled bool) error {
 // RetentionDaysOrDefault resolves the retention window: the UI override if one
 // has been saved, otherwise the configured default.
 func (s *Storage) RetentionDaysOrDefault(configDefault int) int {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	defer s.readLock()()
 	if s.state.RetentionDays != nil {
 		return *s.state.RetentionDays
 	}
@@ -725,8 +1030,7 @@ func (s *Storage) RetentionDaysOrDefault(configDefault int) int {
 // MaxDevicesOrDefault resolves the device cap: the UI override if one has been
 // saved, otherwise the configured default.
 func (s *Storage) MaxDevicesOrDefault(configDefault int) int {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	defer s.readLock()()
 	if s.state.MaxDevices != nil {
 		return *s.state.MaxDevices
 	}
@@ -737,8 +1041,7 @@ func (s *Storage) MaxDevicesOrDefault(configDefault int) int {
 // for a limit that is following the config default. The returned pointers are
 // copies, so the caller can read them without holding the lock.
 func (s *Storage) GetLimitOverrides() (retentionDays, maxDevices *int) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	defer s.readLock()()
 	if s.state.RetentionDays != nil {
 		v := *s.state.RetentionDays
 		retentionDays = &v
@@ -756,6 +1059,7 @@ func (s *Storage) GetLimitOverrides() (retentionDays, maxDevices *int) {
 func (s *Storage) SetLimitOverrides(retentionDays, maxDevices *int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.syncLocked()
 	s.state.RetentionDays = retentionDays
 	s.state.MaxDevices = maxDevices
 	return s.saveState()
@@ -764,8 +1068,7 @@ func (s *Storage) SetLimitOverrides(retentionDays, maxDevices *int) error {
 // ServiceDetectionEnabled reports whether the opt-in port probe should run,
 // honouring a UI override and falling back to the configured default.
 func (s *Storage) ServiceDetectionEnabled(configDefault bool) bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	defer s.readLock()()
 	if s.state.EnableServiceDetection != nil {
 		return *s.state.EnableServiceDetection
 	}
@@ -777,6 +1080,7 @@ func (s *Storage) ServiceDetectionEnabled(configDefault bool) bool {
 func (s *Storage) SetServiceDetection(enabled bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.syncLocked()
 	s.state.EnableServiceDetection = &enabled
 	return s.saveState()
 }
@@ -784,8 +1088,7 @@ func (s *Storage) SetServiceDetection(enabled bool) error {
 // ScanIntervalOrDefault resolves how often the background scanner runs, in
 // seconds: the UI override if one has been saved, otherwise the config default.
 func (s *Storage) ScanIntervalOrDefault(configDefault int) int {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	defer s.readLock()()
 	if s.state.ScanInterval != nil {
 		return *s.state.ScanInterval
 	}
@@ -797,7 +1100,47 @@ func (s *Storage) ScanIntervalOrDefault(configDefault int) int {
 func (s *Storage) SetScanInterval(seconds int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.syncLocked()
 	s.state.ScanInterval = &seconds
+	return s.saveState()
+}
+
+// GetScanOverrides returns the saved overrides for background scanning, the
+// scan interval and service detection, or nil for one that follows the config
+// default. Copies, so the caller can read them without the lock.
+func (s *Storage) GetScanOverrides() (continuous *bool, interval *int, serviceDetection *bool) {
+	defer s.readLock()()
+	if s.state.ContinuousScan != nil {
+		v := *s.state.ContinuousScan
+		continuous = &v
+	}
+	if s.state.ScanInterval != nil {
+		v := *s.state.ScanInterval
+		interval = &v
+	}
+	if s.state.EnableServiceDetection != nil {
+		v := *s.state.EnableServiceDetection
+		serviceDetection = &v
+	}
+	return
+}
+
+// ClearScanOverrides drops the saved overrides named, so those settings follow
+// the config file again. It is the undo for SetContinuousScan, SetScanInterval
+// and SetServiceDetection, which have no way to express "no override".
+func (s *Storage) ClearScanOverrides(continuous, interval, serviceDetection bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.syncLocked()
+	if continuous {
+		s.state.ContinuousScan = nil
+	}
+	if interval {
+		s.state.ScanInterval = nil
+	}
+	if serviceDetection {
+		s.state.EnableServiceDetection = nil
+	}
 	return s.saveState()
 }
 
@@ -805,8 +1148,7 @@ func (s *Storage) SetScanInterval(seconds int) error {
 // override if one has been saved, otherwise the configured default. The returned
 // slice is a copy.
 func (s *Storage) NetworksOrDefault(configDefault []string) []string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	defer s.readLock()()
 	if s.state.Networks != nil {
 		return append([]string(nil), *s.state.Networks...)
 	}
@@ -816,8 +1158,7 @@ func (s *Storage) NetworksOrDefault(configDefault []string) []string {
 // ExcludeNetworksOrDefault resolves the exclude list (CIDRs to hide) the same
 // way as NetworksOrDefault.
 func (s *Storage) ExcludeNetworksOrDefault(configDefault []string) []string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	defer s.readLock()()
 	if s.state.ExcludeNetworks != nil {
 		return append([]string(nil), *s.state.ExcludeNetworks...)
 	}
@@ -827,8 +1168,7 @@ func (s *Storage) ExcludeNetworksOrDefault(configDefault []string) []string {
 // OnlyConfiguredOrDefault resolves whether to scan only the configured networks:
 // the UI override if set, otherwise the configured default.
 func (s *Storage) OnlyConfiguredOrDefault(configDefault bool) bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	defer s.readLock()()
 	if s.state.OnlyConfiguredNetworks != nil {
 		return *s.state.OnlyConfiguredNetworks
 	}
@@ -838,8 +1178,7 @@ func (s *Storage) OnlyConfiguredOrDefault(configDefault bool) bool {
 // GetNetworkOverrides returns the saved UI overrides for the scan-target lists,
 // or nil for a setting that is following the config default. Slices are copied.
 func (s *Storage) GetNetworkOverrides() (networks, exclude *[]string, onlyConfigured *bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	defer s.readLock()()
 	if s.state.Networks != nil {
 		v := append([]string(nil), *s.state.Networks...)
 		networks = &v
@@ -861,6 +1200,7 @@ func (s *Storage) GetNetworkOverrides() (networks, exclude *[]string, onlyConfig
 func (s *Storage) SetNetworkOverrides(networks, exclude *[]string, onlyConfigured *bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.syncLocked()
 	s.state.Networks = networks
 	s.state.ExcludeNetworks = exclude
 	s.state.OnlyConfiguredNetworks = onlyConfigured
@@ -869,8 +1209,7 @@ func (s *Storage) SetNetworkOverrides(networks, exclude *[]string, onlyConfigure
 
 // GetStats returns device statistics
 func (s *Storage) GetStats() types.DeviceStats {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	defer s.readLock()()
 
 	stats := types.DeviceStats{
 		Groups: make(map[string]int),

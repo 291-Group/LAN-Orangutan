@@ -1,0 +1,18 @@
+{
+  "heading": "JavaScript 已关闭",
+  "sub": "网页仪表板需要 JavaScript 才能运行。以下是它提供的功能，以及不用它时如何使用 LAN Orangutan。选择您喜欢的方式即可。",
+  "webTitle": "网页仪表板",
+  "webIntro": "实时、可视化地查看您的网络。它使用 JavaScript 来实现：",
+  "webLive": "服务器扫描时实时更新设备",
+  "webScans": "运行扫描，以及排序、筛选、搜索",
+  "webEditing": "编辑标签和分组，以及复制地址",
+  "webAction": "请为此网站允许 JavaScript（在浏览器或脚本拦截工具中），然后重新加载。",
+  "cliTitle": "或使用命令行",
+  "cliIntro": "同样的发现功能，无需浏览器或 JavaScript，直接在终端中使用：",
+  "cliScan": "扫描您的网络",
+  "cliList": "列出已发现的设备",
+  "cliStatus": "服务与网络状态",
+  "cliHelp": "运行 {command} 查看全部功能。",
+  "safetyQuestion": "仪表板安全吗？",
+  "safetyAnswer": "安全。LAN Orangutan 是自托管的：它的 JavaScript 完全在您自己的浏览器中运行，只与您自己的服务器通信，不会调用任何第三方或外部服务。它由本机在 {path} 提供。"
+}

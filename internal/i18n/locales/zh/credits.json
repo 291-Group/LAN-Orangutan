@@ -1,0 +1,17 @@
+{
+  "intro": "LAN Orangutan 由它的用户塑造。近期版本中几乎所有改进都始于有人提交问题或发起讨论，其中不少人还与我们反复沟通，直到修复真正到位。",
+  "code": "代码",
+  "for291Group": "LAN Orangutan 的设计与开发",
+  "forDeviceTypes": "编辑和指定设备类型（#50）",
+  "forIPv6Merge": "修复命令行扫描中重复出现的 IPv6 设备（#58）",
+  "forCiActions": "将 GitHub 上的构建检查更新到最新版本（#59）",
+  "community": "想法、反馈与测试",
+  "builtWith": "构建基于",
+  "builtGo": "编程语言与标准库",
+  "builtNmap": "网络发现",
+  "builtArpScan": "快速扫描本地网络",
+  "builtCobra": "命令行",
+  "builtCrypto": "密码哈希",
+  "builtIeee": "根据 MAC 地址识别设备厂商名称",
+  "join": "想出现在这个页面上？请在 {github} 上提交问题或发起讨论。"
+}

@@ -16,8 +16,10 @@ type Diff struct {
 	Changed []DeviceChange `json:"changed"`
 }
 
-// DeviceChange is a device present in both lists whose identifying details
-// differ, with the names of the fields that changed.
+// DeviceChange is a device present in both lists whose details differ, with
+// the names of the fields that changed. Field names are the JSON names of the
+// device fields: ip, hostname, vendor, type, custom_hostname, label, group,
+// location and expected.
 type DeviceChange struct {
 	Before types.Device `json:"before"`
 	After  types.Device `json:"after"`
@@ -34,24 +36,60 @@ func key(d types.Device) string {
 	return "ip:" + d.IP
 }
 
-// changedFields lists the identifying fields that differ between two matched
-// devices. Only network-facing details are compared: not LastSeen (which always
-// moves) and not the user's own label, notes, or group.
+// changedFields lists the fields that differ between two matched devices:
+// what the scan saw (address, name, vendor, type) and what the user set
+// (custom hostname, label, group, location, expected), so a comparison shows
+// both kinds of change. LastSeen always moves and notes are free text, so
+// neither is compared.
 func changedFields(before, after types.Device) []string {
 	var f []string
-	if before.IP != after.IP {
-		f = append(f, "ip")
+	add := func(name string, b, a string) {
+		if b != a {
+			f = append(f, name)
+		}
 	}
-	if before.Hostname != after.Hostname {
-		f = append(f, "hostname")
-	}
-	if before.Vendor != after.Vendor {
-		f = append(f, "vendor")
-	}
-	if before.Type != after.Type {
-		f = append(f, "type")
+	add("ip", before.IP, after.IP)
+	add("hostname", before.Hostname, after.Hostname)
+	add("vendor", before.Vendor, after.Vendor)
+	add("type", before.Type, after.Type)
+	add("custom_hostname", before.CustomHostname, after.CustomHostname)
+	add("label", before.Label, after.Label)
+	add("group", before.Group, after.Group)
+	add("location", before.Location, after.Location)
+	if before.Expected != after.Expected {
+		f = append(f, "expected")
 	}
 	return f
+}
+
+// FieldValue returns the value of a changed field on d, as a string, so the
+// CLI and the web page can print "label: old -> new" without each keeping its
+// own switch over the field names.
+func FieldValue(d types.Device, field string) string {
+	switch field {
+	case "ip":
+		return d.IP
+	case "hostname":
+		return d.Hostname
+	case "vendor":
+		return d.Vendor
+	case "type":
+		return d.Type
+	case "custom_hostname":
+		return d.CustomHostname
+	case "label":
+		return d.Label
+	case "group":
+		return d.Group
+	case "location":
+		return d.Location
+	case "expected":
+		if d.Expected {
+			return "yes"
+		}
+		return "no"
+	}
+	return ""
 }
 
 // Compare reports what appeared, disappeared, and changed going from the earlier

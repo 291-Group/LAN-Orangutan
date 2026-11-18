@@ -8,6 +8,7 @@ import (
 	"net"
 	"os/exec"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -25,7 +26,33 @@ type Scanner struct {
 	// another goroutine when that happens, so it is guarded by mu.
 	mu               sync.RWMutex
 	serviceDetection bool
+
+	// routedRTT and routedRetries override the nmap timing used on networks
+	// reached through a route or tunnel (see routedTiming). A zero rtt means
+	// the default; retries is only honoured when routedRetriesSet is true,
+	// because zero retries is a real setting and a zero Scanner must still
+	// get the default.
+	routedRTT        time.Duration
+	routedRetries    int
+	routedRetriesSet bool
+
+	// discoverIPv6 is the neighbour discovery scanIPv6Network runs, so a test
+	// can stand in for the real one without touching the network. nil means
+	// DiscoverIPv6.
+	discoverIPv6 func(context.Context) []types.Device
 }
+
+// Default nmap timing for networks with no ARP (reached through a router or a
+// tunnel such as WireGuard). nmap's own defaults let a probe of an empty
+// address wait up to 10s and retry 10 times, which on a /24 that is mostly
+// empty turns a scan into minutes (212s measured in Discussion #46, 49s with a
+// 200ms / 1 retry setting on that link). These are deliberately more
+// conservative than that, so a slower VPN does not lose real hosts. Exported
+// so the CLI can show them as the "auto" values without repeating them.
+const (
+	DefaultRoutedRTT     = time.Second
+	DefaultRoutedRetries = 2
+)
 
 // New creates a new Scanner. serviceDetection enables the opt-in port probe
 // used to identify devices more precisely.
@@ -34,6 +61,94 @@ func New(minIntervalSeconds int, serviceDetection bool) *Scanner {
 		minInterval:      time.Duration(minIntervalSeconds) * time.Second,
 		serviceDetection: serviceDetection,
 	}
+}
+
+// SetRoutedTiming overrides the nmap timing used on routed and tunnelled
+// networks, for people who know their link. rtt of 0 and retries of -1 keep
+// the defaults. Local networks are never affected: there nmap finds devices by
+// ARP, which these settings do not slow down or speed up.
+func (s *Scanner) SetRoutedTiming(rtt time.Duration, retries int) {
+	s.mu.Lock()
+	s.routedRTT = rtt
+	s.routedRetries = retries
+	s.routedRetriesSet = retries >= 0
+	s.mu.Unlock()
+}
+
+// routedTiming returns the nmap timing to use on a network with no ARP.
+func (s *Scanner) routedTiming() (time.Duration, int) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	rtt, retries := DefaultRoutedRTT, DefaultRoutedRetries
+	if s.routedRTT > 0 {
+		rtt = s.routedRTT
+	}
+	if s.routedRetriesSet {
+		retries = s.routedRetries
+	}
+	return rtt, retries
+}
+
+// nmapArgs builds the nmap command line for a ping sweep of cidr. On a network
+// this machine is not on (or reaches only through a tunnel), there is no ARP,
+// so nmap falls back to probes that wait out every empty address; tighter
+// timing there makes the sweep minutes faster and changes nothing on a LAN.
+func nmapArgs(cidr string, local bool, rtt time.Duration, retries int) []string {
+	args := []string{"-sn"}
+	if !local {
+		args = append(args,
+			"--max-rtt-timeout", fmt.Sprintf("%dms", rtt.Milliseconds()),
+			"--max-retries", strconv.Itoa(retries))
+	}
+	return append(args, "-oX", "-", cidr)
+}
+
+// ifaceNet is one address on one interface, which is all onLocalBroadcastNet
+// needs to know, so tests can describe interfaces without real ones.
+type ifaceNet struct {
+	broadcast bool
+	ip        net.IP
+}
+
+// systemIfaceNets lists the IPv4 addresses on interfaces that are up.
+func systemIfaceNets() []ifaceNet {
+	var out []ifaceNet
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil
+	}
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, a := range addrs {
+			if ipNet, ok := a.(*net.IPNet); ok && ipNet.IP.To4() != nil {
+				out = append(out, ifaceNet{broadcast: iface.Flags&net.FlagBroadcast != 0, ip: ipNet.IP})
+			}
+		}
+	}
+	return out
+}
+
+// onLocalBroadcastNet reports whether this machine has an address inside cidr
+// on an interface that can broadcast, which is what ARP needs. A WireGuard or
+// other tunnel interface is point to point, not broadcast, so a network on one
+// counts as routed even though this machine has an address in it.
+func onLocalBroadcastNet(cidr string, nets []ifaceNet) bool {
+	_, n, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return false
+	}
+	for _, in := range nets {
+		if in.broadcast && n.Contains(in.ip) {
+			return true
+		}
+	}
+	return false
 }
 
 // SetServiceDetection turns the opt-in port probe on or off. The change takes
@@ -95,8 +210,7 @@ type nmapTimes struct {
 
 // Scan performs a network scan on the given CIDR
 func (s *Scanner) Scan(ctx context.Context, cidr string) (*types.ScanResult, error) {
-	// Validate CIDR
-	_, _, err := net.ParseCIDR(cidr)
+	_, prefix, err := net.ParseCIDR(cidr)
 	if err != nil {
 		return nil, fmt.Errorf("invalid CIDR: %w", err)
 	}
@@ -108,6 +222,14 @@ func (s *Scanner) Scan(ctx context.Context, cidr string) (*types.ScanResult, err
 	// whole tailnet, so ask it for the peers instead.
 	if network.IsTailscaleNetwork(cidr) {
 		return s.scanTailscale(cidr, startTime), nil
+	}
+
+	// An IPv6 subnet holds 2^64 addresses, so there is nothing to sweep and
+	// nmap must never be handed one. Devices are found by soliciting
+	// neighbours and reading the neighbour cache, keeping the ones inside
+	// this prefix.
+	if network.IsIPv6Network(cidr) {
+		return s.scanIPv6Network(ctx, cidr, prefix, startTime), nil
 	}
 
 	// Try nmap first, then arp-scan, but only where arp-scan can exist. It has
@@ -179,6 +301,41 @@ func (s *Scanner) scanTailscale(cidr string, startTime time.Time) *types.ScanRes
 	}
 }
 
+// scanIPv6Network finds the devices on an IPv6 prefix.
+//
+// It solicits neighbours and reads the neighbour cache, which is the only
+// discovery that works for IPv6, then returns the entries that fall inside
+// cidr. Nothing is swept, so the result is "everything this machine has heard
+// from on that prefix" rather than "everything that exists on it". That is an
+// honest limit of IPv6 and not a shortcoming of the scan.
+//
+// This is the only place a scan solicits neighbours. A caller that runs an
+// IPv6 pass after its networks are scanned should skip it when any of them
+// was IPv6 (network.HasIPv6Network), or every neighbour is found twice.
+func (s *Scanner) scanIPv6Network(ctx context.Context, cidr string, prefix *net.IPNet, startTime time.Time) *types.ScanResult {
+	discover := s.discoverIPv6
+	if discover == nil {
+		discover = s.DiscoverIPv6
+	}
+
+	var devices []types.Device
+	for _, d := range discover(ctx) {
+		if ip := net.ParseIP(d.IP); ip != nil && prefix.Contains(ip) {
+			devices = append(devices, d)
+		}
+	}
+
+	return &types.ScanResult{
+		Success:     true,
+		Devices:     devices,
+		DeviceCount: len(devices),
+		Network:     cidr,
+		Scanner:     "neighbor discovery",
+		Duration:    time.Since(startTime).Seconds(),
+		Timestamp:   time.Now(),
+	}
+}
+
 // scanWithNmap performs a scan using nmap
 func (s *Scanner) scanWithNmap(ctx context.Context, cidr string) ([]types.Device, string, error) {
 	// Resolve nmap by path rather than name: NmapPath also checks the standard
@@ -190,7 +347,9 @@ func (s *Scanner) scanWithNmap(ctx context.Context, cidr string) ([]types.Device
 	}
 
 	// Run nmap with ping scan and XML output
-	cmd := exec.CommandContext(ctx, nmapBin, "-sn", "-oX", "-", cidr)
+	rtt, retries := s.routedTiming()
+	local := onLocalBroadcastNet(cidr, systemIfaceNets())
+	cmd := exec.CommandContext(ctx, nmapBin, nmapArgs(cidr, local, rtt, retries)...)
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, "", fmt.Errorf("nmap failed: %w", err)

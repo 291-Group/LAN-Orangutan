@@ -147,12 +147,16 @@ ls -la ~/Library/Application\ Support/lan-orangutan/
 ## View debug output
 
 ```bash
-# Run with verbose output
-orangutan scan -v
+# See the settings actually in effect, and where they came from
+orangutan config
 
-# Check version
+# Check what was detected, and the version
+orangutan status
+orangutan networks
 orangutan version
 ```
+
+When running as a service, the server's own messages are in its log (`sudo journalctl -u lan-orangutan -n 50`).
 
 ## Still having issues?
 

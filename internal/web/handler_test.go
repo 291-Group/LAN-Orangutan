@@ -2,6 +2,7 @@ package web
 
 import (
 	"fmt"
+	"html/template"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -512,5 +513,19 @@ func TestNoSetupWhenPasswordAlreadyConfigured(t *testing.T) {
 
 	if rec.Code != http.StatusSeeOther {
 		t.Errorf("status = %d, want a redirect when a password already exists", rec.Code)
+	}
+}
+
+// th fills a translated string with values that may be markup, but only when
+// the template says so: anything else is escaped, so a value with a tag in it
+// can never land in the page as HTML.
+func TestThEscapesPlainArguments(t *testing.T) {
+	got := string(th("en", "dashboard.networks.you", "ip", "<b>10.0.0.1</b>"))
+	if strings.Contains(got, "<b>") || !strings.Contains(got, "&lt;b&gt;10.0.0.1&lt;/b&gt;") {
+		t.Errorf("th left markup in a plain argument: %q", got)
+	}
+	got = string(th("en", "dashboard.networks.you", "ip", template.HTML("<span>10.0.0.1</span>")))
+	if !strings.Contains(got, "<span>10.0.0.1</span>") {
+		t.Errorf("th should keep markup the template marked as such: %q", got)
 	}
 }

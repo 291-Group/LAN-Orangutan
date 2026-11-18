@@ -8,6 +8,6 @@
 
 ## Checks
 
-- [ ] `go build ./...`, `go vet ./...` and `go test -race ./...` are clean
+- [ ] `gofmt -l .` prints nothing, and `go build ./...`, `go vet ./...` and `go test -race ./...` are clean
 - [ ] One change per pull request
 - [ ] Docs updated if behaviour changed

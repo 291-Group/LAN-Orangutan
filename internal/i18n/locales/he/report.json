@@ -1,0 +1,21 @@
+{
+  "networkReport": "דוח רשת",
+  "generated": "נוצר ב‑{date} בשעה {time}",
+  "devices.one": "מכשיר",
+  "devices.two": "מכשירים",
+  "devices.other": "מכשירים",
+  "online": "מחוברים",
+  "offline": "מנותקים",
+  "networks.one": "רשת",
+  "networks.two": "רשתות",
+  "networks.other": "רשתות",
+  "ipAddress": "כתובת IP",
+  "hostname": "שם מארח",
+  "type": "סוג",
+  "mac": "MAC",
+  "vendor": "יצרן",
+  "group": "קבוצה",
+  "location": "מיקום",
+  "lastSeen": "נצפה לאחרונה",
+  "generatedBy": "נוצר על ידי ⁦LAN Orangutan⁩"
+}

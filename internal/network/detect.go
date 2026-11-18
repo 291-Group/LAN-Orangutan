@@ -2,10 +2,13 @@
 package network
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net"
+	"os"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/291-Group/LAN-Orangutan/internal/types"
@@ -19,6 +22,7 @@ func DetectNetworks() ([]types.Network, error) {
 		return nil, fmt.Errorf("failed to get interfaces: %w", err)
 	}
 
+	flags := ipv6AddrFlags()
 	var networks []types.Network
 	for _, iface := range ifaces {
 		// Skip loopback and down interfaces
@@ -40,8 +44,12 @@ func DetectNetworks() ([]types.Network, error) {
 				continue
 			}
 
-			// Skip IPv6
-			if ipNet.IP.To4() == nil {
+			isV6 := ipNet.IP.To4() == nil
+			// A link-local IPv6 address is not a network anyone can act on:
+			// every interface has one, they are not routable, and they are
+			// identical across machines. Loopback, multicast and the
+			// unspecified address are not networks either.
+			if isV6 && !isRoutableIPv6(ipNet.IP) {
 				continue
 			}
 
@@ -57,36 +65,143 @@ func DetectNetworks() ([]types.Network, error) {
 				IP:           ipNet.IP.String(),
 				IsTailscale:  isTailscaleInterface(iface.Name, ipNet.IP),
 				IsWireless:   isWirelessInterface(iface.Name),
+				IsIPv6:       isV6,
 			}
-			networks = append(networks, network)
+			networks = appendNetwork(networks, network, flags)
 		}
 	}
 
 	return networks, nil
 }
 
-// calculateCIDR calculates the network CIDR from an IP and prefix length
-func calculateCIDR(ip string, prefixLen int) string {
-	parsedIP := net.ParseIP(ip)
-	if parsedIP == nil {
-		return ""
+// appendNetwork adds n to the list unless the same prefix on the same
+// interface is already there. A dual-stack interface carries several
+// addresses in one IPv6 /64 (a stable one, a temporary privacy one, and
+// deprecated ones on their way out), and listing the prefix once per address
+// shows the user the same network three or four times. When the prefix is
+// already listed, n replaces the entry only if it is a better address to show
+// for it: one the OS does not mark temporary or deprecated.
+func appendNetwork(networks []types.Network, n types.Network, flags map[string]ipv6Flags) []types.Network {
+	for i, existing := range networks {
+		if existing.Interface != n.Interface || existing.CIDR != n.CIDR {
+			continue
+		}
+		if addrRank(n.IP, flags) < addrRank(existing.IP, flags) {
+			networks[i] = n
+		}
+		return networks
 	}
+	return append(networks, n)
+}
 
-	ipv4 := parsedIP.To4()
-	if ipv4 == nil {
-		return ""
+// ipv6Flags is what the OS says about an address's lifetime, where it says
+// anything at all.
+type ipv6Flags struct {
+	temporary  bool
+	deprecated bool
+}
+
+// addrRank orders addresses for choosing which one represents a prefix: lower
+// is better. A deprecated address is about to disappear and a temporary one
+// rotates, so a stable address is preferred when the OS tells them apart.
+func addrRank(ip string, flags map[string]ipv6Flags) int {
+	f := flags[ip]
+	rank := 0
+	if f.temporary {
+		rank += 1
 	}
-
-	// Create subnet mask
-	mask := net.CIDRMask(prefixLen, 32)
-
-	// Calculate network address
-	network := make(net.IP, 4)
-	for i := 0; i < 4; i++ {
-		network[i] = ipv4[i] & mask[i]
+	if f.deprecated {
+		rank += 2
 	}
+	return rank
+}
 
-	return fmt.Sprintf("%s/%d", network.String(), prefixLen)
+// ipv6AddrFlags reads the lifetime flags of every IPv6 address on the host,
+// keyed by address. Go's net package does not expose them, so they come from
+// /proc on Linux and from ifconfig on macOS; elsewhere the map is empty and
+// the first address listed for a prefix is the one shown.
+func ipv6AddrFlags() map[string]ipv6Flags {
+	switch runtime.GOOS {
+	case "linux":
+		data, err := os.ReadFile("/proc/net/if_inet6")
+		if err != nil {
+			return nil
+		}
+		return parseProcIfInet6(string(data))
+	case "darwin":
+		out, err := runCommand("ifconfig")
+		if err != nil {
+			return nil
+		}
+		return parseIfconfigInet6(string(out))
+	}
+	return nil
+}
+
+// Linux address flags as /proc/net/if_inet6 prints them (IFA_F_* in
+// linux/if_addr.h).
+const (
+	ifaFlagTemporary  = 0x01
+	ifaFlagDeprecated = 0x20
+)
+
+// parseProcIfInet6 parses /proc/net/if_inet6, one address per line as
+// "<32 hex digits> <ifindex> <prefixlen> <scope> <flags> <ifname>".
+func parseProcIfInet6(data string) map[string]ipv6Flags {
+	flags := make(map[string]ipv6Flags)
+	for _, line := range strings.Split(data, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 6 || len(fields[0]) != 32 {
+			continue
+		}
+		raw, err := hex.DecodeString(fields[0])
+		if err != nil {
+			continue
+		}
+		bits, err := strconv.ParseUint(fields[4], 16, 32)
+		if err != nil {
+			continue
+		}
+		flags[net.IP(raw).String()] = ipv6Flags{
+			temporary:  bits&ifaFlagTemporary != 0,
+			deprecated: bits&ifaFlagDeprecated != 0,
+		}
+	}
+	return flags
+}
+
+// parseIfconfigInet6 parses macOS ifconfig output, where an address line reads
+// "inet6 2001:db8::1 prefixlen 64 autoconf secured" and the words after the
+// prefix length include "temporary" or "deprecated" when they apply. The
+// zone suffix ("%en0") on link-local addresses is dropped, matching how the
+// net package prints them.
+func parseIfconfigInet6(out string) map[string]ipv6Flags {
+	flags := make(map[string]ipv6Flags)
+	for _, line := range strings.Split(out, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 2 || fields[0] != "inet6" {
+			continue
+		}
+		addr := fields[1]
+		if i := strings.IndexByte(addr, '%'); i >= 0 {
+			addr = addr[:i]
+		}
+		ip := net.ParseIP(addr)
+		if ip == nil {
+			continue
+		}
+		var f ipv6Flags
+		for _, w := range fields[2:] {
+			switch w {
+			case "temporary":
+				f.temporary = true
+			case "deprecated":
+				f.deprecated = true
+			}
+		}
+		flags[ip.String()] = f
+	}
+	return flags
 }
 
 // getFriendlyName returns a user-friendly name for an interface
@@ -124,10 +239,31 @@ func getFriendlyName(ifname string, ip net.IP) string {
 	}
 }
 
-// tailscaleCGNAT is the address range Tailscale assigns to every node.
+// tailscaleCGNAT is the IPv4 range Tailscale assigns to every node.
 var tailscaleCGNAT = &net.IPNet{
 	IP:   net.IPv4(100, 64, 0, 0),
 	Mask: net.CIDRMask(10, 32),
+}
+
+// tailscaleULA is the IPv6 range Tailscale assigns alongside the IPv4 address.
+// Unlike the utun device number, this prefix is fixed, so it identifies a
+// Tailscale address reliably. Tailscale already knows every node on the
+// tailnet, so a network in this range is asked rather than discovered.
+var tailscaleULA = func() *net.IPNet {
+	_, n, _ := net.ParseCIDR("fd7a:115c:a1e0::/48")
+	return n
+}()
+
+// isTailscaleAddr reports whether ip is an address Tailscale assigned, in
+// either family.
+func isTailscaleAddr(ip net.IP) bool {
+	if ip == nil {
+		return false
+	}
+	if v4 := ip.To4(); v4 != nil {
+		return tailscaleCGNAT.Contains(v4)
+	}
+	return tailscaleULA.Contains(ip)
 }
 
 // IsTailscaleNetwork reports whether a CIDR belongs to the Tailscale network.
@@ -138,7 +274,7 @@ func IsTailscaleNetwork(cidr string) bool {
 	if err != nil {
 		return false
 	}
-	return tailscaleCGNAT.Contains(ip.To4())
+	return isTailscaleAddr(ip)
 }
 
 // isTailscaleInterface returns true if the interface is a Tailscale interface.
@@ -156,7 +292,7 @@ func isTailscaleInterface(ifname string, ip net.IP) bool {
 	if !strings.HasPrefix(ifname, "utun") && !strings.HasPrefix(ifname, "tun") {
 		return false
 	}
-	return ip != nil && tailscaleCGNAT.Contains(ip.To4())
+	return isTailscaleAddr(ip)
 }
 
 // isWirelessInterface returns true if the interface is a wireless interface
@@ -276,7 +412,45 @@ func ValidateCIDR(cidr string) bool {
 	return err == nil
 }
 
-// ParseIPRange parses a port range string (e.g., "1-1024")
+// isRoutableIPv6 reports whether ip is an IPv6 address worth presenting as a
+// network: a routable unicast address, either global or unique-local. Link
+// local is excluded on purpose, since every interface has one and none of them
+// identifies a network a user can do anything with.
+func isRoutableIPv6(ip net.IP) bool {
+	if ip == nil || ip.To4() != nil {
+		return false
+	}
+	return !ip.IsLoopback() && !ip.IsMulticast() &&
+		!ip.IsUnspecified() && !ip.IsLinkLocalUnicast()
+}
+
+// IsIPv6Network reports whether cidr names an IPv6 network.
+//
+// This is the guard that keeps an IPv6 prefix away from nmap. A /64 holds 2^64
+// addresses, so asking a sweeping scanner to cover one is not a slow scan, it
+// is an impossible one. Callers route these to neighbour discovery instead.
+func IsIPv6Network(cidr string) bool {
+	ip, _, err := net.ParseCIDR(strings.TrimSpace(cidr))
+	if err != nil {
+		return false
+	}
+	return ip.To4() == nil
+}
+
+// HasIPv6Network reports whether any of cidrs names an IPv6 network. A scan
+// of an IPv6 network already solicits and reads the neighbour cache, so a
+// caller that runs a separate IPv6 pass after scanning should skip it when
+// this is true, or every neighbour is found and counted twice.
+func HasIPv6Network(cidrs []string) bool {
+	for _, c := range cidrs {
+		if IsIPv6Network(c) {
+			return true
+		}
+	}
+	return false
+}
+
+// ParsePortRange parses a port range string (e.g., "1-1024")
 func ParsePortRange(rangeStr string) (start, end int, err error) {
 	parts := strings.Split(rangeStr, "-")
 	if len(parts) != 2 {

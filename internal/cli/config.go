@@ -2,18 +2,29 @@ package cli
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/291-Group/LAN-Orangutan/internal/auth"
+	"github.com/291-Group/LAN-Orangutan/internal/scanner"
 	"github.com/291-Group/LAN-Orangutan/internal/storage"
 )
 
 var configCmd = &cobra.Command{
 	Use:   "config",
 	Short: "Display current configuration",
-	RunE:  runConfig,
+	Long: `Show every setting in effect and where it came from: the config file, the
+environment, or a change made on the Settings page (saved in the data
+directory, never written back to the file).
+
+The settings the Settings page can change (scan interval, continuous scan,
+networks to include or exclude, service detection, storage limits) can be
+changed from the command line with "orangutan settings set". The theme is
+chosen in each browser and is not a server setting.`,
+	Args: cobra.NoArgs,
+	RunE: runConfig,
 }
 
 func runConfig(cmd *cobra.Command, args []string) error {
@@ -23,12 +34,12 @@ func runConfig(cmd *cobra.Command, args []string) error {
 	// this command reports the EFFECTIVE value and marks where it came from.
 	// Degrade gracefully: with no readable data directory the config file is still
 	// the whole truth, which is exactly what we then print.
-	store, _ := storage.New(cfg.DevicesFile(), cfg.StateFile())
+	store, _ := openStore()
 
 	fmt.Println("=== LAN Orangutan Configuration ===")
-	fmt.Printf("Config file: %s\n", cfgFile)
+	fmt.Printf("Config file:           %s\n", cfgFile)
 	if store != nil {
-		fmt.Printf("Overrides:   %s\n", cfg.StateFile())
+		fmt.Printf("Settings page changes: %s\n", cfg.StateFile())
 	}
 	fmt.Println()
 
@@ -51,6 +62,8 @@ func runConfig(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  networks = %s%s\n", listOrNone(effList(store, cfg.Scanning.Networks, storeNetworks)), markList(store, cfg.Scanning.Networks, storeNetworks))
 	fmt.Printf("  exclude_networks = %s%s\n", listOrNone(effList(store, cfg.Scanning.ExcludeNetworks, storeExclude)), markList(store, cfg.Scanning.ExcludeNetworks, storeExclude))
 	fmt.Printf("  only_configured_networks = %v%s\n", effBool(store, cfg.Scanning.OnlyConfiguredNetworks, storeOnlyConfigured), mark(store, cfg.Scanning.OnlyConfiguredNetworks, storeOnlyConfigured))
+	fmt.Printf("  nmap_max_rtt_timeout = %s\n", autoOr(cfg.Scanning.NmapMaxRTTTimeout > 0, cfg.Scanning.NmapMaxRTTTimeout.String(), scanner.DefaultRoutedRTT.String()))
+	fmt.Printf("  nmap_max_retries = %s\n", autoOr(cfg.Scanning.NmapMaxRetries >= 0, strconv.Itoa(cfg.Scanning.NmapMaxRetries), strconv.Itoa(scanner.DefaultRoutedRetries)))
 	// Reserved keys: parsed and preserved, but nothing consumes them yet.
 	fmt.Printf("  enable_port_scan = %v (reserved, not wired up yet)\n", cfg.Scanning.EnablePortScan)
 	fmt.Printf("  port_scan_range = %s (reserved, not wired up yet)\n", cfg.Scanning.PortScanRange)
@@ -153,4 +166,14 @@ func listOrNone(v []string) string {
 		return "(none)"
 	}
 	return strings.Join(v, ", ")
+}
+
+// autoOr prints a value the user set, or says the scanner picks it, and what
+// it picks. Used for the routed-network nmap timing, which only applies to
+// networks with no ARP.
+func autoOr(set bool, value, auto string) string {
+	if set {
+		return value + " (routed networks only)"
+	}
+	return "automatic (" + auto + " on routed networks)"
 }

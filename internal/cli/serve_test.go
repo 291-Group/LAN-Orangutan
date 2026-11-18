@@ -168,3 +168,14 @@ func TestAllowInsecureWithNoPasswordReportsNothingIgnored(t *testing.T) {
 		t.Fatalf("got password %q, ignored %q; want both empty", got, ignored)
 	}
 }
+
+func TestNoReferrerHeaderOnEveryResponse(t *testing.T) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.NotFound(w, r)
+	})
+	rec := httptest.NewRecorder()
+	noReferrer(next).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/credits", nil))
+	if got := rec.Header().Get("Referrer-Policy"); got != "no-referrer" {
+		t.Fatalf("Referrer-Policy = %q, want no-referrer", got)
+	}
+}

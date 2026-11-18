@@ -26,7 +26,7 @@ brew install 291-group/tap/lan-orangutan
 Or by hand:
 
 ```bash
-# Download and extract
+# Download and extract (Apple Silicon; on an Intel Mac use orangutan-darwin-amd64.tar.gz)
 curl -LO https://github.com/291-Group/LAN-Orangutan/releases/latest/download/orangutan-darwin-arm64.tar.gz
 tar xzf orangutan-darwin-arm64.tar.gz
 
@@ -55,6 +55,8 @@ Download `orangutan-windows-amd64.zip` from [GitHub Releases](https://github.com
   - Windows: Download from [nmap.org](https://nmap.org/download.html)
 
 ## Building from Source
+
+Needs Go 1.27.3 or newer.
 
 ```bash
 git clone https://github.com/291-Group/LAN-Orangutan.git
@@ -122,6 +124,10 @@ Then:
 cp orangutan /usr/local/bin/
 launchctl load ~/Library/LaunchAgents/com.291group.lan-orangutan.plist
 ```
+
+## Uninstalling
+
+See [Uninstalling](../README.md#uninstalling) in the README for every install method, and where your data folder is.
 
 ## Configuration
 

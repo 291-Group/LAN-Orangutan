@@ -19,7 +19,7 @@ import (
 	"github.com/291-Group/LAN-Orangutan/internal/auth"
 	"github.com/291-Group/LAN-Orangutan/internal/config"
 	"github.com/291-Group/LAN-Orangutan/internal/network"
-	"github.com/291-Group/LAN-Orangutan/internal/storage"
+	"github.com/291-Group/LAN-Orangutan/internal/notify"
 	"github.com/291-Group/LAN-Orangutan/internal/web"
 )
 
@@ -33,6 +33,7 @@ var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "Start the web server",
 	Long:  `Start the LAN Orangutan web server with REST API and dashboard.`,
+	Args:  cobra.NoArgs,
 	RunE:  runServe,
 }
 
@@ -64,16 +65,18 @@ func runServe(cmd *cobra.Command, args []string) error {
 		bind = serveBind
 	}
 
-	// Flags win over the config file and environment.
+	// Flags win over the config file and environment, and are written back so
+	// everything that reads cfg later (/api/status, the loopback check) sees
+	// the address actually in use.
+	cfg.Server.Port = port
 	cfg.Server.BindAddress = bind
 	if serveAllowInsecure {
 		cfg.Server.AllowInsecure = true
 	}
 
-	// Initialize storage
-	store, err := storage.New(cfg.DevicesFile(), cfg.StateFile())
+	store, err := openStore()
 	if err != nil {
-		return fmt.Errorf("failed to initialize storage: %w", err)
+		return err
 	}
 	// Apply the retention window and device cap, preferring a UI override over
 	// the config default. This heals an existing install on startup and then
@@ -94,11 +97,21 @@ func runServe(cmd *cobra.Command, args []string) error {
 	}
 	authn.SetSetupRequired(cfg.RequiresSetup())
 
+	// An API token, if one has been created, lets scripts and agents reach the
+	// API without borrowing a browser session. Only its hash is on disk.
+	authn.WatchAPITokenFile(cfg.APITokenFile())
+	// enable_api = false means scripts may not use the API at all. The routes
+	// stay up for the dashboard, which calls them from the browser session.
+	authn.SetTokenAccess(cfg.Server.EnableAPI)
+	if !cfg.Server.EnableAPI {
+		fmt.Println("API tokens are not accepted (enable_api is off); the API is reachable from the dashboard only")
+	}
+
 	// Create HTTP handler
 	mux := http.NewServeMux()
 
 	webHandler := web.NewHandler(store, cfg, authn, Version)
-	apiHandler := api.NewHandler(store, cfg)
+	apiHandler := api.NewHandler(store, cfg, authn)
 
 	// Keep the device list current on its own: re-scan the detected networks
 	// every scan_interval seconds. Without this the list only changes when
@@ -131,7 +144,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	server := &http.Server{
 		Addr: addr,
 		// guardHost wraps the mux to reject DNS rebinding when bound to loopback.
-		Handler:      guardHost(cfg.IsLoopbackBind(), mux),
+		Handler:      noReferrer(guardHost(cfg.IsLoopbackBind(), mux)),
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
@@ -164,6 +177,12 @@ func runServe(cmd *cobra.Command, args []string) error {
 		server.SetKeepAlivesEnabled(false)
 		if err := server.Shutdown(ctx); err != nil {
 			fmt.Fprintf(os.Stderr, "Error shutting down: %v\n", err)
+		}
+
+		// Let webhook deliveries already in flight finish, bounded so a
+		// receiver that never answers cannot hold the exit.
+		if !notify.Wait(15 * time.Second) {
+			fmt.Fprintln(os.Stderr, "Some webhook notifications were still being sent and were abandoned.")
 		}
 
 		// scanCancel above cancels the context of any scan in flight, which
@@ -256,6 +275,17 @@ func runServe(cmd *cobra.Command, args []string) error {
 // because something else already holds it.
 func isAddrInUse(err error) bool {
 	return errors.Is(err, syscall.EADDRINUSE)
+}
+
+// noReferrer stops the browser sending this instance's address to any site the
+// user follows a link to (GitHub, a contributor's profile on the Thanks page).
+// The address is usually a private LAN IP or hostname; nobody outside the
+// network needs it, and the app never reports anything about itself.
+func noReferrer(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		next.ServeHTTP(w, r)
+	})
 }
 
 // guardHost rejects requests whose Host header is not a loopback identifier,

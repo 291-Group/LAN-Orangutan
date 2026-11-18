@@ -23,6 +23,8 @@ import (
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
+
+	"github.com/291-Group/LAN-Orangutan/internal/uerr"
 )
 
 const (
@@ -58,6 +60,23 @@ type Authenticator struct {
 	// hash is the bcrypt hash of the current password. Empty means no password
 	// has been set yet.
 	hash []byte
+
+	// apiTokenHash is the SHA-256 of the active API token, or empty when none
+	// has been created. The token itself is never held in memory or on disk.
+	apiTokenHash string
+
+	// apiTokenFile, when set, is re-read whenever it changes on disk, so a token
+	// created or revoked from the command line takes effect in a running server
+	// immediately. A revoke that only applied after a restart would leave a
+	// credential the user believes is dead still working.
+	apiTokenFile  string
+	apiTokenStamp tokenFileStamp
+
+	// tokenAccessOff refuses the API token even when one exists. It is the
+	// enable_api setting: with it off, scripts cannot use the API at all, and
+	// only a browser session gets in. Inverted so the zero value keeps the
+	// token working, which is what every existing caller expects.
+	tokenAccessOff bool
 
 	// setupRequired means that, with no password set, visitors should be sent
 	// to the setup page rather than let straight through.
@@ -161,17 +180,20 @@ func (a *Authenticator) SetPassword(plaintext string) (string, error) {
 	return string(hash), nil
 }
 
-// ValidatePassword reports whether a proposed password is acceptable.
+// ValidatePassword reports whether a proposed password is acceptable. The
+// error is a *uerr.Error with code password.tooShort (arg min) or
+// password.tooLong (arg max), so a caller can tell which rule failed with
+// uerr.Of rather than measuring the password again.
 func ValidatePassword(password string) error {
 	if len(password) < MinPasswordLength {
-		return fmt.Errorf("password must be at least %d characters", MinPasswordLength)
+		return uerr.Newf("password.tooShort", "password must be at least %d characters", "min", MinPasswordLength)
 	}
 	// len() counts bytes, which is what bcrypt limits. Accented and non-Latin
 	// characters take more than one byte each, so say so.
 	if len(password) > MaxPasswordBytes {
-		return fmt.Errorf(
+		return uerr.Newf("password.tooLong",
 			"password is too long: the limit is %d characters, and accented or non-Latin characters count as more than one",
-			MaxPasswordBytes)
+			"max", MaxPasswordBytes)
 	}
 	return nil
 }
@@ -217,8 +239,18 @@ func (a *Authenticator) reject(w http.ResponseWriter, r *http.Request, redirectT
 	http.Redirect(w, r, redirectTo, http.StatusSeeOther)
 }
 
-// authenticated reports whether r carries a valid, unexpired session cookie.
+// authenticated reports whether r carries a valid, unexpired session cookie,
+// or presents the API token.
+//
+// Two credentials for two kinds of caller. A browser logs in once and carries a
+// cookie; a script or an agent has nowhere to keep a cookie and presents a
+// token on every request instead. The token is only honoured on /api/ paths,
+// which apiTokenAuthenticated enforces.
 func (a *Authenticator) authenticated(r *http.Request) bool {
+	if a.apiTokenAuthenticated(r) {
+		return true
+	}
+
 	cookie, err := r.Cookie(SessionCookie)
 	if err != nil || cookie.Value == "" {
 		return false
@@ -236,6 +268,13 @@ func (a *Authenticator) authenticated(r *http.Request) bool {
 		return false
 	}
 	return true
+}
+
+// TokenAuthenticated reports whether r was let in by the API token rather
+// than a session cookie. The CSRF check relies on it: a token is something a
+// script typed in deliberately, which a browser cannot be tricked into sending.
+func (a *Authenticator) TokenAuthenticated(r *http.Request) bool {
+	return a.apiTokenAuthenticated(r)
 }
 
 // Login verifies password and, on success, returns a new session token.

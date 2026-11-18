@@ -1,0 +1,19 @@
+{
+  "networkReport": "নেটওয়ার্ক রিপোর্ট",
+  "generated": "{date} তারিখে {time}-এ তৈরি",
+  "devices.one": "ডিভাইস",
+  "devices.other": "ডিভাইস",
+  "online": "অনলাইন",
+  "offline": "অফলাইন",
+  "networks.one": "নেটওয়ার্ক",
+  "networks.other": "নেটওয়ার্ক",
+  "ipAddress": "IP ঠিকানা",
+  "hostname": "হোস্টনাম",
+  "type": "ধরন",
+  "mac": "MAC",
+  "vendor": "প্রস্তুতকারক",
+  "group": "গ্রুপ",
+  "location": "স্থান",
+  "lastSeen": "সর্বশেষ দেখা",
+  "generatedBy": "LAN Orangutan দিয়ে তৈরি"
+}

@@ -11,7 +11,7 @@ body:
     attributes:
       label: Version
       description: Shown in the dashboard footer, or run `orangutan version`. For Docker, `docker exec <container> orangutan version`.
-      placeholder: "3.4.2"
+      placeholder: "4.0.0"
     validations:
       required: true
   - type: dropdown

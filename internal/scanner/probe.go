@@ -36,6 +36,8 @@ var serviceProbePorts = []int{
 // riskyServices maps an open port to a plainly worded security concern. Kept
 // deliberately high-signal: Telnet and FTP are unencrypted by design, so
 // finding them open is a real red flag, not noise a router's web page would be.
+// The dashboard translates these by their exact text (riskKeys in
+// internal/web/handler.go), so a new or reworded entry needs a key there too.
 var riskyServices = map[int]string{
 	23: "Telnet is open (unencrypted remote access)",
 	21: "FTP is open (unencrypted file transfer)",

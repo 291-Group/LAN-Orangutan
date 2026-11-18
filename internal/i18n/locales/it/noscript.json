@@ -1,0 +1,18 @@
+{
+  "heading": "JavaScript è disattivato",
+  "sub": "La dashboard web richiede JavaScript. Ecco cosa offre e come usare LAN Orangutan senza. Scegli l'opzione che preferisci.",
+  "webTitle": "La dashboard web",
+  "webIntro": "Una vista grafica e in tempo reale della tua rete. Usa JavaScript per:",
+  "webLive": "Aggiornare i dispositivi in tempo reale durante le scansioni del server",
+  "webScans": "Avviare scansioni, ordinare, filtrare e cercare",
+  "webEditing": "Modificare etichette e gruppi e copiare indirizzi",
+  "webAction": "Consenti JavaScript per questo sito (nel browser o nel blocco script), poi ricarica la pagina.",
+  "cliTitle": "Oppure la riga di comando",
+  "cliIntro": "Stesso rilevamento, senza browser né JavaScript, direttamente dal terminale:",
+  "cliScan": "scansiona le tue reti",
+  "cliList": "elenca i dispositivi trovati",
+  "cliStatus": "stato del servizio e della rete",
+  "cliHelp": "Esegui {command} per vedere tutti i comandi.",
+  "safetyQuestion": "La dashboard è sicura?",
+  "safetyAnswer": "Sì. LAN Orangutan è self-hosted: il suo JavaScript viene eseguito interamente nel tuo browser verso il tuo server e non effettua chiamate esterne o a terze parti. Viene servito da questo computer all'indirizzo {path}."
+}

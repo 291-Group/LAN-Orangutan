@@ -3,7 +3,8 @@ package scanner
 import "testing"
 
 func TestParseIPNeigh(t *testing.T) {
-	out := `2001:db8::5 dev eth0 lladdr aa:bb:cc:dd:ee:ff STALE
+	out := `2001:db8::5 dev eth0 lladdr aa:bb:cc:dd:ee:ff REACHABLE
+2001:db8::6 dev eth0 lladdr aa:bb:cc:dd:ee:01 STALE
 fe80::1 dev eth0 lladdr 00:11:22:33:44:55 router REACHABLE
 fe80::dead dev eth0  FAILED
 192.168.1.1 dev eth0 lladdr 11:22:33:44:55:66 REACHABLE
@@ -12,7 +13,8 @@ ff02::1 dev eth0 lladdr 33:33:00:00:00:01 NOARP
 	got := parseIPNeigh(out)
 
 	// Only the routable, reachable IPv6 neighbor survives: link-local (fe80::),
-	// the FAILED ones, the IPv4 one and the multicast one are all dropped.
+	// the STALE one (it did not answer the solicitation), the FAILED ones, the
+	// IPv4 one and the multicast one are all dropped.
 	if len(got) != 1 {
 		t.Fatalf("expected 1 device, got %d: %+v", len(got), got)
 	}

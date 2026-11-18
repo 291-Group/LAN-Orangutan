@@ -1,0 +1,18 @@
+{
+  "heading": "JavaScript est désactivé",
+  "sub": "Le tableau de bord web a besoin de JavaScript pour fonctionner. Voici ce qu'il propose, et comment utiliser LAN Orangutan sans lui. Choisissez ce que vous préférez.",
+  "webTitle": "Le tableau de bord web",
+  "webIntro": "Une vue visuelle et en direct de votre réseau. Il utilise JavaScript pour :",
+  "webLive": "Les mises à jour des appareils en direct pendant les scans du serveur",
+  "webScans": "Lancer des scans, trier, filtrer, rechercher",
+  "webEditing": "Modifier les libellés et les groupes, et copier les adresses",
+  "webAction": "Autorisez JavaScript pour ce site (dans votre navigateur ou votre bloqueur de scripts), puis rechargez la page.",
+  "cliTitle": "Ou la ligne de commande",
+  "cliIntro": "La même découverte, sans navigateur ni JavaScript, directement depuis votre terminal :",
+  "cliScan": "scanner vos réseaux",
+  "cliList": "lister les appareils trouvés",
+  "cliStatus": "état du service et du réseau",
+  "cliHelp": "Lancez {command} pour tout voir.",
+  "safetyQuestion": "Le tableau de bord est-il sûr ?",
+  "safetyAnswer": "Oui. LAN Orangutan est auto-hébergé : son JavaScript s'exécute entièrement dans votre propre navigateur, face à votre propre serveur, et n'appelle aucun service tiers ou externe. Il est servi depuis cette machine à l'adresse {path}."
+}

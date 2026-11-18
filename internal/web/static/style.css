@@ -309,8 +309,33 @@ a:hover { color: var(--accent-hover); }
     justify-content: center;
 }
 
+/* The header theme button carries all three icons; data-theme (set before the
+   first paint) decides which one shows, so the icon never changes on load.
+   No data-theme counts as auto. */
+.theme-toggle .theme-icon { display: none; }
+[data-theme="light"] .theme-toggle .theme-icon-light,
+[data-theme="dark"] .theme-toggle .theme-icon-dark,
+html:not([data-theme="light"]):not([data-theme="dark"]) .theme-toggle .theme-icon-auto { display: inline-block; vertical-align: middle; }
+
 .theme-toggle:hover {
     background: rgba(255,255,255,0.2);
+}
+
+/* Small icon link in the header (Thanks). Deliberately quieter than the text
+   nav links: it is there to be found, not to compete with Dashboard. */
+.nav-icon {
+    color: var(--header-text);
+    opacity: 0.6;
+    display: inline-flex;
+    align-items: center;
+    padding: 0.5rem;
+    border-radius: var(--radius-sm);
+    transition: var(--transition);
+}
+
+.nav-icon:hover,
+.nav-icon.active {
+    opacity: 1;
 }
 
 /* Main Content */
@@ -484,6 +509,18 @@ a:hover { color: var(--accent-hover); }
     font-size: 0.8rem;
 }
 
+/* Marks a network that is discovered rather than swept (IPv6). */
+.net-tag {
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    padding: 0.1rem 0.35rem;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    background: var(--surface-2, transparent);
+}
+
 .net-sep {
     color: var(--text-muted);
     opacity: 0.7;
@@ -492,6 +529,10 @@ a:hover { color: var(--accent-hover); }
 .net-mono {
     font-family: 'SF Mono', 'Fira Code', monospace;
     font-size: 0.82rem;
+    /* An IPv6 address has no spaces to wrap at; let it break wherever it must
+       rather than run out of the card. */
+    overflow-wrap: anywhere;
+    min-width: 0;
 }
 
 .net-scan {
@@ -578,6 +619,12 @@ a:hover { color: var(--accent-hover); }
     body.strip-docked .stat-strip-main,
     body.strip-docked .stat-strip-meta {
         flex-wrap: nowrap;
+    }
+    /* A caption must not wrap inside its tile either ("デバ/イス"): the strip
+       drops whole pieces (fitDock) when it is short of room, not letters. */
+    body.strip-docked .stat-item,
+    body.strip-docked .stat-cap {
+        white-space: nowrap;
     }
     /* When the docked strip is short of room beside the nav, drop the least
        important pieces first: the scanned/Live line (also shown at the table
@@ -811,6 +858,18 @@ body.strip-docked .stat-strip .stat-chip-filter {
     background: var(--bg-tertiary);
     color: var(--text-secondary);
     border: 1px solid var(--border-color);
+    /* The column is narrow; a long translated type name ends in an ellipsis
+       (the badge carries a title with the full name) rather than being cut. */
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.type-badge-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .type-icon {
@@ -821,7 +880,7 @@ body.strip-docked .stat-strip .stat-chip-filter {
 .web-indicator {
     display: inline-flex;
     vertical-align: middle;
-    margin-left: 0.35rem;
+    margin-inline-start: 0.35rem;
     color: var(--text-muted);
 }
 
@@ -830,7 +889,7 @@ body.strip-docked .stat-strip .stat-chip-filter {
 .moved-indicator {
     display: inline-flex;
     vertical-align: middle;
-    margin-left: 0.35rem;
+    margin-inline-start: 0.35rem;
     color: var(--warning);
 }
 
@@ -839,7 +898,7 @@ body.strip-docked .stat-strip .stat-chip-filter {
 .risk-indicator {
     display: inline-flex;
     vertical-align: middle;
-    margin-left: 0.35rem;
+    margin-inline-start: 0.35rem;
     color: var(--danger);
 }
 
@@ -1023,7 +1082,7 @@ td[data-copy]:not([data-copy=""]) {
 
 .table th, .table td {
     padding: 0.7rem 0.65rem;
-    text-align: left;
+    text-align: start;
     border-bottom: 1px solid var(--border-color);
     /* With fixed layout, keep every cell's content inside its column: nothing
        may spill out and widen the row. */
@@ -1034,16 +1093,21 @@ td[data-copy]:not([data-copy=""]) {
 /* Column widths for the fixed layout (they sum to 100%). When the responsive
    rules further down hide a column, its share is redistributed across the
    rest, so the table always fills its panel exactly. */
-.table th:nth-child(1),  .table td:nth-child(1)  { width: 5%; }   /* Status (just a dot) */
+/* Status holds only a dot, but its HEADER is the word plus a sort arrow, and
+   5% cut that to "STATU...". Sized for the header, not the cell. The 3% came
+   from Hostname and MAC on the reporter's own advice: once a device is
+   labelled, the hostname and the MAC are the first things he stops reading. */
+.table th:nth-child(1),  .table td:nth-child(1)  { width: 8%; }   /* Status (dot; header needs the room) */
 .table th:nth-child(2),  .table td:nth-child(2)  { width: 12%; }  /* IP       */
-.table th:nth-child(3),  .table td:nth-child(3)  { width: 12%; }  /* Hostname */
-.table th:nth-child(4),  .table td:nth-child(4)  { width: 9%; }   /* Type     */
-.table th:nth-child(5),  .table td:nth-child(5)  { width: 12%; }  /* MAC      */
-.table th:nth-child(6),  .table td:nth-child(6)  { width: 10%; }  /* Vendor   */
-.table th:nth-child(7),  .table td:nth-child(7)  { width: 14%; }  /* Label (free text, the widest user-set value) */
-.table th:nth-child(8),  .table td:nth-child(8)  { width: 11%; }  /* Group (dropdown needs room) */
-.table th:nth-child(9),  .table td:nth-child(9)  { width: 8%; }   /* Last Seen*/
-.table th:nth-child(10), .table td:nth-child(10) { width: 7%; }   /* Actions (two icons) */
+.table th:nth-child(3),  .table td:nth-child(3)  { width: 8%; }   /* Hostname (first on the reporter's narrow-first list) */
+.table th:nth-child(4),  .table td:nth-child(4)  { width: 8%; }   /* Type     */
+.table th:nth-child(5),  .table td:nth-child(5)  { width: 9%; }   /* MAC (second on that list) */
+.table th:nth-child(6),  .table td:nth-child(6)  { width: 7%; }   /* Vendor (third on that list; truncates by design) */
+.table th:nth-child(7),  .table td:nth-child(7)  { width: 12%; }  /* Label (free text, the widest user-set value) */
+.table th:nth-child(8),  .table td:nth-child(8)  { width: 10%; }  /* Group (dropdown) */
+.table th:nth-child(9),  .table td:nth-child(9)  { width: 9%; }   /* Location (#47; its 9% came from Hostname, MAC and Vendor, in the order he gave) */
+.table th:nth-child(10), .table td:nth-child(10) { width: 10%; }  /* Last Seen (header "LAST SEEN" + arrow did not fit at 8%) */
+.table th:nth-child(11), .table td:nth-child(11) { width: 7%; }   /* Actions (two icons) */
 
 /* Single-line cells that should truncate rather than wrap. The group select
    fills its column so it never forces the row wider. */
@@ -1076,7 +1140,7 @@ td[data-copy]:not([data-copy=""]) {
     font-style: italic;
 }
 
-.hostname-cell, .vendor-cell {
+.hostname-cell, .vendor-cell, .location-cell {
     max-width: 150px;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1090,10 +1154,33 @@ td[data-copy]:not([data-copy=""]) {
     color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    white-space: nowrap;
+    /* Headers wrap rather than truncate. Eleven columns in sixteen languages
+       cannot all fit "MAC ADDRESS" or "VU POUR LA DERNIÈRE FOIS" on one line,
+       and a clipped header is worse than a two-line one (#47 was exactly that
+       complaint). They break between words only: a word split across lines
+       ("ПРОИЗ-ВОДИ-ТЕЛЬ") reads as damage, so a single word too long for its
+       column is shrunk by initHeaderFit in app.js instead, and only allowed
+       to break (.th-break) once it is at the smallest readable size. Headers
+       sit on the bottom line so a wrapped one does not push its neighbours'
+       text up. */
+    white-space: normal;
+    hyphens: manual;
+    overflow-wrap: normal;
+    word-break: normal;
+    vertical-align: bottom;
+    line-height: 1.3;
     cursor: pointer;
     user-select: none;
     transition: var(--transition);
+}
+
+.table th.th-break {
+    overflow-wrap: anywhere;
+}
+
+/* Keep the sort arrow with the last word of its header. */
+.table th .sort-icon {
+    white-space: nowrap;
 }
 
 .table th:hover {
@@ -1101,7 +1188,7 @@ td[data-copy]:not([data-copy=""]) {
 }
 
 .table th .sort-icon {
-    margin-left: 0.3rem;
+    margin-inline-start: 0.3rem;
     opacity: 0.5;
 }
 
@@ -1164,7 +1251,7 @@ td[data-copy]:not([data-copy=""]) {
     height: 10px;
     border-radius: 50%;
     display: inline-block;
-    margin-right: 0.5rem;
+    margin-inline-end: 0.5rem;
 }
 
 /* These class names must match the StatusClass values produced in
@@ -1230,12 +1317,23 @@ td[data-copy]:not([data-copy=""]) {
 }
 
 .notes-indicator {
-    margin-left: 0.5rem;
+    margin-inline-start: 0.5rem;
     cursor: help;
     opacity: 0.7;
 }
 
 .notes-indicator:hover {
+    opacity: 1;
+}
+
+.custom-hostname-indicator {
+    margin-inline-start: 0.35rem;
+    cursor: help;
+    opacity: 0.55;
+    vertical-align: -1px;
+}
+
+.custom-hostname-indicator:hover {
     opacity: 1;
 }
 
@@ -1289,7 +1387,7 @@ td[data-copy]:not([data-copy=""]) {
 .select {
     appearance: none;
     -webkit-appearance: none;
-    padding-right: 2.75rem;
+    padding-inline-end: 2.75rem;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2.5' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 0.9rem center;
@@ -1311,7 +1409,7 @@ td[data-copy]:not([data-copy=""]) {
 
 .search-input {
     width: 250px;
-    padding-left: 2.5rem;
+    padding-inline-start: 2.5rem;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z'%3E%3C/path%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: 0.75rem center;
@@ -1397,7 +1495,67 @@ textarea.input {
 .group-actions {
     display: flex;
     gap: 0.4rem;
-    margin-left: auto;
+    margin-inline-start: auto;
+}
+
+/* Webhook rows (Settings > Notifications) are group rows with more in them: a
+   name and masked URL, the events it listens for, and the last delivery. The
+   row doubles as the inline editor and the delete confirm, like a group row. */
+.webhook-row {
+    align-items: flex-start;
+    flex-wrap: wrap;
+}
+.webhook-row.confirming {
+    align-items: center;
+}
+.webhook-info {
+    min-width: 0;
+    flex: 1 1 260px;
+}
+.webhook-title,
+.webhook-last,
+.webhook-row .confirm-text {
+    overflow-wrap: anywhere;
+}
+.webhook-last.ok { color: var(--success); }
+.webhook-last.failed { color: var(--danger); }
+.webhook-actions {
+    align-items: center;
+}
+.webhook-toggle {
+    border: 1px solid var(--border-color);
+}
+.webhook-edit {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    flex: 1 1 100%;
+    min-width: 0;
+}
+.webhook-edit .input {
+    width: 100%;
+    max-width: 520px;
+}
+.webhook-edit label {
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+.webhook-edit-events {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1.2rem;
+}
+.webhook-edit-events label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    font-weight: normal;
+}
+.webhook-edit-actions {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
 }
 
 @media (max-width: 600px) {
@@ -1405,13 +1563,20 @@ textarea.input {
         flex-wrap: wrap;
     }
     .group-actions {
-        margin-left: 0;
+        margin-inline-start: 0;
         width: 100%;
     }
 }
 
 .form-group {
     margin-bottom: 1.25rem;
+}
+
+.form-hint {
+    display: block;
+    margin-top: 0.4rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
 }
 
 .form-group label {
@@ -1659,7 +1824,7 @@ textarea.input {
 .toast {
     position: fixed;
     bottom: 2rem;
-    right: 2rem;
+    inset-inline-end: 2rem;
     padding: 1rem 1.5rem;
     background: var(--text-primary);
     color: var(--bg-primary);
@@ -1847,7 +2012,7 @@ textarea.input {
     content: '';
     position: absolute;
     top: 2px;
-    left: 2px;
+    inset-inline-start: 2px;
     width: 20px;
     height: 20px;
     background: white;
@@ -1857,7 +2022,7 @@ textarea.input {
 }
 
 .toggle-switch.active::after {
-    left: 22px;
+    inset-inline-start: 22px;
 }
 
 /* Export Dropdown */
@@ -1868,7 +2033,7 @@ textarea.input {
 .dropdown-menu {
     position: absolute;
     top: 100%;
-    right: 0;
+    inset-inline-end: 0;
     margin-top: 0.5rem;
     background: var(--glass-strong);
     backdrop-filter: var(--blur);
@@ -1926,9 +2091,11 @@ textarea.input {
     .main { padding: 1.5rem; }
 }
 
-/* Tablets only (phones switch to the card layout below): drop the widest
-   optional columns (Vendor, Label) so the rest keep room without cramming. */
+/* Tablets only (phones switch to the card layout below): drop the optional
+   columns (MAC, Vendor, Label) so the rest keep room without cramming. MAC
+   went when Location arrived, on #47's narrow-first order. */
 @media (min-width: 769px) and (max-width: 1024px) {
+    .table th:nth-child(5), .table td:nth-child(5),
     .table th:nth-child(6), .table td:nth-child(6),
     .table th:nth-child(7), .table td:nth-child(7) { display: none; }
 }
@@ -1984,6 +2151,14 @@ textarea.input {
         background: var(--bg-tertiary);
         border: 1px solid var(--border-color);
         border-radius: var(--radius-md);
+        /* A two-word caption ("غير متصل") may take a second line inside its
+           tile on a narrow phone, but never spill out of it. */
+        flex-wrap: wrap;
+        min-width: 0;
+    }
+    .stat-item .stat-cap {
+        min-width: 0;
+        overflow-wrap: anywhere;
     }
     .stat-sep { display: none; }
     .stat-strip-meta {
@@ -1992,7 +2167,7 @@ textarea.input {
     }
     /* Keep the status chips on the left but push the "Live / scanned X ago"
        status to the right edge of the card. */
-    .stat-scan { margin-left: auto; }
+    .stat-scan { margin-inline-start: auto; }
 }
 
 /* Narrow enough that four tiles in a row would be too cramped: fall back to the
@@ -2001,11 +2176,18 @@ textarea.input {
     .stat-strip-main {
         grid-template-columns: 1fr 1fr;
     }
+    .stat-item {
+        padding: 0.6rem 0.65rem;
+    }
 }
 
 @media (max-width: 768px) {
     .header { padding: 0 1rem; }
     .header h1 { display: none; }
+    /* Room for longer words than "Dashboard" and "Settings" once translated. */
+    .header-nav { gap: 0.15rem; }
+    .nav-link { padding: 0.45rem 0.6rem; font-size: 0.85rem; white-space: nowrap; }
+    .nav-icon { padding: 0.45rem 0.35rem; }
     .main { padding: 1rem; }
     /* Let the toolbar controls wrap onto more lines instead of squeezing, and
        give the search field its own full-width row above them. */
@@ -2040,7 +2222,7 @@ textarea.input {
         max-width: none;
         padding: 0.5rem 0.9rem;
         border-bottom: 1px solid var(--border-color);
-        text-align: right;
+        text-align: end;
         white-space: normal;
         overflow: visible;
         text-overflow: clip;
@@ -2050,11 +2232,14 @@ textarea.input {
         mask-image: none;
     }
     .clip-hint { display: none; }
+    /* A card lists only the fields the device has: a blank "Type" or
+       "Location" row says nothing. */
+    .table .device-row td.cell-empty { display: none; }
     .table .device-row td:last-child { border-bottom: none; }
     .table .device-row td::before {
         content: attr(data-label);
         flex: 0 0 auto;
-        margin-right: auto;
+        margin-inline-end: auto;
         font-size: 0.7rem;
         font-weight: 700;
         text-transform: uppercase;
@@ -2069,7 +2254,7 @@ textarea.input {
     .table .device-row td.ip-cell .ipv6-addr {
         flex-basis: 100%;
         max-width: 100%;
-        text-align: right;
+        text-align: end;
     }
 
     /* The group dropdown and the action buttons sit to the right of the label. */
@@ -2263,7 +2448,7 @@ textarea.input {
 
 .notes-indicator .icon {
     color: var(--text-muted);
-    margin-left: 0.35rem;
+    margin-inline-start: 0.35rem;
 }
 
 .empty-state-icon .icon {
@@ -2385,7 +2570,7 @@ img.login-logo {
     border-radius: var(--radius-lg);
     box-shadow: var(--card-shadow-lg);
     color: var(--text-secondary);
-    text-align: left;
+    text-align: start;
 }
 
 /* Header: logo beside the title/intro, so the page does not open as one tall
@@ -2492,7 +2677,7 @@ img.login-logo {
 .noscript-safety {
     padding: 0.8rem 1rem;
     background: color-mix(in srgb, var(--accent-primary) 12%, var(--bg-primary));
-    border-left: 3px solid var(--accent-primary);
+    border-inline-start: 3px solid var(--accent-primary);
     border-radius: var(--radius-md);
 }
 
@@ -2541,4 +2726,277 @@ img.login-logo {
 
 .noscript-footer a:hover {
     color: var(--accent-hover);
+}
+
+/* Thanks page */
+.credits .card p {
+    line-height: 1.6;
+}
+
+.credits-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.credits-names {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.25rem;
+}
+
+.credits-code li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.25rem 0.75rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.credits-code li:last-child {
+    border-bottom: none;
+}
+
+.credits-for {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.credits-join {
+    text-align: center;
+}
+
+/* Language picker */
+.langpicker {
+    position: relative;
+    display: inline-flex;
+}
+
+.lang-glyph {
+    white-space: nowrap;
+    font-size: 0.85rem;
+    font-weight: 600;
+    line-height: 1;
+}
+
+.lang-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font: inherit;
+}
+
+.lang-menu {
+    position: absolute;
+    inset-inline-end: 0;
+    top: calc(100% + 0.4rem);
+    z-index: 200;
+    min-width: 13rem;
+    /* Sixteen one-line options fit a laptop screen whole; on anything shorter
+       the menu scrolls inside itself rather than running off the screen. */
+    max-height: min(80vh, 40rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 0.35rem;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.lang-menu[hidden] {
+    display: none;
+}
+
+.lang-option {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    width: 100%;
+    padding: 0.4rem 0.6rem;
+    background: none;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    color: var(--text-primary);
+    font: inherit;
+    text-align: start;
+}
+
+.lang-option:hover,
+.lang-option.on {
+    background: var(--bg-secondary);
+}
+
+.lang-native {
+    font-size: 0.95rem;
+}
+
+.lang-english {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+/* On the sign in and setup pages the picker is a plain link under the card. */
+.langpicker.compact {
+    display: flex;
+    justify-content: center;
+    margin-top: 1.25rem;
+}
+
+.lang-link {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    font: inherit;
+    font-size: 0.85rem;
+    text-decoration: underline;
+}
+
+/* Opens downwards, centred under its link: the sign in card sits mid-screen,
+   so opening upwards could run off the top of a short screen, while below it
+   the page simply scrolls. */
+.langpicker.compact .lang-menu {
+    inset-inline-end: auto;
+    inset-inline-start: 50%;
+    transform: translateX(-50%);
+}
+
+[dir="rtl"] .langpicker.compact .lang-menu {
+    transform: translateX(50%);
+}
+
+/* Right-to-left (Arabic, Hebrew). Layout uses logical properties throughout, so
+   it mirrors on its own; these are the few things drawn at a fixed physical
+   position: the chevron in selects and the magnifier in the search box. */
+[dir="rtl"] .select {
+    background-position: left 0.9rem center;
+}
+
+[dir="rtl"] .group-select {
+    padding: 0.35rem 0.75rem 0.35rem 2rem;
+    background-position: left 0.6rem center;
+}
+
+[dir="rtl"] .search-input {
+    background-position: right 0.75rem center;
+}
+
+/* Commands and code read left to right in every language; keep them that way
+   inside a right-to-left page. */
+[dir="rtl"] .mono,
+[dir="rtl"] code,
+[dir="rtl"] pre,
+[dir="rtl"] kbd {
+    direction: ltr;
+    unicode-bidi: isolate;
+}
+
+/* Addresses, MACs, hostnames and vendor names are Latin values; in a
+   right-to-left table they are laid out left to right and clipped at their
+   own end, not their start, while still lining up with the column's right
+   edge. Labels and locations may be typed in either script, so they follow
+   their own first strong character. The card layout on a phone keeps the
+   page direction so the field names and values stay on consistent sides. */
+@media (min-width: 769px) {
+    [dir="rtl"] .table .ip-cell,
+    [dir="rtl"] .table .mac-cell,
+    [dir="rtl"] .table .hostname-cell,
+    [dir="rtl"] .table .vendor-cell {
+        direction: ltr;
+        text-align: right;
+    }
+    [dir="rtl"] .table .label-cell,
+    [dir="rtl"] .table .location-cell {
+        unicode-bidi: plaintext;
+    }
+}
+
+/* The narrowest phones: French "Tableau de bord" and German "Einstellungen"
+   need the header to give up a little more padding. */
+@media (max-width: 480px) {
+    .nav-link { padding: 0.4rem 0.45rem; font-size: 0.8rem; }
+    .theme-toggle { padding: 0.4rem 0.5rem; }
+}
+
+@media (max-width: 400px) {
+    .header { padding: 0 0.6rem; }
+    .nav-link { padding: 0.4rem 0.35rem; }
+    .nav-icon { padding: 0.4rem 0.25rem; }
+    /* Arabic "Sign out" and "Dashboard" alone fill the bar; the Thanks page
+       is linked from the footer too, so its icon is the one to give up. */
+    .nav-icon[href="/credits"] { display: none; }
+}
+
+/* Settings page: a row of links to the groups, kept in view under the header,
+   and each group's heading as a quiet divider above its sections. */
+.settings-nav {
+    /* Full window width, like the header, sticking just under it. */
+    position: sticky;
+    top: 64px;
+    z-index: 50;
+    background: var(--glass-strong);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    border-bottom: 1px solid var(--border-color);
+}
+.settings-nav-inner {
+    /* Same width and side padding as .main, so the links line up with the
+       content below. */
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: 0.6rem 2rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+@media (max-width: 1024px) {
+    .settings-nav-inner { padding: 0.6rem 1.5rem; }
+}
+@media (max-width: 768px) {
+    .settings-nav-inner { padding: 0.6rem 1rem; }
+}
+.settings-nav a {
+    padding: 0.35rem 0.8rem;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    font-weight: 500;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.settings-nav a:hover {
+    color: var(--accent-primary);
+    border-color: var(--accent-primary);
+}
+
+.settings-group {
+    /* Where a jump from the link row lands is set by the page script, which
+       measures the header and link row (the row wraps on narrow screens) and
+       sets the page's scroll-padding-top to just below them. */
+    margin-bottom: 2.5rem;
+}
+
+.settings-group-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    padding-bottom: 0.5rem;
+    margin-bottom: 1.25rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* Long values in help text (a webhook URL, a path) wrap anywhere rather than
+   push a phone-width page sideways. */
+.form-help code,
+.form-help .mono {
+    overflow-wrap: anywhere;
 }

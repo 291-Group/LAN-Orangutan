@@ -1,0 +1,18 @@
+{
+  "heading": "JavaScript が無効です",
+  "sub": "ウェブダッシュボードの動作には JavaScript が必要です。ここでは、その機能と、JavaScript なしで LAN Orangutan を使う方法を紹介します。お好きな方をお選びください。",
+  "webTitle": "ウェブダッシュボード",
+  "webIntro": "ネットワークをリアルタイムに見やすく表示します。JavaScript は次の用途に使われます:",
+  "webLive": "サーバーのスキャンに合わせたデバイスのリアルタイム更新",
+  "webScans": "スキャンの実行、並べ替え、絞り込み、検索",
+  "webEditing": "名前とグループの編集、アドレスのコピー",
+  "webAction": "このサイトで JavaScript を許可し（ブラウザーまたはスクリプトブロッカーで）、ページを再読み込みしてください。",
+  "cliTitle": "またはコマンドライン",
+  "cliIntro": "同じ検出を、ブラウザーも JavaScript も使わずにターミナルから直接:",
+  "cliScan": "ネットワークをスキャン",
+  "cliList": "見つかったデバイスを一覧表示",
+  "cliStatus": "サービスとネットワークの状態",
+  "cliHelp": "{command} を実行すると、すべてを確認できます。",
+  "safetyQuestion": "ダッシュボードは安全ですか？",
+  "safetyAnswer": "はい。LAN Orangutan はセルフホスト型です。JavaScript はすべてお使いのブラウザー内で動作して自分のサーバーとだけ通信し、第三者や外部への通信は一切行いません。このマシンの {path} から配信されています。"
+}

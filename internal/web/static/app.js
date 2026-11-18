@@ -31,41 +31,32 @@ function syncThemeRadios(theme) {
     });
 }
 
-// Icons and labels for the header theme button, one per state. The icon always
-// changes on click, so cycling into Auto is visibly different even when Auto
-// happens to match the current system look (a sun for light, a moon for dark, a
-// monitor for "follow the system"). Feather-style strokes, currentColor so they
-// sit on the header in either theme.
-const THEME_TOGGLE = {
-    light: {
-        title: 'Theme: Light — click for Dark',
-        icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>'
-    },
-    dark: {
-        title: 'Theme: Dark — click for Auto',
-        icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>'
-    },
-    auto: {
-        title: 'Theme: Auto (follows your system) — click for Light',
-        icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>'
-    }
+// Tooltips for the header theme button, one per state. The three icons (sun
+// for light, moon for dark, monitor for "follow the system") are in the page
+// markup, and the stylesheet shows the one matching data-theme, which the inline
+// script in <head> sets before the first paint. Drawing the icon here instead
+// made it change visibly on every page load.
+const THEME_TOGGLE_TITLES = {
+    light: 'app.theme.light',
+    dark: 'app.theme.dark',
+    auto: 'app.theme.auto'
 };
 
-// Point the header button(s) at the state the given theme will land on, so the
-// icon and tooltip always describe what is actually active.
+// Keep the header button's tooltip describing the active state and what the
+// next click does.
 function updateThemeToggle(theme) {
-    const state = THEME_TOGGLE[theme] ? theme : 'auto';
+    const state = THEME_TOGGLE_TITLES[theme] ? theme : 'auto';
+    const title = t(THEME_TOGGLE_TITLES[state]);
     document.querySelectorAll('.theme-toggle').forEach(function (btn) {
-        btn.innerHTML = THEME_TOGGLE[state].icon;
-        btn.setAttribute('title', THEME_TOGGLE[state].title);
-        btn.setAttribute('aria-label', THEME_TOGGLE[state].title);
+        btn.setAttribute('title', title);
+        btn.setAttribute('aria-label', title);
     });
 }
 
 // The header button cycles light -> dark -> auto -> light, matching the three
 // choices on the settings page so the two controls can never disagree. The icon
-// changes on every click (see updateThemeToggle), so landing on Auto is always
-// a visible change even when Auto looks like the current system theme.
+// changes on every click, so landing on Auto is always a visible change even
+// when Auto looks like the current system theme.
 function toggleTheme() {
     const current = document.documentElement.getAttribute('data-theme');
     const next = current === 'light' ? 'dark' : current === 'dark' ? 'auto' : 'light';
@@ -130,6 +121,10 @@ function showToast(message, type = 'info', duration = 3000) {
 }
 
 // API helper
+//
+// A failed request throws an Error carrying the server's message, and, when
+// the server identified the problem, its `code` and `args` so errorText can
+// show it in the page's language.
 async function api(action, params = {}, method = 'GET') {
     let url = `/api/${action}`;
     const options = { method };
@@ -144,26 +139,45 @@ async function api(action, params = {}, method = 'GET') {
         const response = await fetch(url, options);
         const text = await response.text();
         if (!response.ok) {
-            // Try to parse error from response body
-            try {
-                const errData = JSON.parse(text);
-                if (response.status === 429) {
-                    throw new Error(errData.error || 'Rate limited - please wait before scanning again');
-                }
-                throw new Error(errData.error || `HTTP error: ${response.status}`);
-            } catch (parseErr) {
-                if (parseErr.message.includes('Rate limited') || parseErr.message.includes('rate limited')) {
-                    throw parseErr;
-                }
-                throw new Error(`HTTP error: ${response.status}`);
-            }
+            // The body is JSON on every error the server itself produced. A
+            // proxy or a crash in front of it can still answer with something
+            // else, which is the only case the generic HTTP message is for.
+            let body = null;
+            try { body = JSON.parse(text); } catch (e) { body = null; }
+            const fallback = response.status === 429 ? t('app.error.rateLimited') : t('app.error.http', { status: response.status });
+            const err = apiError(body, fallback);
+            err.status = response.status;
+            err.rateLimited = response.status === 429;
+            throw err;
         }
-        if (!text) throw new Error('Empty response');
+        if (!text) throw new Error(t('app.error.emptyResponse'));
         return JSON.parse(text);
     } catch (error) {
         console.error('API error:', error);
         throw error;
     }
+}
+
+// apiError turns an error response body ({error, code, args}) into an Error
+// that errorText can translate. fallback is used when the body has no message.
+function apiError(body, fallback) {
+    const err = new Error((body && body.error) || fallback);
+    if (body && body.code) {
+        err.code = body.code;
+        err.args = body.args || {};
+    }
+    return err;
+}
+
+// errorText is the message to show for an error from api(): the catalogue's
+// translation when the server named the problem and this language has it,
+// otherwise the server's own English text.
+function errorText(err) {
+    if (err && err.code) {
+        const key = 'app.error.' + err.code;
+        if (window.I18N && window.I18N[key] !== undefined) return t(key, err.args || {});
+    }
+    return (err && err.message) || String(err);
 }
 
 // Network scanning
@@ -174,7 +188,9 @@ const SCAN_POLL_MS = 1000;
 
 function formatSeconds(total) {
     const s = Math.max(0, Math.round(total));
-    return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
+    return s < 60
+        ? t('app.scan.seconds', { s })
+        : t('app.scan.minutesSeconds', { m: Math.floor(s / 60), s: String(s % 60).padStart(2, '0') });
 }
 
 function showScanProgress(p) {
@@ -182,22 +198,32 @@ function showScanProgress(p) {
     if (!panel) return;
     panel.style.display = 'flex';
 
+    // Once every network is swept the job asks the network for IPv6
+    // neighbours and mDNS names. That pass has no estimate, so it gets its own
+    // label and an indeterminate bar rather than the last network's bar
+    // sitting at 100% with "~0s left".
+    const discovering = p.phase === 'discover';
+
     const title = document.getElementById('scan-title');
-    if (title) title.textContent = p.current_network ? `Scanning ${p.current_network}` : 'Starting scan...';
+    if (title) {
+        title.textContent = discovering ? t('app.scan.phaseDiscover')
+            : p.current_network ? t('app.scan.scanningNetwork', { network: p.current_network })
+            : t('app.scan.starting');
+    }
 
     // percent is -1 when the network has never been scanned and there is no
     // timing history to estimate from. Show a sweeping bar rather than a
     // made-up number.
     const bar = document.getElementById('scan-bar');
     const fill = document.getElementById('scan-bar-fill');
-    const known = p.percent >= 0;
+    const known = !discovering && p.percent >= 0;
     if (bar) bar.classList.toggle('indeterminate', !known);
     if (fill) fill.style.width = known ? `${Math.min(100, p.percent)}%` : '';
 
     const detail = document.getElementById('scan-detail');
     if (detail) {
         const parts = [];
-        if (p.network_count > 1) parts.push(`Network ${p.network_index} of ${p.network_count}`);
+        if (!discovering && p.network_count > 1) parts.push(t('app.scan.networkOf', { index: p.network_index, total: p.network_count }));
         if (p.current_network) parts.push(p.current_network);
 
         detail.textContent = parts.join(' · ');
@@ -212,23 +238,25 @@ function showScanProgress(p) {
     const count = document.getElementById('scan-count');
     if (count) {
         count.textContent = p.device_count > 0
-            ? `${p.device_count} device${p.device_count === 1 ? '' : 's'} found`
+            ? tn('app.scan.devicesFound', p.device_count)
             : '';
     }
 
     const eta = document.getElementById('scan-eta');
     if (eta) {
         eta.textContent = known && p.remaining != null
-            ? `~${formatSeconds(p.remaining)} left · ${Math.round(p.percent)}%`
-            : `${formatSeconds(p.elapsed)} elapsed`;
+            ? t('app.scan.timeLeft', { time: formatSeconds(p.remaining), percent: Math.round(p.percent) })
+            : t('app.scan.elapsed', { time: formatSeconds(p.elapsed) });
     }
 
-    // Set expectations explicitly while there is nothing to report yet.
+    // Set expectations explicitly while there is nothing to report yet. An
+    // IPv6 network is never swept address by address, so it gets the hint
+    // that matches what its card says.
     const hint = document.getElementById('scan-hint');
     if (hint) {
-        hint.textContent = p.device_count > 0
+        hint.textContent = p.device_count > 0 || discovering
             ? ''
-            : 'Checking every address on the network. Devices are listed once the sweep finishes.';
+            : (p.current_network || '').includes(':') ? t('app.scan.hintIPv6') : t('app.scan.hint');
     }
 }
 
@@ -240,28 +268,45 @@ function hideScanProgress() {
 async function cancelScan() {
     try {
         await api('scan/cancel', {}, 'POST');
-        showToast('Scan cancelled', 'warning');
+        showToast(t('app.scan.cancelled'), 'warning');
     } catch (e) {
-        showToast('Could not cancel: ' + e.message, 'error');
+        showToast(t('app.scan.cancelFailed', { error: errorText(e) }), 'error');
     }
 }
+
+// The supplemental passes report under these names in the per-network list.
+// They are sources, not networks, so they do not count as one.
+const SUPPLEMENTAL_SOURCES = new Set(['ARP table', 'IPv6 neighbors', 'mDNS']);
 
 // Reports the outcome of a finished job. Networks that were rate limited or
 // failed are surfaced rather than being hidden behind a success message.
 function reportScanOutcome(p) {
-    const scanned = (p.networks || []).filter(n => n.status === 'scanned');
+    const all = p.networks || [];
+    const scanned = all.filter(n => n.status === 'scanned');
+    const real = all.filter(n => !SUPPLEMENTAL_SOURCES.has(n.network));
+    const scannedReal = real.filter(n => n.status === 'scanned');
+    const failed = real.filter(n => n.status === 'failed');
     if (p.status === 'cancelled') {
-        showToast('Scan cancelled', 'warning');
+        showToast(t('app.scan.cancelled'), 'warning');
         if (scanned.length) setTimeout(refreshAfterScan, 1000);
         return;
     }
     if (scanned.length === 0) {
-        const reason = (p.networks || []).find(n => n.error)?.error;
-        showToast(reason ? 'Scan failed: ' + reason : 'No networks could be scanned', 'warning');
+        const reason = all.find(n => n.error)?.error;
+        showToast(reason ? t('app.scan.failed', { error: reason }) : t('app.scan.noNetworks'), 'warning');
         return;
     }
-    const where = p.network_count > 1 ? ` across ${scanned.length} network${scanned.length === 1 ? '' : 's'}` : '';
-    showToast(`Found ${p.device_count} device${p.device_count === 1 ? '' : 's'}${where}`, 'success');
+    const found = p.network_count > 1
+        ? tn('app.scan.foundAcross', p.device_count, { networks: tn('app.scan.networkCount', scannedReal.length) })
+        : tn('app.scan.found', p.device_count);
+    // A network that failed is a warning, not a success, however well the
+    // others went: the user should know part of the picture is missing.
+    if (failed.length) {
+        const list = failed.map(n => n.network).join(', ');
+        showToast(found + ' · ' + tn('app.scan.failedNetworks', failed.length, { list }), 'warning', 6000);
+    } else {
+        showToast(found, 'success');
+    }
     setTimeout(refreshAfterScan, 1000);
 }
 
@@ -298,8 +343,7 @@ async function runScan(target) {
         await followScan();
     } catch (e) {
         hideScanProgress();
-        const isRateLimit = e.message.toLowerCase().includes('rate limit');
-        showToast(isRateLimit ? e.message : 'Scan failed: ' + e.message, isRateLimit ? 'warning' : 'error');
+        showToast(e.rateLimited ? errorText(e) : t('app.scan.failed', { error: errorText(e) }), e.rateLimited ? 'warning' : 'error');
     }
 }
 
@@ -353,10 +397,11 @@ function filterDevices() {
     const search = (document.getElementById('device-search')?.value || '').toLowerCase();
     const statusFilter = document.getElementById('device-filter')?.value || 'all';
     const groupFilter = document.getElementById('group-filter')?.value || 'all';
+    const locationFilter = document.getElementById('location-filter')?.value || 'all';
 
     let visible = 0;
     document.querySelectorAll('.device-row').forEach(row => {
-        const text = [row.dataset.ip, row.dataset.hostname, row.dataset.mac, row.dataset.vendor, row.dataset.label, row.dataset.type].join(' ').toLowerCase();
+        const text = [row.dataset.ip, row.dataset.hostname, row.dataset.mac, row.dataset.vendor, row.dataset.label, row.dataset.type, row.dataset.location].join(' ').toLowerCase();
         const status = row.dataset.status;
         const group = row.dataset.group || '';
 
@@ -365,19 +410,20 @@ function filterDevices() {
             (statusFilter === 'online' && (status === 'online' || status === 'recent')) ||
             (statusFilter === 'offline' && status === 'offline');
         const matchGroup = groupFilter === 'all' || group === groupFilter;
+        const matchLocation = locationFilter === 'all' || (row.dataset.location || '') === locationFilter;
         const matchChip = !statChipFilter ||
             (statChipFilter === 'moved' && row.dataset.moved === '1') ||
             (statChipFilter === 'flagged' && row.dataset.flagged === '1') ||
             (statChipFilter === 'unexpected' && row.dataset.unexpected === '1') ||
             (statChipFilter === 'missing' && row.dataset.missing === '1');
 
-        const show = matchSearch && matchStatus && matchGroup && matchChip;
+        const show = matchSearch && matchStatus && matchGroup && matchLocation && matchChip;
         row.style.display = show ? '' : 'none';
         if (show) visible++;
     });
 
     const countEl = document.getElementById('device-count');
-    if (countEl) countEl.textContent = `Showing ${visible} device${visible === 1 ? '' : 's'}`;
+    if (countEl) countEl.textContent = tn('app.devices.showing', visible);
 }
 
 // Device editing
@@ -389,7 +435,21 @@ function editDevice(ip) {
     document.getElementById('edit-ip-display').value = ip;
     document.getElementById('edit-label').value = row.dataset.labelOriginal || '';
     document.getElementById('edit-group').value = row.dataset.group || '';
+    const locInput = document.getElementById('edit-location');
+    if (locInput) locInput.value = row.dataset.location || '';
     document.getElementById('edit-notes').value = row.dataset.notes || '';
+    const hostInput = document.getElementById('edit-hostname');
+    if (hostInput) {
+        const scanned = row.dataset.hostnameScanned || '';
+        hostInput.value = row.dataset.customHostname || '';
+        hostInput.placeholder = scanned || t('app.edit.noHostname');
+        const hint = document.getElementById('edit-hostname-hint');
+        if (hint) {
+            hint.textContent = scanned
+                ? t('app.edit.hostnameHintScanned', { hostname: scanned })
+                : t('app.edit.hostnameHint');
+        }
+    }
     const exp = document.getElementById('edit-expected');
     if (exp) exp.checked = row.dataset.expected === '1';
 
@@ -437,17 +497,17 @@ async function loadSnapshots() {
         const p = document.createElement('p');
         p.className = 'form-help';
         p.style.margin = '0';
-        p.textContent = 'No snapshots yet.';
+        p.textContent = t('app.snapshots.none');
         list.appendChild(p);
     } else {
         snaps.forEach(s => {
             const row = document.createElement('div');
             row.className = 'snapshot-row';
             const info = document.createElement('span');
-            info.textContent = `${s.name} · ${formatSnapDate(s.created_at)} · ${s.device_count} device${s.device_count === 1 ? '' : 's'}`;
+            info.textContent = tn('app.snapshots.row', s.device_count, { name: s.name, date: formatSnapDate(s.created_at) });
             const del = document.createElement('button');
             del.className = 'btn btn-sm';
-            del.textContent = 'Delete';
+            del.textContent = t('app.snapshots.delete');
             del.onclick = () => deleteSnapshot(s.id);
             row.appendChild(info);
             row.appendChild(del);
@@ -457,7 +517,7 @@ async function loadSnapshots() {
         });
     }
     // "Current network" is always a valid comparison target.
-    toSel.add(new Option('Current network', 'current'));
+    toSel.add(new Option(t('app.snapshots.currentNetwork'), 'current'));
     toSel.value = 'current';
 }
 
@@ -467,11 +527,11 @@ async function saveSnapshot() {
     const res = await api('snapshots', { name }, 'POST');
     if (res && res.success) {
         document.getElementById('snapshot-name').value = '';
-        status.textContent = 'Saved';
+        status.textContent = t('app.snapshots.saved');
         status.style.color = 'var(--success)';
         loadSnapshots();
     } else {
-        status.textContent = (res && res.error) || 'Could not save';
+        status.textContent = res ? errorText(apiError(res, t('app.snapshots.saveFailed'))) : t('app.snapshots.saveFailed');
         status.style.color = 'var(--danger)';
     }
     setTimeout(() => { status.textContent = ''; }, 2500);
@@ -493,15 +553,29 @@ async function runCompare() {
     const from = document.getElementById('compare-from').value;
     const to = document.getElementById('compare-to').value;
     const result = document.getElementById('compare-result');
-    if (!from || !to) { result.textContent = 'Pick two snapshots to compare.'; return; }
-    if (from === to) { result.textContent = 'Pick two different snapshots.'; return; }
+    if (!from || !to) { result.textContent = t('app.compare.pickTwo'); return; }
+    if (from === to) { result.textContent = t('app.compare.pickDifferent'); return; }
     const res = await api('snapshots/compare', { from, to });
     if (!res || !res.success) {
-        result.textContent = (res && res.error) || 'Could not compare.';
+        result.textContent = res ? errorText(apiError(res, t('app.compare.failed'))) : t('app.compare.failed');
         return;
     }
     renderDiff(res.data);
 }
+
+// Display names for the fields a snapshot comparison reports as changed. An
+// unknown field is shown under its own name.
+const COMPARE_FIELD_KEYS = {
+    ip: 'app.compare.field.ip',
+    hostname: 'app.compare.field.hostname',
+    vendor: 'app.compare.field.vendor',
+    type: 'app.compare.field.type',
+    custom_hostname: 'app.compare.field.customHostname',
+    label: 'app.compare.field.label',
+    group: 'app.compare.field.group',
+    location: 'app.compare.field.location',
+    expected: 'app.compare.field.expected'
+};
 
 function renderDiff(d) {
     const result = document.getElementById('compare-result');
@@ -511,21 +585,21 @@ function renderDiff(d) {
         const p = document.createElement('p');
         p.className = 'form-help';
         p.style.margin = '0';
-        p.textContent = 'No differences — the network is unchanged between these two.';
+        p.textContent = t('app.compare.noDifferences');
         result.appendChild(p);
         return;
     }
     const groups = [
-        { key: 'added', label: 'New', cls: 'diff-added', sign: '+' },
-        { key: 'removed', label: 'Gone', cls: 'diff-removed', sign: '−' },
-        { key: 'changed', label: 'Changed', cls: 'diff-changed', sign: '~' }
+        { key: 'added', labelKey: 'app.compare.added', cls: 'diff-added', sign: '+' },
+        { key: 'removed', labelKey: 'app.compare.removed', cls: 'diff-removed', sign: '−' },
+        { key: 'changed', labelKey: 'app.compare.changed', cls: 'diff-changed', sign: '~' }
     ];
     groups.forEach(g => {
         const items = d[g.key];
         if (!items || items.length === 0) return;
         const head = document.createElement('div');
         head.className = 'diff-group-head ' + g.cls;
-        head.textContent = `${g.label} (${items.length})`;
+        head.textContent = t(g.labelKey, { count: items.length });
         result.appendChild(head);
         items.forEach(item => {
             const dev = g.key === 'changed' ? item.after : item;
@@ -533,7 +607,11 @@ function renderDiff(d) {
             if (dev.hostname) text += ` · ${dev.hostname}`;
             else if (dev.vendor) text += ` · ${dev.vendor}`;
             if (g.key === 'changed') {
-                text += '  (' + item.fields.map(f => `${f}: ${item.before[f] || '—'} → ${item.after[f] || '—'}`).join(', ') + ')';
+                text += '  (' + item.fields.map(f => t('app.compare.fieldChange', {
+                    field: COMPARE_FIELD_KEYS[f] ? t(COMPARE_FIELD_KEYS[f]) : f,
+                    before: item.before[f] || '-',
+                    after: item.after[f] || '-'
+                })).join(', ') + ')';
             }
             const line = document.createElement('div');
             line.className = 'diff-line';
@@ -551,6 +629,10 @@ async function saveDevice() {
     const expected = document.getElementById('edit-expected') ? document.getElementById('edit-expected').checked : false;
 
     const payload = { ip, label, group, notes, expected };
+    const locInput = document.getElementById('edit-location');
+    if (locInput) payload.location = locInput.value.trim();
+    const hostInput = document.getElementById('edit-hostname');
+    if (hostInput) payload.custom_hostname = hostInput.value.trim();
     const typeSelect = document.getElementById('edit-type-select');
     if (typeSelect) {
         if (typeSelect.value !== '') {
@@ -565,16 +647,16 @@ async function saveDevice() {
     try {
         const result = await api('device', payload, 'POST');
         if (result.success) {
-            showToast('Device updated', 'success');
+            showToast(t('app.toast.deviceUpdated'), 'success');
             closeModal();
             // Keep the user where they were; editing a device halfway down a
             // long list should not jump back to the top.
             if (!(await refreshInPlace())) location.reload();
         } else {
-            showToast(result.error || 'Failed to update device', 'error');
+            showToast(errorText(apiError(result, t('app.toast.deviceUpdateFailed'))), 'error');
         }
     } catch (e) {
-        showToast('Error: ' + e.message, 'error');
+        showToast(errorText(e), 'error');
     }
 }
 
@@ -584,18 +666,18 @@ async function markAllExpected() {
     try {
         const result = await api('devices/mark-expected', { expected: true }, 'POST');
         if (result && result.success) {
-            showToast('All current devices marked as expected', 'success');
+            showToast(t('app.toast.allMarkedExpected'), 'success');
             if (!(await refreshInPlace())) location.reload();
         } else {
-            showToast((result && result.error) || 'Could not update devices', 'error');
+            showToast(errorText(apiError(result, t('app.toast.devicesUpdateFailed'))), 'error');
         }
     } catch (e) {
-        showToast('Error: ' + e.message, 'error');
+        showToast(errorText(e), 'error');
     }
 }
 
 async function deleteDevice(ip) {
-    if (!confirm(`Delete device ${ip}?`)) return;
+    if (!confirm(t('app.confirm.deleteDevice', { ip }))) return;
     try {
         const response = await fetch(`/api/device?ip=${encodeURIComponent(ip)}`, {
             method: 'DELETE',
@@ -603,14 +685,14 @@ async function deleteDevice(ip) {
         });
         const result = await response.json();
         if (result.success) {
-            showToast('Device deleted', 'success');
+            showToast(t('app.toast.deviceDeleted'), 'success');
             document.querySelector(`.device-row[data-ip="${CSS.escape(ip)}"]`)?.remove();
             filterDevices(); // Update count
         } else {
-            showToast(result.error || 'Failed to delete', 'error');
+            showToast(errorText(apiError(result, t('app.toast.deleteFailed'))), 'error');
         }
     } catch (e) {
-        showToast('Error: ' + e.message, 'error');
+        showToast(errorText(e), 'error');
     }
 }
 
@@ -620,7 +702,7 @@ async function updateDeviceGroup(select) {
     try {
         const result = await api('device', { ip, group }, 'POST');
         if (result.success) {
-            showToast('Group updated', 'success');
+            showToast(t('app.toast.groupUpdated'), 'success');
             // Update data attribute, then re-apply the current filters so a row
             // moved out of the active group filter stops showing (and the
             // "Showing N devices" count stays honest) without waiting for the
@@ -629,10 +711,10 @@ async function updateDeviceGroup(select) {
             if (row) row.dataset.group = group;
             filterDevices();
         } else {
-            showToast(result.error || 'Failed to update', 'error');
+            showToast(errorText(apiError(result, t('app.toast.updateFailed'))), 'error');
         }
     } catch (e) {
-        showToast('Failed to update group', 'error');
+        showToast(errorText(e), 'error');
     }
 }
 
@@ -645,14 +727,14 @@ async function updateDeviceGroup(select) {
 // instance, so the fallback is the common case, not an edge one.
 function copyToClipboard(text, event) {
     const ok = () => showCopied(event);
-    const fail = () => showToast('Failed to copy', 'error');
+    const fail = () => showToast(t('app.copy.failed'), 'error');
     // Chromium over plain http cannot be written to at all (see
     // clipboardWriteBlocked). The one copy the browser still honours there is
     // the user's own keyboard shortcut, so select the value for them and say so,
     // instead of claiming a copy that did not happen.
     if (clipboardWriteBlocked()) {
         if (selectValueText(event, text)) {
-            showCopied(event, 'Press ' + copyShortcutName() + ' to copy');
+            showCopied(event, t('app.copy.pressShortcut', { shortcut: copyShortcutName() }));
         } else {
             fail();
         }
@@ -677,7 +759,7 @@ function copyToClipboard(text, event) {
 function showCopied(event, message) {
     const feedback = document.createElement('div');
     feedback.className = 'copy-feedback';
-    feedback.textContent = message || 'Copied!';
+    feedback.textContent = message || t('app.copy.copied');
     document.body.appendChild(feedback);
     // .copy-feedback is position: fixed, so it is placed in viewport
     // coordinates (clientX/clientY). pageX/pageY include the scroll offset,
@@ -853,6 +935,7 @@ function exportDevices(format) {
                 vendor: row.querySelector('.vendor-cell')?.textContent?.trim() || '',
                 label: row.dataset.labelOriginal || '',
                 group: row.dataset.group || '',
+                location: row.dataset.location || '',
                 status: row.dataset.status || ''
             });
         }
@@ -861,10 +944,10 @@ function exportDevices(format) {
     let content, filename, type;
 
     if (format === 'csv') {
-        const headers = ['IP', 'Hostname', 'MAC', 'Vendor', 'Label', 'Group', 'Status'];
+        const headers = ['IP', 'Hostname', 'MAC', 'Vendor', 'Label', 'Group', 'Location', 'Status'];
         const csvRows = [headers.join(',')];
         devices.forEach(d => {
-            csvRows.push([d.ip, d.hostname, d.mac, d.vendor, d.label, d.group, d.status]
+            csvRows.push([d.ip, d.hostname, d.mac, d.vendor, d.label, d.group, d.location, d.status]
                 .map(v => `"${(v || '').replace(/"/g, '""')}"`)
                 .join(','));
         });
@@ -886,7 +969,7 @@ function exportDevices(format) {
     URL.revokeObjectURL(url);
 
     toggleDropdown('export-menu');
-    showToast(`Exported ${devices.length} devices`, 'success');
+    showToast(tn('app.export.done', devices.length), 'success');
 }
 
 // Dropdown toggle
@@ -925,24 +1008,16 @@ function compareRows(a, b, column) {
             valB = b.dataset.ip.split('.').map(n => n.padStart(3, '0')).join('');
             break;
         case 'hostname':
-            valA = a.dataset.hostname || 'zzz';
-            valB = b.dataset.hostname || 'zzz';
-            break;
-        case 'mac':
-            valA = a.dataset.mac || 'zzz';
-            valB = b.dataset.mac || 'zzz';
-            break;
-        case 'vendor':
-            valA = a.dataset.vendor || 'zzz';
-            valB = b.dataset.vendor || 'zzz';
+            valA = a.dataset.hostnameDisplay || '';
+            valB = b.dataset.hostnameDisplay || '';
             break;
         case 'label':
         case 'group':
-            // The two the user types themselves, so compare them the way the
-            // user reads them: case-insensitively, with devices that have no
-            // value sorted to the end rather than to the top.
-            valA = (a.dataset[column] || '').toLowerCase() || 'zzz';
-            valB = (b.dataset[column] || '').toLowerCase() || 'zzz';
+        case 'location':
+            // The ones the user types themselves, so compare them the way the
+            // user reads them: case-insensitively.
+            valA = (a.dataset[column] || '').toLowerCase();
+            valB = (b.dataset[column] || '').toLowerCase();
             break;
         case 'status':
             const order = { online: 0, recent: 1, offline: 2 };
@@ -958,6 +1033,11 @@ function compareRows(a, b, column) {
             valB = b.dataset[column] || '';
     }
 
+    // A device with no value for the column goes last whichever way the sort
+    // runs: flipping the direction should reverse the devices that have a
+    // value, not bring the blanks to the top.
+    if (valA === '' && valB !== '') return 1;
+    if (valB === '' && valA !== '') return -1;
     if (valA < valB) return sortAsc ? -1 : 1;
     if (valA > valB) return sortAsc ? 1 : -1;
     return 0;
@@ -1035,10 +1115,26 @@ async function refreshInPlace() {
 
     document.getElementById('devices-tbody')?.replaceWith(freshRows);
 
-    for (const selector of ['.stat-strip', '.table-footer', '#device-count', '#scan-time-top']) {
+    for (const selector of ['.stat-strip', '.table-footer', '#device-count', '#scan-time-top', '#location-options']) {
         const current = document.querySelector(selector);
         const replacement = doc.querySelector(selector);
         if (current && replacement) current.replaceWith(replacement);
+    }
+
+    // The location filter lists the places devices are in, so a place typed
+    // into a device for the first time has to appear here too. The server
+    // omits the dropdown when there are no locations at all, so it may need
+    // adding or removing, not just refreshing. The user's current choice is
+    // kept when it still exists.
+    const freshLoc = doc.getElementById('location-filter');
+    const curLoc = document.getElementById('location-filter');
+    if (freshLoc) {
+        const chosen = curLoc ? curLoc.value : 'all';
+        if (curLoc) curLoc.replaceWith(freshLoc);
+        else document.getElementById('group-filter')?.after(freshLoc);
+        if (Array.from(freshLoc.options).some(o => o.value === chosen)) freshLoc.value = chosen;
+    } else if (curLoc) {
+        curLoc.remove();
     }
 
     // The search box, filter dropdowns and column sort are deliberately left
@@ -1095,9 +1191,9 @@ async function toggleContinuousScan() {
     const next = !continuousScan;
     try {
         const res = await api('scan/continuous', { enabled: next }, 'POST');
-        if (!res || !res.success) throw new Error((res && res.error) || 'request failed');
+        if (!res || !res.success) throw apiError(res, t('app.error.requestFailed'));
     } catch (e) {
-        showToast('Could not change continuous scan: ' + e.message, 'error');
+        showToast(t('app.continuous.changeFailed', { error: errorText(e) }), 'error');
         return;
     }
     continuousScan = next;
@@ -1105,8 +1201,8 @@ async function toggleContinuousScan() {
     toggle.setAttribute('aria-checked', next ? 'true' : 'false');
     applyContinuousScanState();
     showToast(next
-        ? 'Continuous scan on: the server keeps scanning your networks and the view updates automatically.'
-        : 'Continuous scan off: showing a static snapshot. Click Scan All whenever you want a fresh one.',
+        ? t('app.continuous.on')
+        : t('app.continuous.off'),
         'info', 5000);
 }
 
@@ -1163,20 +1259,26 @@ document.addEventListener('keydown', e => {
 function relativeTime(unixSeconds) {
     const diff = Math.floor(Date.now() / 1000) - unixSeconds;
 
-    if (diff < 0) return 'just now';
-    if (diff < 60) return 'just now';
+    if (diff < 0) return t('app.time.justNow');
+    if (diff < 60) return t('app.time.justNow');
 
     const minutes = Math.floor(diff / 60);
-    if (minutes < 60) return minutes === 1 ? '1 min ago' : `${minutes} min ago`;
+    if (minutes < 60) return tn('app.time.minAgo', minutes);
 
     const hours = Math.floor(diff / 3600);
-    if (hours < 24) return hours === 1 ? '1 hr ago' : `${hours} hr ago`;
+    if (hours < 24) return tn('app.time.hrAgo', hours);
 
     const days = Math.floor(diff / 86400);
-    if (days < 7) return days === 1 ? '1 day ago' : `${days} days ago`;
+    if (days < 7) return tn('app.time.dayAgo', days);
 
-    // Older than a week, show the date instead, matching the server format.
-    return new Date(unixSeconds * 1000).toLocaleDateString('en-US', {
+    // Older than a week, show the date instead, matching the server format:
+    // "Jan 2, 2006" in English, a numeric date in every other language.
+    const date = new Date(unixSeconds * 1000);
+    if ((window.I18N_LANG || 'en') !== 'en') {
+        return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' +
+            String(date.getDate()).padStart(2, '0');
+    }
+    return date.toLocaleDateString('en-US', {
         month: 'short', day: 'numeric', year: 'numeric'
     });
 }
@@ -1202,7 +1304,7 @@ setInterval(updateRelativeTimes, 30000);
 // automate the browser sign-in.
 async function connectTailscale() {
     const msg = document.getElementById('tailscale-message');
-    if (msg) msg.textContent = 'Connecting...';
+    if (msg) msg.textContent = t('app.tailscale.connecting');
     try {
         const result = await api('tailscale/connect', {}, 'POST');
         const data = result.data || {};
@@ -1211,41 +1313,40 @@ async function connectTailscale() {
             if (msg) {
                 // Build the link with the DOM rather than innerHTML so the URL
                 // cannot inject markup.
-                msg.textContent = 'Tailscale needs you to sign in: ';
+                // The sentence is translated whole; {link} marks where the
+                // link goes, since its position differs between languages.
+                const [before, after = ''] = t('app.tailscale.signInNeeded').split('{link}');
+                msg.textContent = before;
                 const a = document.createElement('a');
                 a.href = data.login_url;
                 a.target = '_blank';
-                a.rel = 'noopener';
-                a.textContent = 'open sign in';
+                a.rel = 'noreferrer noopener';
+                a.textContent = t('app.tailscale.signInLink');
                 msg.appendChild(a);
-                msg.appendChild(document.createTextNode('. Finish it, then refresh this page.'));
+                msg.appendChild(document.createTextNode(after));
             }
             return;
         }
 
-        showToast('Tailscale connected', 'success');
+        showToast(t('app.tailscale.connected'), 'success');
         setTimeout(() => location.reload(), 1000);
     } catch (e) {
         if (msg) msg.textContent = '';
-        showToast('Could not connect: ' + e.message, 'error');
+        showToast(t('app.tailscale.connectFailed', { error: errorText(e) }), 'error');
     }
 }
 
 // disconnectTailscale takes the machine off its tailnet, after warning that
 // this can cut the connection the user is reaching the dashboard through.
 async function disconnectTailscale() {
-    const warning =
-        'Disconnect Tailscale?\n\n' +
-        'If you are reaching this dashboard over Tailscale, disconnecting will ' +
-        'cut your connection and you will need local access to reconnect.';
-    if (!confirm(warning)) return;
+    if (!confirm(t('app.tailscale.disconnectConfirm'))) return;
 
     try {
         await api('tailscale/disconnect', {}, 'POST');
-        showToast('Tailscale disconnected', 'warning');
+        showToast(t('app.tailscale.disconnected'), 'warning');
         setTimeout(() => location.reload(), 1000);
     } catch (e) {
-        showToast('Could not disconnect: ' + e.message, 'error');
+        showToast(t('app.tailscale.disconnectFailed', { error: errorText(e) }), 'error');
     }
 }
 
@@ -1273,12 +1374,18 @@ async function disconnectTailscale() {
     // Bound the docked strip to the space between the logo and the nav, so it
     // can never slide under either. The nav widens when a "Sign out" link is
     // present (auth enabled) and shifts with the monitor width, so measure it
-    // live rather than assuming a fixed layout.
+    // live rather than assuming a fixed layout. In a right-to-left page the
+    // logo sits on the right and the nav on the left, so the gap is taken
+    // between whichever of the two is nearer each edge.
     function measureDockBounds() {
         if (!brand || !nav) return;
         const gap = 20;
-        const left = Math.round(brand.getBoundingClientRect().right + gap);
-        const right = Math.round(window.innerWidth - nav.getBoundingClientRect().left + gap);
+        const b = brand.getBoundingClientRect();
+        const n = nav.getBoundingClientRect();
+        const innerLeft = Math.min(b.right, n.right);
+        const innerRight = Math.max(b.left, n.left);
+        const left = Math.round(innerLeft + gap);
+        const right = Math.round(window.innerWidth - innerRight + gap);
         document.documentElement.style.setProperty('--dock-left', Math.max(0, left) + 'px');
         document.documentElement.style.setProperty('--dock-right', Math.max(0, right) + 'px');
     }
@@ -1368,6 +1475,153 @@ async function disconnectTailscale() {
     });
 })();
 
+// Column headers wrap at word boundaries only, and take at most two lines. A
+// translated header that is a single long word ("ПРОИЗВОДИТЕЛЬ") cannot wrap,
+// and hyphenating it mid-word read as broken, so instead the header's text is
+// shrunk just enough for its longest word to fit the column, down to a floor.
+// Below the floor the column borrows the width it still needs from a free-text
+// column (Label first, then Hostname, then Group: all truncate with a tooltip
+// anyway), and only if none can spare it is the word allowed to break. A
+// header that still needs more than two lines is shrunk further. Re-run on
+// resize and after fonts load, since both change widths.
+(function initHeaderFit() {
+    const table = document.getElementById('devices-table');
+    if (!table) return;
+    const MIN_PX = 9.5;
+    const MAX_LINES = 2;
+    const MIN_DONOR_PX = 48;
+    const donors = ['label', 'hostname', 'group']
+        .map(c => table.querySelector('thead th[data-sort="' + c + '"]')).filter(Boolean);
+
+    // The header's own words, as the browser can wrap them: at spaces and
+    // after a hyphen ("MAC-" / "Adresse").
+    function words(th) {
+        const text = th.firstChild && th.firstChild.nodeType === Node.TEXT_NODE ? th.firstChild.textContent : th.textContent;
+        return text.trim().split(/\s+|(?<=-)/).filter(Boolean);
+    }
+
+    // Width of the longest word and height of the header wrapped at avail, at
+    // its current font, measured on a hidden probe inside the header so it
+    // inherits the transform and spacing. The sort arrow is a word of its own
+    // that can wrap onto a line by itself, so a copy of it is part of the
+    // wrapped text.
+    function measure(th, avail) {
+        const probe = document.createElement('span');
+        probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;font:inherit;letter-spacing:inherit;text-transform:inherit;line-height:inherit';
+        th.appendChild(probe);
+        let longest = 0;
+        words(th).forEach(w => { probe.textContent = w; longest = Math.max(longest, probe.getBoundingClientRect().width); });
+        probe.style.whiteSpace = 'normal';
+        probe.style.display = 'block';
+        probe.style.width = avail + 'px';
+        probe.textContent = words(th).join(' ');
+        const icon = th.querySelector('.sort-icon');
+        if (icon) {
+            probe.appendChild(document.createTextNode(' '));
+            probe.appendChild(icon.cloneNode(true));
+        }
+        const height = probe.getBoundingClientRect().height;
+        probe.remove();
+        return { longest, height };
+    }
+
+    function padding(th) {
+        const cs = getComputedStyle(th);
+        return parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+    }
+
+    // A fixed-layout table keeps its column widths when a header's width is
+    // changed or cleared, so anything measured afterwards would still see the
+    // old columns. Laying the table out again from scratch applies the change.
+    function relayout() {
+        table.style.display = 'none';
+        void table.offsetHeight;
+        table.style.display = '';
+    }
+
+    // Whether a header's text fits its column in at most MAX_LINES lines.
+    function fits(th) {
+        const avail = th.clientWidth - padding(th);
+        const m = measure(th, avail);
+        return m.longest <= avail && m.height <= MAX_LINES * parseFloat(getComputedStyle(th).fontSize) * 1.3 + 1;
+    }
+
+    // Widen th by need pixels at the expense of the first donor that can
+    // spare them without its own header ceasing to fit. Both are set as
+    // shares of the table, like the stylesheet's widths, so the fixed layout
+    // keeps the table exactly as wide as it was. Returns whether anything
+    // moved.
+    function borrow(th, need) {
+        const share = px => (px / table.clientWidth * 100).toFixed(2) + '%';
+        for (const d of donors) {
+            if (d === th || d.offsetWidth === 0 || d.clientWidth - need < MIN_DONOR_PX) continue;
+            const before = [d.style.width, th.style.width];
+            d.style.width = share(d.clientWidth - need);
+            th.style.width = share(th.clientWidth + need);
+            relayout();
+            if (fits(d)) return true;
+            d.style.width = before[0];
+            th.style.width = before[1];
+            relayout();
+        }
+        return false;
+    }
+
+    function fit() {
+        const ths = Array.from(table.querySelectorAll('thead th'));
+        ths.forEach(th => { th.style.fontSize = ''; th.style.width = ''; th.classList.remove('th-break'); });
+        relayout();
+        // Freeze the stylesheet's layout as explicit shares that sum to the
+        // table's width, so that borrowing moves exactly the pixels asked for.
+        // (The stylesheet's shares are for all eleven columns; once some are
+        // hidden the browser scales the rest, which borrowing cannot predict.)
+        const visible = ths.filter(th => th.offsetWidth > 0);
+        const widths = visible.map(th => th.clientWidth);
+        visible.forEach((th, i) => { th.style.width = (widths[i] / table.clientWidth * 100).toFixed(3) + '%'; });
+        ths.forEach(th => {
+            if (th.offsetWidth === 0) return; // hidden column
+            const cs = getComputedStyle(th);
+            const pad = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+            let avail = th.clientWidth - pad;
+            if (!words(th).length || avail <= 0) return;
+            const base = parseFloat(cs.fontSize);
+            let size = base;
+            let m = measure(th, avail);
+            const tooTall = () => m.height > MAX_LINES * size * 1.3 + 1;
+            // First shrink: for the longest word, then for the line count.
+            if (m.longest > avail) {
+                size = Math.max(MIN_PX, Math.floor(base * avail / m.longest * 10) / 10);
+                th.style.fontSize = size + 'px';
+                m = measure(th, avail);
+            }
+            while (size > MIN_PX && tooTall()) {
+                size = Math.max(MIN_PX, size - 0.5);
+                th.style.fontSize = size + 'px';
+                m = measure(th, avail);
+            }
+            // Then, at the floor, widen the column until it fits.
+            for (let tries = 0; (m.longest > avail || tooTall()) && tries < 6; tries++) {
+                const need = m.longest > avail ? Math.ceil(m.longest - avail) + 2 : 20;
+                if (!borrow(th, need)) break;
+                avail = th.clientWidth - pad;
+                m = measure(th, avail);
+            }
+            if (m.longest > avail) th.classList.add('th-break');
+        });
+    }
+
+    let pending = false;
+    function schedule() {
+        if (pending) return;
+        pending = true;
+        setTimeout(() => { pending = false; fit(); }, 0);
+    }
+    schedule();
+    window.addEventListener('load', schedule);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(schedule);
+    window.addEventListener('resize', schedule, { passive: true });
+})();
+
 // Instant tooltips for truncated table cells (hostname, vendor, label). The
 // native `title` attribute waits ~1s before showing (and resets to that delay
 // when "cold"), so those cells use this instead: one shared element at the body
@@ -1382,7 +1636,7 @@ async function disconnectTailscale() {
     tip.setAttribute('role', 'tooltip');
     document.body.appendChild(tip);
 
-    const SELECTOR = '.hostname-cell, .vendor-cell, .label-cell, .ip-cell, .mac-cell';
+    const SELECTOR = '.hostname-cell, .vendor-cell, .label-cell, .location-cell, .ip-cell, .mac-cell';
 
     function isClipped(cell) {
         return cell.scrollWidth > cell.clientWidth + 1;
@@ -1564,3 +1818,66 @@ async function disconnectTailscale() {
     });
     window.addEventListener('scroll', hide, { passive: true });
 })();
+
+// --- API token (Settings > API access) --------------------------------------
+//
+// The token is shown once, at creation, because only its hash is stored. The
+// page therefore has two states: "no token" and "a token exists", and it can
+// never display an existing one.
+
+async function refreshApiTokenState() {
+    const state = document.getElementById('token-state');
+    if (!state) return; // not on the settings page
+    try {
+        const result = await api('token');
+        setApiTokenState(result.data && result.data.exists);
+    } catch (err) {
+        state.textContent = t('app.token.unavailable');
+    }
+}
+
+function setApiTokenState(exists) {
+    const state = document.getElementById('token-state');
+    const create = document.getElementById('token-create');
+    const revoke = document.getElementById('token-revoke');
+    if (!state) return;
+    state.textContent = exists ? t('app.token.active') : t('app.token.notCreated');
+    state.className = 'status-value' + (exists ? ' online' : '');
+    if (create) create.textContent = exists ? t('app.token.replace') : t('app.token.create');
+    if (revoke) revoke.style.display = exists ? '' : 'none';
+}
+
+async function createApiToken() {
+    const status = document.getElementById('token-status');
+    try {
+        const result = await api('token', {}, 'POST');
+        const reveal = document.getElementById('token-reveal');
+        const value = document.getElementById('token-value');
+        if (value) value.value = result.data.token;
+        if (reveal) reveal.style.display = '';
+        if (value) { value.focus(); value.select(); }
+        setApiTokenState(true);
+        if (status) status.textContent = '';
+        showToast(t('app.token.created'), 'success');
+    } catch (err) {
+        if (status) status.textContent = errorText(err);
+    }
+}
+
+async function revokeApiToken() {
+    const status = document.getElementById('token-status');
+    try {
+        await api('token', {}, 'DELETE');
+        const reveal = document.getElementById('token-reveal');
+        const value = document.getElementById('token-value');
+        if (reveal) reveal.style.display = 'none';
+        if (value) value.value = '';
+        setApiTokenState(false);
+        if (status) status.textContent = '';
+        showToast(t('app.token.revoked'), 'success');
+    } catch (err) {
+        if (status) status.textContent = errorText(err);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', refreshApiTokenState);

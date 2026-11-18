@@ -1,0 +1,25 @@
+{{define "langpicker"}}
+{{/* Every language is listed in its own script, because someone looking for
+     their language scans for how it looks, not for its English name. The
+     English name sits underneath so the list stays usable for everyone else.
+     Every button declares type="button": this also appears next to the sign in
+     form, and a typeless button would submit it. */}}
+<div class="langpicker{{if .Compact}} compact{{end}}">
+    <button type="button" class="{{if .Compact}}lang-link{{else}}nav-icon lang-btn{{end}}" title="{{t .Lang "common.language"}}" aria-label="{{t .Lang "common.language"}}" aria-haspopup="listbox" aria-expanded="false" onclick="toggleLangMenu(this)">
+        {{if .Compact}}{{range .Languages}}{{if eq .ID $.Lang}}{{.Native}}{{end}}{{end}}{{else}}<span class="lang-glyph" aria-hidden="true">文A</span>{{end}}
+    </button>
+    <div class="lang-menu" role="listbox" hidden>
+        {{range .Languages}}
+        <button type="button" role="option" class="lang-option{{if eq .ID $.Lang}} on{{end}}" aria-selected="{{if eq .ID $.Lang}}true{{else}}false{{end}}" onclick="setLang('{{.ID}}')">
+            <span class="lang-native" lang="{{.ID}}" dir="{{.Dir}}">{{.Native}}</span>
+            <span class="lang-english">{{.English}}</span>
+        </button>
+        {{end}}
+    </div>
+</div>
+{{end}}
+
+{{define "i18nscript"}}
+<script>window.I18N = {{.I18N}}; window.I18N_LANG = {{.Lang}};</script>
+<script src="/static/i18n.js?v={{.Version}}"></script>
+{{end}}

@@ -1,0 +1,17 @@
+{
+  "networkReport": "네트워크 보고서",
+  "generated": "생성일: {date} {time}",
+  "devices.other": "기기",
+  "online": "온라인",
+  "offline": "오프라인",
+  "networks.other": "네트워크",
+  "ipAddress": "IP 주소",
+  "hostname": "호스트 이름",
+  "type": "유형",
+  "mac": "MAC",
+  "vendor": "제조사",
+  "group": "그룹",
+  "location": "위치",
+  "lastSeen": "마지막 확인",
+  "generatedBy": "LAN Orangutan에서 생성됨"
+}

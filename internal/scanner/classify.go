@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"unicode"
+
+	"github.com/291-Group/LAN-Orangutan/internal/uerr"
 )
 
 // Device type labels produced by Classify. They are stable strings so stored
@@ -70,7 +72,9 @@ func ValidateType(t string) (string, error) {
 			return k, nil
 		}
 	}
-	return "", fmt.Errorf("invalid device type %q: must be one of %s", t, strings.Join(KnownTypes, ", "))
+	return "", uerr.New("type.invalid",
+		fmt.Sprintf("invalid device type %q: must be one of %s", t, strings.Join(KnownTypes, ", ")),
+		"type", t)
 }
 
 // Classify infers a device's type from the signals a scan gathers: its vendor

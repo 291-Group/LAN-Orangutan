@@ -1,0 +1,19 @@
+{
+  "networkReport": "नेटवर्क रिपोर्ट",
+  "generated": "{date} को {time} बजे बनाई गई",
+  "devices.one": "उपकरण",
+  "devices.other": "उपकरण",
+  "online": "ऑनलाइन",
+  "offline": "ऑफ़लाइन",
+  "networks.one": "नेटवर्क",
+  "networks.other": "नेटवर्क",
+  "ipAddress": "IP पता",
+  "hostname": "होस्टनाम",
+  "type": "प्रकार",
+  "mac": "MAC",
+  "vendor": "निर्माता",
+  "group": "समूह",
+  "location": "स्थान",
+  "lastSeen": "अंतिम बार देखा गया",
+  "generatedBy": "LAN Orangutan द्वारा बनाई गई"
+}

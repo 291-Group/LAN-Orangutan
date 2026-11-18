@@ -42,7 +42,7 @@ parts:
     plugin: go
     source: .
     build-snaps:
-      - go/1.22/stable
+      - go/1.27/stable
     override-build: |
       go build -ldflags="-s -w" -o $SNAPCRAFT_PART_INSTALL/bin/orangutan ./cmd/orangutan
 

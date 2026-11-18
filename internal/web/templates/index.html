@@ -1,10 +1,11 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="{{.Theme}}">
+<html lang="{{.Lang}}" dir="{{.Dir}}" data-theme="{{.Theme}}">
 <head>
     <script>(function(){try{var t=localStorage.getItem("theme");if(t)document.documentElement.setAttribute("data-theme",t);var a=localStorage.getItem("accent")||"blue";if(a!=="orange")document.documentElement.setAttribute("data-accent",a);if({{if .ContinuousScan}}true{{else}}false{{end}})document.documentElement.classList.add("live-view");}catch(e){}})();</script>
     <meta charset="UTF-8">
+    <meta name="referrer" content="no-referrer">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LAN Orangutan - Network Discovery</title>
+    <title>{{t $.Lang "dashboard.pageTitle"}}</title>
     <link rel="stylesheet" href="/static/style.css?v={{.Version}}">
     <link rel="icon" type="image/svg+xml" href="/static/orangutan.svg">
 </head>
@@ -13,43 +14,43 @@
         <div class="noscript-screen">
             <div class="noscript-card">
                 <div class="noscript-head">
-                    <img src="/static/orangutan.svg" alt="LAN Orangutan" class="noscript-logo" width="60" height="60">
+                    <img src="/static/orangutan.svg" alt="{{t $.Lang "common.appName"}}" class="noscript-logo" width="60" height="60">
                     <div>
-                        <h1>JavaScript is switched off</h1>
-                        <p class="noscript-sub">The web dashboard needs JavaScript to run. Here's what it offers, and how to use LAN Orangutan without it. Pick whichever you prefer.</p>
+                        <h1>{{t $.Lang "noscript.heading"}}</h1>
+                        <p class="noscript-sub">{{t $.Lang "noscript.sub"}}</p>
                     </div>
                 </div>
 
                 <div class="noscript-cols">
                     <section class="noscript-panel">
-                        <h2>The web dashboard</h2>
-                        <p>A live, visual view of your network. It uses JavaScript for:</p>
+                        <h2>{{t $.Lang "noscript.webTitle"}}</h2>
+                        <p>{{t $.Lang "noscript.webIntro"}}</p>
                         <ul>
-                            <li>Live device updates as the server scans</li>
-                            <li>Running scans, and sorting, filtering, searching</li>
-                            <li>Editing labels and groups, and copying addresses</li>
+                            <li>{{t $.Lang "noscript.webLive"}}</li>
+                            <li>{{t $.Lang "noscript.webScans"}}</li>
+                            <li>{{t $.Lang "noscript.webEditing"}}</li>
                         </ul>
-                        <p class="noscript-action">Allow JavaScript for this site (in your browser or script blocker), then reload.</p>
+                        <p class="noscript-action">{{t $.Lang "noscript.webAction"}}</p>
                     </section>
 
                     <section class="noscript-panel">
-                        <h2>Or the command line</h2>
-                        <p>Same discovery, no browser or JavaScript needed, straight from your terminal:</p>
-                        <pre class="noscript-cli"><code>orangutan scan all      # scan your networks
-orangutan list          # list found devices
-orangutan status        # service &amp; network status
+                        <h2>{{t $.Lang "noscript.cliTitle"}}</h2>
+                        <p>{{t $.Lang "noscript.cliIntro"}}</p>
+                        <pre class="noscript-cli"><code>orangutan scan all      # {{t $.Lang "noscript.cliScan"}}
+orangutan list          # {{t $.Lang "noscript.cliList"}}
+orangutan status        # {{t $.Lang "noscript.cliStatus"}}
 orangutan export out.csv</code></pre>
-                        <p class="noscript-action-muted">Run <code>orangutan --help</code> to see everything.</p>
+                        <p class="noscript-action-muted">{{th $.Lang "noscript.cliHelp" "command" (raw `<code>orangutan --help</code>`)}}</p>
                     </section>
                 </div>
 
-                <p class="noscript-safety"><strong>Is the dashboard safe?</strong> Yes. LAN Orangutan is self-hosted: its JavaScript runs entirely in your own browser against your own server, and makes no third-party or external calls. It is served from this machine at <code>/static/app.js</code>.</p>
+                <p class="noscript-safety"><strong>{{t $.Lang "noscript.safetyQuestion"}}</strong> {{th $.Lang "noscript.safetyAnswer" "path" (raw `<code>/static/app.js</code>`)}}</p>
 
                 <footer class="noscript-footer">
                     <img src="/static/orangutan.svg" alt="" class="noscript-footer-logo" width="22" height="22">
-                    <span class="noscript-footer-name">LAN Orangutan by 291 Group</span>
+                    <span class="noscript-footer-name">{{t $.Lang "common.byOrg" "org" "291 Group"}}</span>
                     <span class="noscript-footer-sep">&bull;</span>
-                    <a href="https://github.com/291-Group/LAN-Orangutan" target="_blank" rel="noopener">github.com/291-Group/LAN-Orangutan</a>
+                    <a href="https://github.com/291-Group/LAN-Orangutan" target="_blank" rel="noreferrer noopener">github.com/291-Group/LAN-Orangutan</a>
                 </footer>
             </div>
         </div>
@@ -58,13 +59,15 @@ orangutan export out.csv</code></pre>
     <header class="header">
         <a href="/" class="header-brand">
             <img src="/static/orangutan.svg" alt="" class="logo" width="32" height="32">
-            <h1>LAN Orangutan</h1>
+            <h1>{{t $.Lang "common.appName"}}</h1>
         </a>
         <nav class="header-nav">
-            <a href="/" class="nav-link active">Dashboard</a>
-            <a href="/settings" class="nav-link">Settings</a>
-            {{if .AuthEnabled}}<a href="/logout" class="nav-link">Sign out</a>{{end}}
-            <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme (T)">◐</button>
+            <a href="/" class="nav-link active">{{t $.Lang "common.dashboard"}}</a>
+            <a href="/settings" class="nav-link">{{t $.Lang "common.settings"}}</a>
+            {{if .AuthEnabled}}<a href="/logout" class="nav-link">{{t $.Lang "common.signOut"}}</a>{{end}}
+            {{template "langpicker" (langPicker . false)}}
+            <a href="/credits" class="nav-icon" title="{{t $.Lang "common.thanks"}}" aria-label="{{t $.Lang "common.thanks"}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></a>
+            <button class="theme-toggle" onclick="toggleTheme()" title="{{t $.Lang "common.toggleThemeKey"}}"><svg class="theme-icon theme-icon-light" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg><svg class="theme-icon theme-icon-dark" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg><svg class="theme-icon theme-icon-auto" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><text x="12" y="13.6" text-anchor="middle" font-size="9" font-weight="700" font-family="system-ui, sans-serif" fill="currentColor" stroke="none">A</text></svg></button>
         </nav>
     </header>
 
@@ -74,7 +77,7 @@ orangutan export out.csv</code></pre>
              container without host networking. Scans would look successful
              while reporting devices that do not exist. */}}
         <div class="alert alert-warning network-warning">
-            <strong>No access to your local network.</strong>
+            <strong>{{t $.Lang "dashboard.networkWarning.heading"}}</strong>
             {{.NetworkWarning}}
         </div>
         {{end}}
@@ -91,59 +94,59 @@ orangutan export out.csv</code></pre>
                     <div class="stat-item">
                         <span class="stat-dot dot-total"></span>
                         <span class="stat-num">{{.Stats.Total}}</span>
-                        <span class="stat-cap">device{{if ne .Stats.Total 1}}s{{end}}</span>
+                        <span class="stat-cap">{{tn $.Lang "dashboard.stats.devices" .Stats.Total}}</span>
                     </div>
                     <span class="stat-sep"></span>
                     <div class="stat-item">
                         <span class="stat-dot dot-online"></span>
                         <span class="stat-num online">{{.Stats.Online}}</span>
-                        <span class="stat-cap">online</span>
+                        <span class="stat-cap">{{t $.Lang "common.status.online"}}</span>
                     </div>
                     <span class="stat-sep"></span>
                     <div class="stat-item">
                         <span class="stat-dot dot-offline"></span>
                         <span class="stat-num">{{.Stats.Offline}}</span>
-                        <span class="stat-cap">offline</span>
+                        <span class="stat-cap">{{t $.Lang "common.status.offline"}}</span>
                     </div>
                     <span class="stat-sep"></span>
                     <div class="stat-item">
                         <span class="stat-num">{{len .Networks}}</span>
-                        <span class="stat-cap">network{{if ne (len .Networks) 1}}s{{end}}</span>
+                        <span class="stat-cap">{{tn $.Lang "dashboard.stats.networks" (len .Networks)}}</span>
                     </div>
                 </div>
                 <div class="stat-strip-meta">
                     {{if .Flagged}}
-                    <span class="stat-chip stat-chip-danger stat-chip-filter" data-filter="flagged" role="button" tabindex="0" title="Show the {{.Flagged}} device{{if ne .Flagged 1}}s{{end}} exposing a risky service">
+                    <span class="stat-chip stat-chip-danger stat-chip-filter" data-filter="flagged" role="button" tabindex="0" title="{{tn $.Lang "dashboard.stats.flaggedTitle" .Flagged}}">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>
-                        {{.Flagged}} flagged
+                        {{tn $.Lang "dashboard.stats.flagged" .Flagged}}
                     </span>
                     {{else if .Stats.Total}}
-                    <span class="stat-chip stat-chip-ok" title="No devices are exposing a risky service">
+                    <span class="stat-chip stat-chip-ok" title="{{t $.Lang "dashboard.stats.allClearTitle"}}">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-                        All clear
+                        {{t $.Lang "dashboard.stats.allClear"}}
                     </span>
                     {{end}}
                     {{if .Moved}}
-                    <span class="stat-chip stat-chip-warn stat-chip-filter" data-filter="moved" role="button" tabindex="0" title="Show the {{.Moved}} device{{if ne .Moved 1}}s{{end}} that changed IP address">
+                    <span class="stat-chip stat-chip-warn stat-chip-filter" data-filter="moved" role="button" tabindex="0" title="{{tn $.Lang "dashboard.stats.movedTitle" .Moved}}">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-                        {{.Moved}} moved
+                        {{tn $.Lang "dashboard.stats.moved" .Moved}}
                     </span>
                     {{end}}
                     {{if .Unexpected}}
-                    <span class="stat-chip stat-chip-warn stat-chip-filter" data-filter="unexpected" role="button" tabindex="0" title="Show the {{.Unexpected}} online device{{if ne .Unexpected 1}}s{{end}} not marked as expected">
+                    <span class="stat-chip stat-chip-warn stat-chip-filter" data-filter="unexpected" role="button" tabindex="0" title="{{tn $.Lang "dashboard.stats.unexpectedTitle" .Unexpected}}">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
-                        {{.Unexpected}} unexpected
+                        {{tn $.Lang "dashboard.stats.unexpected" .Unexpected}}
                     </span>
                     {{end}}
                     {{if .Missing}}
-                    <span class="stat-chip stat-chip-danger stat-chip-filter" data-filter="missing" role="button" tabindex="0" title="Show the {{.Missing}} expected device{{if ne .Missing 1}}s{{end}} that {{if ne .Missing 1}}are{{else}}is{{end}} currently offline">
+                    <span class="stat-chip stat-chip-danger stat-chip-filter" data-filter="missing" role="button" tabindex="0" title="{{tn $.Lang "dashboard.stats.missingTitle" .Missing}}">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2h8M12 2v6M5 13a7 7 0 1 0 14 0 7 7 0 0 0-14 0z"/></svg>
-                        {{.Missing}} missing
+                        {{tn $.Lang "dashboard.stats.missing" .Missing}}
                     </span>
                     {{end}}
                     {{if or .ContinuousScan .LastScanAt}}
                     <span class="stat-scan">
-                        <span class="live-indicator"><span class="live-dot"></span>Live</span>{{if .LastScanAt}}<span class="live-sep">&middot;</span><span class="scan-when">scanned <span data-relative-time="{{.LastScanUnix}}">{{.LastScanAgo}}</span></span>{{end}}
+                        <span class="live-indicator"><span class="live-dot"></span>{{t $.Lang "dashboard.scan.live"}}</span>{{if .LastScanAt}}<span class="live-sep">&middot;</span><span class="scan-when">{{$p := tparts $.Lang "dashboard.scan.scannedAgo" "when"}}{{index $p 0}}<span data-relative-time="{{.LastScanUnix}}">{{.LastScanAgo}}</span>{{index $p 1}}</span>{{end}}
                     </span>
                     {{end}}
                 </div>
@@ -152,7 +155,7 @@ orangutan export out.csv</code></pre>
 
         <!-- Networks Section -->
         <section class="section">
-            <h2 class="section-title">Networks</h2>
+            <h2 class="section-title">{{t $.Lang "dashboard.networks.title"}}</h2>
             <div class="network-cards">
                 {{/* Tailscale gets its own card below, and its interface is a
                      single-address /32 that there is no point sweeping, so it is
@@ -162,15 +165,25 @@ orangutan export out.csv</code></pre>
                     <div class="net-card-top">
                         <span class="net-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.55a11 11 0 0 1 14 0"/><path d="M8.5 16.1a6 6 0 0 1 7 0"/><path d="M2 8.82a15 15 0 0 1 20 0"/><line x1="12" y1="19.5" x2="12.01" y2="19.5"/></svg></span>
                         <span class="net-name">{{.FriendlyName}}</span>
-                        <span class="status-badge online">Active</span>
+                        {{if .IsIPv6}}<span class="net-tag">IPv6</span>{{end}}
+                        <span class="status-badge online">{{t $.Lang "dashboard.networks.active"}}</span>
                     </div>
                     <div class="net-meta">
                         <span class="net-mono">{{.CIDR}}</span>
                         <span class="net-sep">&middot;</span>
                         <span>{{.Interface}}</span>
                     </div>
-                    <div class="net-meta net-meta-muted">you <span class="net-mono">{{.IP}}</span></div>
-                    <button class="btn btn-primary btn-sm net-scan" onclick="scanNetwork('{{.CIDR}}')">Scan network</button>
+                    <div class="net-meta net-meta-muted">{{$p := tparts $.Lang "dashboard.networks.you" "ip"}}{{index $p 0}}<span class="net-mono">{{.IP}}</span>{{index $p 1}}</div>
+                    {{/* An IPv6 subnet holds 2^64 addresses, so it is never swept.
+                         Say so on the card rather than leaving a button that
+                         behaves differently from its neighbour without explaining
+                         why. */}}
+                    {{if .IsIPv6}}
+                    <div class="net-meta net-meta-muted">{{t $.Lang "dashboard.networks.ipv6TooLarge"}}</div>
+                    <button class="btn btn-primary btn-sm net-scan" onclick="scanNetwork('{{.CIDR}}')">{{t $.Lang "dashboard.networks.findDevices"}}</button>
+                    {{else}}
+                    <button class="btn btn-primary btn-sm net-scan" onclick="scanNetwork('{{.CIDR}}')">{{t $.Lang "dashboard.networks.scanNetwork"}}</button>
+                    {{end}}
                 </div>
                 {{end}}{{end}}
 
@@ -178,26 +191,26 @@ orangutan export out.csv</code></pre>
                 <div class="net-card tailscale">
                     <div class="net-card-top">
                         <span class="net-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
-                        <span class="net-name">Tailscale VPN</span>
-                        <span class="status-badge {{if .Tailscale.Connected}}online{{else}}offline{{end}}">{{.Tailscale.StatusLabel}}</span>
+                        <span class="net-name">{{t $.Lang "dashboard.networks.tailscale"}}</span>
+                        <span class="status-badge {{if .Tailscale.Connected}}online{{else}}offline{{end}}">{{tailscaleStatus $.Lang .Tailscale}}</span>
                     </div>
                     {{/* The IP and peer list linger from the last session after
                          Tailscale is stopped, so only show them while connected. */}}
                     {{if .Tailscale.Connected}}
                     <div class="net-meta">
                         {{if .Tailscale.SelfIP}}<span class="net-mono">{{.Tailscale.SelfIP}}</span><span class="net-sep">&middot;</span>{{end}}
-                        <span>{{.Tailscale.PeerCount}} peer{{if ne .Tailscale.PeerCount 1}}s{{end}}</span>
+                        <span>{{tn $.Lang "dashboard.networks.peers" .Tailscale.PeerCount}}</span>
                     </div>
                     {{else}}
-                    <div class="net-meta net-meta-muted">Not connected</div>
+                    <div class="net-meta net-meta-muted">{{t $.Lang "dashboard.networks.notConnected"}}</div>
                     {{end}}
 
                     {{if .Tailscale.Installed}}
                     <div class="tailscale-actions">
                         {{if .Tailscale.Connected}}
-                        <button class="btn btn-sm net-scan" onclick="disconnectTailscale()">Disconnect</button>
+                        <button class="btn btn-sm net-scan" onclick="disconnectTailscale()">{{t $.Lang "dashboard.networks.disconnect"}}</button>
                         {{else}}
-                        <button class="btn btn-sm btn-primary net-scan" onclick="connectTailscale()">Connect</button>
+                        <button class="btn btn-sm btn-primary net-scan" onclick="connectTailscale()">{{t $.Lang "dashboard.networks.connect"}}</button>
                         {{end}}
                     </div>
                     <div id="tailscale-message" class="tailscale-message"></div>
@@ -210,60 +223,70 @@ orangutan export out.csv</code></pre>
         <!-- Devices Section -->
         <section class="section">
             <div class="section-header">
-                <h2 class="section-title">Discovered Devices</h2>
+                <h2 class="section-title">{{t $.Lang "dashboard.devices.title"}}</h2>
                 <div class="section-actions">
                     <div class="auto-refresh">
-                        <span>Continuous scan</span>
-                        <div class="toggle-switch{{if .ContinuousScan}} active{{end}}" id="continuous-scan-toggle" role="switch" aria-checked="{{if .ContinuousScan}}true{{else}}false{{end}}" tabindex="0" onclick="toggleContinuousScan()" data-tip="On: keeps scanning and the view stays live. Off: a static snapshot you can refresh with Scan All."></div>
+                        <span>{{t $.Lang "dashboard.devices.continuousScan"}}</span>
+                        <div class="toggle-switch{{if .ContinuousScan}} active{{end}}" id="continuous-scan-toggle" role="switch" aria-checked="{{if .ContinuousScan}}true{{else}}false{{end}}" tabindex="0" onclick="toggleContinuousScan()" data-tip="{{t $.Lang "dashboard.devices.continuousScanTip"}}"></div>
                     </div>
-                    <input type="text" id="device-search" class="input search-input" placeholder="Search devices..." oninput="filterDevices()">
+                    <input type="text" id="device-search" class="input search-input" placeholder="{{t $.Lang "dashboard.devices.searchPlaceholder"}}" oninput="filterDevices()">
                     <select id="device-filter" class="select" style="width:auto" onchange="filterDevices()">
-                        <option value="all">All Status</option>
-                        <option value="online">Online</option>
-                        <option value="offline">Offline</option>
+                        <option value="all">{{t $.Lang "dashboard.devices.filterAllStatus"}}</option>
+                        <option value="online">{{t $.Lang "dashboard.devices.filterOnline"}}</option>
+                        <option value="offline">{{t $.Lang "dashboard.devices.filterOffline"}}</option>
                     </select>
                     <select id="group-filter" class="select" style="width:auto" onchange="filterDevices()">
-                        <option value="all">All Groups</option>
+                        <option value="all">{{t $.Lang "dashboard.devices.filterAllGroups"}}</option>
                         {{range .Groups}}<option value="{{.}}">{{.}}</option>{{end}}
                     </select>
-                    <button class="btn" onclick="markAllExpected()" title="Mark every current device as expected, so you are flagged only when something new appears or a known device goes missing">Mark all expected</button>
-                    <button class="btn" onclick="openSnapshots()">Snapshots</button>
+                    {{if .Locations}}
+                    <select id="location-filter" class="select" style="width:auto" onchange="filterDevices()">
+                        <option value="all">{{t $.Lang "dashboard.devices.filterAllLocations"}}</option>
+                        {{range .Locations}}<option value="{{.}}">{{.}}</option>{{end}}
+                    </select>
+                    {{end}}
+                    <button class="btn" onclick="markAllExpected()" title="{{t $.Lang "dashboard.devices.markAllExpectedTitle"}}">{{t $.Lang "dashboard.devices.markAllExpected"}}</button>
+                    <button class="btn" onclick="openSnapshots()">{{t $.Lang "dashboard.devices.snapshots"}}</button>
                     <div class="dropdown">
-                        <button class="btn" onclick="toggleDropdown('export-menu')">Export</button>
+                        <button class="btn" onclick="toggleDropdown('export-menu')">{{t $.Lang "dashboard.devices.export"}}</button>
                         <div id="export-menu" class="dropdown-menu">
-                            <a class="dropdown-item" onclick="exportDevices('csv')">Export as CSV</a>
-                            <a class="dropdown-item" onclick="exportDevices('json')">Export as JSON</a>
+                            <a class="dropdown-item" onclick="exportDevices('csv')">{{t $.Lang "dashboard.devices.exportCSV"}}</a>
+                            <a class="dropdown-item" onclick="exportDevices('json')">{{t $.Lang "dashboard.devices.exportJSON"}}</a>
                         </div>
                     </div>
-                    <button class="btn btn-primary" onclick="scanAllNetworks()">Scan All</button>
+                    <button class="btn btn-primary" onclick="scanAllNetworks()">{{t $.Lang "dashboard.devices.scanAll"}}</button>
                 </div>
             </div>
 
             <div class="table-container">
                 <div class="table-toolbar">
-                    <span class="table-info" id="device-count">Showing {{len .Devices}} device{{if ne (len .Devices) 1}}s{{end}}</span>
-                    <span class="table-scanned" id="scan-time-top"><span class="live-indicator"><span class="live-dot"></span>Live</span>{{if .LastScanAt}}<span class="live-sep">&middot;</span><span class="scan-when">scanned <span data-relative-time="{{.LastScanUnix}}">{{.LastScanAgo}}</span></span>{{end}}</span>
+                    <span class="table-info" id="device-count">{{tn $.Lang "dashboard.devices.showing" (len .Devices)}}</span>
+                    <span class="table-scanned" id="scan-time-top"><span class="live-indicator"><span class="live-dot"></span>{{t $.Lang "dashboard.scan.live"}}</span>{{if .LastScanAt}}<span class="live-sep">&middot;</span><span class="scan-when">{{$p := tparts $.Lang "dashboard.scan.scannedAgo" "when"}}{{index $p 0}}<span data-relative-time="{{.LastScanUnix}}">{{.LastScanAgo}}</span>{{index $p 1}}</span>{{end}}</span>
                 </div>
                 <table class="table" id="devices-table">
                     <thead>
                         <tr>
-                            <th data-sort="status" onclick="sortTable('status')">Status <span class="sort-icon">↕</span></th>
-                            <th data-sort="ip" onclick="sortTable('ip')">IP Address <span class="sort-icon">↕</span></th>
-                            <th data-sort="hostname" onclick="sortTable('hostname')">Hostname <span class="sort-icon">↕</span></th>
-                            <th data-sort="type" onclick="sortTable('type')">Type <span class="sort-icon">↕</span></th>
-                            <th data-sort="mac" onclick="sortTable('mac')">MAC Address <span class="sort-icon">↕</span></th>
-                            <th data-sort="vendor" onclick="sortTable('vendor')">Vendor <span class="sort-icon">↕</span></th>
-                            <th data-sort="label" onclick="sortTable('label')">Label <span class="sort-icon">↕</span></th>
-                            <th data-sort="group" onclick="sortTable('group')">Group <span class="sort-icon">↕</span></th>
-                            <th data-sort="lastseen" onclick="sortTable('lastseen')">Last Seen <span class="sort-icon">↕</span></th>
-                            <th>Actions</th>
+                            <th data-sort="status" onclick="sortTable('status')">{{t $.Lang "dashboard.table.status"}} <span class="sort-icon">↕</span></th>
+                            <th data-sort="ip" onclick="sortTable('ip')">{{t $.Lang "dashboard.table.ipAddress"}} <span class="sort-icon">↕</span></th>
+                            <th data-sort="hostname" onclick="sortTable('hostname')">{{t $.Lang "dashboard.table.hostname"}} <span class="sort-icon">↕</span></th>
+                            <th data-sort="type" onclick="sortTable('type')">{{t $.Lang "dashboard.table.type"}} <span class="sort-icon">↕</span></th>
+                            <th data-sort="mac" onclick="sortTable('mac')">{{t $.Lang "dashboard.table.macAddress"}} <span class="sort-icon">↕</span></th>
+                            <th data-sort="vendor" onclick="sortTable('vendor')">{{t $.Lang "dashboard.table.vendor"}} <span class="sort-icon">↕</span></th>
+                            <th data-sort="label" onclick="sortTable('label')">{{t $.Lang "dashboard.table.label"}} <span class="sort-icon">↕</span></th>
+                            <th data-sort="group" onclick="sortTable('group')">{{t $.Lang "dashboard.table.group"}} <span class="sort-icon">↕</span></th>
+                            <th data-sort="location" onclick="sortTable('location')">{{t $.Lang "dashboard.table.location"}} <span class="sort-icon">↕</span></th>
+                            <th data-sort="lastseen" onclick="sortTable('lastseen')">{{t $.Lang "dashboard.table.lastSeen"}} <span class="sort-icon">↕</span></th>
+                            <th>{{t $.Lang "dashboard.table.actions"}}</th>
                         </tr>
                     </thead>
                     <tbody id="devices-tbody">
                         {{range .Devices}}
                         <tr class="device-row {{.StatusClass}}"
                             data-ip="{{.IP}}"
-                            data-hostname="{{lower .Hostname}}"
+                            data-hostname="{{lower .DisplayHostname}} {{lower .Hostname}}"
+                            data-hostname-display="{{lower .DisplayHostname}}"
+                            data-hostname-scanned="{{.Hostname}}"
+                            data-custom-hostname="{{.CustomHostname}}"
                             data-mac="{{lower .MAC}}"
                             data-vendor="{{lower .Vendor}}"
                             data-type="{{lower .Type}}"
@@ -273,6 +296,7 @@ orangutan export out.csv</code></pre>
                             data-label-original="{{.Label}}"
                             data-notes="{{.Notes}}"
                             data-group="{{.Group}}"
+                            data-location="{{.Location}}"
                             data-status="{{.Status}}"
                             data-moved="{{if .AddressHistory}}1{{end}}"
                             data-flagged="{{if .Risks}}1{{end}}"
@@ -280,33 +304,34 @@ orangutan export out.csv</code></pre>
                             data-unexpected="{{if and .IsOnline (not .Expected)}}1{{end}}"
                             data-missing="{{if and .Expected (not .IsOnline)}}1{{end}}"
                             data-lastseen="{{.LastSeenUnix}}">
-                            <td data-label="Status">
+                            <td data-label="{{t $.Lang "dashboard.table.status"}}">
                                 <span class="status-indicator {{.StatusClass}}"></span>
                             </td>
-                            <td class="ip-cell" data-label="IP Address" data-copy="{{.IP}}">
-                                {{.IP}}{{if .AddressHistory}}<span class="moved-indicator" data-tip="Changed address{{range .AddressHistory}}, was {{.IP}}{{end}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg></span>{{end}}{{if .IPv6}}<span class="ipv6-addr" data-copy="{{.IPv6}}" data-tip="IPv6: {{.IPv6}} (click to copy)">{{.IPv6}}</span>{{end}}
+                            <td class="ip-cell" data-label="{{t $.Lang "dashboard.table.ipAddress"}}" data-copy="{{.IP}}">
+                                {{.IP}}{{if .AddressHistory}}<span class="moved-indicator" data-tip="{{t $.Lang "dashboard.row.changedAddress"}}{{range .AddressHistory}}{{t $.Lang "dashboard.row.wasAddress" "ip" .IP}}{{end}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg></span>{{end}}{{if .IPv6}}<span class="ipv6-addr" data-copy="{{.IPv6}}" data-tip="{{t $.Lang "dashboard.row.ipv6Tip" "ip" .IPv6}}">{{.IPv6}}</span>{{end}}
                             </td>
-                            <td class="hostname-cell" data-label="Hostname" data-copy="{{.Hostname}}">{{if .Hostname}}{{.Hostname}}{{else}}<span style="color:var(--text-muted)">-</span>{{end}}</td>
-                            <td class="type-cell" data-label="Type">
-                                {{if .Type}}<span class="type-badge">{{typeIcon .Type}}{{.Type}}</span>{{end}}
-                                {{if .WebUI}}<span class="web-indicator" data-tip="Serves a web interface"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span>{{end}}
-                                {{if .Risks}}<span class="risk-indicator" data-tip="Security: {{range $i, $r := .Risks}}{{if $i}}; {{end}}{{$r}}{{end}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg></span>{{end}}
+                            <td class="hostname-cell" data-label="{{t $.Lang "dashboard.table.hostname"}}" data-copy="{{.DisplayHostname}}">{{if .DisplayHostname}}{{.DisplayHostname}}{{else}}<span style="color:var(--text-muted)">-</span>{{end}}{{if .CustomHostname}}<span class="custom-hostname-indicator" data-tip="{{t $.Lang "dashboard.row.customHostnameTip" "hostname" (or .Hostname (t $.Lang "dashboard.row.noHostname"))}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span>{{end}}</td>
+                            <td class="type-cell{{if not (or .Type .WebUI .Risks)}} cell-empty{{end}}" data-label="{{t $.Lang "dashboard.table.type"}}">
+                                {{if .Type}}<span class="type-badge" title="{{typeName $.Lang .Type}}">{{typeIcon .Type}}<span class="type-badge-text">{{typeName $.Lang .Type}}</span></span>{{end}}
+                                {{if .WebUI}}<span class="web-indicator" data-tip="{{t $.Lang "dashboard.row.webUI"}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span>{{end}}
+                                {{if .Risks}}<span class="risk-indicator" data-tip="{{$risks := ""}}{{range $i, $r := .Risks}}{{if $i}}{{$risks = printf "%s; %s" $risks (riskText $.Lang $r)}}{{else}}{{$risks = riskText $.Lang $r}}{{end}}{{end}}{{t $.Lang "dashboard.row.security" "risks" $risks}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg></span>{{end}}
                             </td>
-                            <td class="mac-cell" data-label="MAC Address" data-copy="{{.MAC}}">
+                            <td class="mac-cell{{if not .MAC}} cell-empty{{end}}" data-label="{{t $.Lang "dashboard.table.macAddress"}}" data-copy="{{.MAC}}">
                                 {{if .MAC}}{{.MAC}}{{else}}<span style="color:var(--text-muted)">-</span>{{end}}
                             </td>
-                            <td class="vendor-cell" data-label="Vendor" data-copy="{{.Vendor}}">{{if .Vendor}}{{.Vendor}}{{else}}<span style="color:var(--text-muted)">Unknown</span>{{end}}</td>
-                            <td class="label-cell" data-label="Label">{{.Label}}{{if .Notes}}<span class="notes-indicator" data-tip="{{.Notes}}"><svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg></span>{{end}}</td>
-                            <td data-label="Group">
+                            <td class="vendor-cell" data-label="{{t $.Lang "dashboard.table.vendor"}}" data-copy="{{.Vendor}}">{{if .Vendor}}{{.Vendor}}{{else}}<span style="color:var(--text-muted)">{{t $.Lang "dashboard.row.unknownVendor"}}</span>{{end}}</td>
+                            <td class="label-cell{{if not (or .Label .Notes)}} cell-empty{{end}}" data-label="{{t $.Lang "dashboard.table.label"}}">{{.Label}}{{if .Notes}}<span class="notes-indicator" data-tip="{{.Notes}}"><svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg></span>{{end}}</td>
+                            <td data-label="{{t $.Lang "dashboard.table.group"}}">
                                 <select class="group-select" data-ip="{{.IP}}" onchange="updateDeviceGroup(this)">
                                     <option value="">-</option>
                                     {{$g := .Group}}{{range $.Groups}}<option value="{{.}}" {{if eq $g .}}selected{{end}}>{{.}}</option>{{end}}
                                 </select>
                             </td>
-                            <td class="time-cell" data-label="Last Seen" data-relative-time="{{.LastSeenUnix}}">{{.TimeAgo}}</td>
-                            <td class="actions-cell" data-label="Actions">
-                                <button class="btn-icon" onclick="editDevice('{{.IP}}')" data-tip="Edit" aria-label="Edit"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
-                                <button class="btn-icon danger" onclick="deleteDevice('{{.IP}}')" data-tip="Delete" aria-label="Delete"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6"/><path d="M10 11v6M14 11v6"/></svg></button>
+                            <td class="location-cell{{if not .Location}} cell-empty{{end}}" data-label="{{t $.Lang "dashboard.table.location"}}">{{.Location}}</td>
+                            <td class="time-cell" data-label="{{t $.Lang "dashboard.table.lastSeen"}}" data-relative-time="{{.LastSeenUnix}}">{{.TimeAgo}}</td>
+                            <td class="actions-cell" data-label="{{t $.Lang "dashboard.table.actions"}}">
+                                <button class="btn-icon" onclick="editDevice('{{.IP}}')" data-tip="{{t $.Lang "dashboard.row.edit"}}" aria-label="{{t $.Lang "dashboard.row.edit"}}"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+                                <button class="btn-icon danger" onclick="deleteDevice('{{.IP}}')" data-tip="{{t $.Lang "common.delete"}}" aria-label="{{t $.Lang "common.delete"}}"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6"/><path d="M10 11v6M14 11v6"/></svg></button>
                             </td>
                         </tr>
                         {{end}}
@@ -317,26 +342,26 @@ orangutan export out.csv</code></pre>
                      live view. State when that was, so "last seen" times are
                      read in the right context. */}}
                 <div class="table-footer">
-                    <div class="status-legend" aria-label="What the status colours mean">
-                        <span class="legend-item"><span class="legend-dot online"></span>Online</span>
-                        <span class="legend-item"><span class="legend-dot seen"></span>Seen recently</span>
-                        <span class="legend-item"><span class="legend-dot offline"></span>Offline</span>
-                        <span class="legend-item clip-hint" id="clip-hint" hidden>Shortened values show in full on hover</span>
+                    <div class="status-legend" aria-label="{{t $.Lang "dashboard.legend.label"}}">
+                        <span class="legend-item"><span class="legend-dot online"></span>{{t $.Lang "dashboard.legend.online"}}</span>
+                        <span class="legend-item"><span class="legend-dot seen"></span>{{t $.Lang "dashboard.legend.seen"}}</span>
+                        <span class="legend-item"><span class="legend-dot offline"></span>{{t $.Lang "dashboard.legend.offline"}}</span>
+                        <span class="legend-item clip-hint" id="clip-hint" hidden>{{t $.Lang "dashboard.legend.clipHint"}}</span>
                     </div>
                     {{if or .ContinuousScan .LastScanAt}}
                     <span class="table-footer-label">
-                        <span class="live-indicator"><span class="live-dot"></span>Live</span>{{if .LastScanAt}}<span class="live-sep">&middot;</span><span class="scan-when">scanned <span data-relative-time="{{.LastScanUnix}}">{{.LastScanAgo}}</span> <span class="table-footer-detail">&middot; {{.LastScanAt}}</span></span>{{end}}
+                        <span class="live-indicator"><span class="live-dot"></span>{{t $.Lang "dashboard.scan.live"}}</span>{{if .LastScanAt}}<span class="live-sep">&middot;</span><span class="scan-when">{{$p := tparts $.Lang "dashboard.scan.scannedAgo" "when"}}{{index $p 0}}<span data-relative-time="{{.LastScanUnix}}">{{.LastScanAgo}}</span>{{index $p 1}} <span class="table-footer-detail">&middot; {{.LastScanAt}}</span></span>{{end}}
                     </span>
                     {{else}}
-                    <span class="table-footer-label">Not scanned yet &middot; run a scan to discover devices</span>
+                    <span class="table-footer-label">{{t $.Lang "dashboard.footer.notScanned"}}</span>
                     {{end}}
                 </div>
             </div>
             {{if not .Devices}}
             <div class="empty-state">
                 <div class="empty-state-icon"><svg class="icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></div>
-                <h3>No devices discovered yet</h3>
-                <p>Click "Scan All" to discover devices on your network.</p>
+                <h3>{{t $.Lang "dashboard.empty.title"}}</h3>
+                <p>{{t $.Lang "dashboard.empty.body"}}</p>
             </div>
             {{end}}
         </section>
@@ -346,49 +371,61 @@ orangutan export out.csv</code></pre>
     <div id="edit-modal" class="modal" style="display:none">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>Edit Device</h3>
+                <h3>{{t $.Lang "dashboard.edit.title"}}</h3>
                 <button class="modal-close" onclick="closeModal()">×</button>
             </div>
             <div class="modal-body">
                 <form id="edit-form">
                     <input type="hidden" id="edit-ip" name="ip">
                     <div class="form-group">
-                        <label>IP Address</label>
+                        <label>{{t $.Lang "dashboard.edit.ipAddress"}}</label>
                         <input type="text" id="edit-ip-display" class="input" disabled>
                     </div>
                     <div class="form-group">
-                        <label>Label</label>
-                        <input type="text" id="edit-label" name="label" class="input" placeholder="e.g., Living Room TV">
+                        <label>{{t $.Lang "dashboard.edit.label"}}</label>
+                        <input type="text" id="edit-label" name="label" class="input" placeholder="{{t $.Lang "dashboard.edit.labelPlaceholder"}}">
                     </div>
                     <div class="form-group">
-                        <label>Device Type</label>
+                        <label>{{t $.Lang "dashboard.edit.hostname"}}</label>
+                        <input type="text" id="edit-hostname" name="custom_hostname" class="input" maxlength="253">
+                        <small id="edit-hostname-hint" class="form-hint"></small>
+                    </div>
+                    <div class="form-group">
+                        <label>{{t $.Lang "dashboard.edit.deviceType"}}</label>
                         <select id="edit-type-select" name="type" class="select">
-                            <option value="">Auto (Detect)</option>
-                            {{range .Types}}<option value="{{.}}">{{.}}</option>{{end}}
+                            <option value="">{{t $.Lang "dashboard.edit.typeAuto"}}</option>
+                            {{range .Types}}<option value="{{.}}">{{typeName $.Lang .}}</option>{{end}}
                         </select>
                     </div>
                     <div class="form-group">
-                        <label>Group</label>
+                        <label>{{t $.Lang "dashboard.edit.group"}}</label>
                         <select id="edit-group" name="group" class="select">
-                            <option value="">None</option>
+                            <option value="">{{t $.Lang "dashboard.edit.groupNone"}}</option>
                             {{range .Groups}}<option value="{{.}}">{{.}}</option>{{end}}
                         </select>
                     </div>
                     <div class="form-group">
-                        <label>Notes</label>
-                        <textarea id="edit-notes" name="notes" class="input" rows="3" placeholder="Add notes about this device..."></textarea>
+                        <label for="edit-location">{{t $.Lang "dashboard.edit.location"}}</label>
+                        {{/* Pick a place from the list or type a new one; a new
+                             place is added to the list when the device is saved. */}}
+                        <input type="text" id="edit-location" name="location" class="input" list="location-options" maxlength="32" autocomplete="off" placeholder="{{t $.Lang "dashboard.edit.locationPlaceholder"}}">
+                        <datalist id="location-options">{{range .Locations}}<option value="{{.}}">{{end}}</datalist>
+                    </div>
+                    <div class="form-group">
+                        <label>{{t $.Lang "dashboard.edit.notes"}}</label>
+                        <textarea id="edit-notes" name="notes" class="input" rows="3" placeholder="{{t $.Lang "dashboard.edit.notesPlaceholder"}}"></textarea>
                     </div>
                     <div class="form-group">
                         <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
                             <input type="checkbox" id="edit-expected">
-                            <span>Expected device &mdash; part of my known network</span>
+                            <span>{{t $.Lang "dashboard.edit.expected"}}</span>
                         </label>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
-                <button class="btn" onclick="closeModal()">Cancel</button>
-                <button class="btn btn-primary" onclick="saveDevice()">Save Changes</button>
+                <button class="btn" onclick="closeModal()">{{t $.Lang "common.cancel"}}</button>
+                <button class="btn btn-primary" onclick="saveDevice()">{{t $.Lang "dashboard.edit.saveChanges"}}</button>
             </div>
         </div>
     </div>
@@ -396,26 +433,26 @@ orangutan export out.csv</code></pre>
     <div id="snapshots-modal" class="modal" style="display:none">
         <div class="modal-content modal-wide">
             <div class="modal-header">
-                <h3>Snapshots</h3>
+                <h3>{{t $.Lang "dashboard.snapshots.title"}}</h3>
                 <button class="modal-close" onclick="closeModal()">&times;</button>
             </div>
             <div class="modal-body">
-                <p class="form-help" style="margin-top:0;">Save a snapshot of the network now, then compare it later to see what is new, gone, or changed.</p>
+                <p class="form-help" style="margin-top:0;">{{t $.Lang "dashboard.snapshots.help"}}</p>
                 <div class="form-group" style="display:flex; gap:0.5rem; align-items:center; margin-bottom:0.35rem;">
-                    <input type="text" id="snapshot-name" class="input" placeholder="Snapshot name (optional)" style="flex:1;">
-                    <button class="btn btn-primary" onclick="saveSnapshot()">Save current</button>
+                    <input type="text" id="snapshot-name" class="input" placeholder="{{t $.Lang "dashboard.snapshots.namePlaceholder"}}" style="flex:1;">
+                    <button class="btn btn-primary" onclick="saveSnapshot()">{{t $.Lang "dashboard.snapshots.saveCurrent"}}</button>
                 </div>
                 <span id="snapshot-status" class="form-help" style="margin:0;"></span>
 
-                <h4 style="margin:1.25rem 0 0.5rem;">Saved snapshots</h4>
+                <h4 style="margin:1.25rem 0 0.5rem;">{{t $.Lang "dashboard.snapshots.saved"}}</h4>
                 <div id="snapshot-list"></div>
 
-                <h4 style="margin:1.5rem 0 0.5rem;">Compare</h4>
+                <h4 style="margin:1.5rem 0 0.5rem;">{{t $.Lang "dashboard.snapshots.compareTitle"}}</h4>
                 <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
                     <select id="compare-from" class="select" style="width:auto;"></select>
                     <span class="form-help" style="margin:0;">&rarr;</span>
                     <select id="compare-to" class="select" style="width:auto;"></select>
-                    <button class="btn" onclick="runCompare()">Compare</button>
+                    <button class="btn" onclick="runCompare()">{{t $.Lang "dashboard.snapshots.compare"}}</button>
                 </div>
                 <div id="compare-result" style="margin-top:1rem;"></div>
             </div>
@@ -425,8 +462,8 @@ orangutan export out.csv</code></pre>
     <div id="toast" class="toast"></div>
     <div id="scan-progress" class="scan-progress" style="display:none">
         <div class="scan-progress-head">
-            <span id="scan-title">Scanning network...</span>
-            <button type="button" class="btn btn-sm scan-cancel" id="scan-cancel" onclick="cancelScan()">Cancel</button>
+            <span id="scan-title">{{t $.Lang "dashboard.scanProgress.title"}}</span>
+            <button type="button" class="btn btn-sm scan-cancel" id="scan-cancel" onclick="cancelScan()">{{t $.Lang "common.cancel"}}</button>
         </div>
         <div class="scan-bar" id="scan-bar">
             <div class="scan-bar-fill" id="scan-bar-fill"></div>
@@ -440,15 +477,16 @@ orangutan export out.csv</code></pre>
     </div>
 
     <footer class="footer">
-        <p>LAN Orangutan &bull; <a href="https://github.com/291-Group/LAN-Orangutan" target="_blank">GitHub</a></p>
-        <p style="margin-top:0.5rem;font-size:0.8rem;">Press <kbd class="kbd">/</kbd> to search &bull; <kbd class="kbd">R</kbd> to refresh &bull; <kbd class="kbd">T</kbd> to toggle theme</p>
+        <p>{{t $.Lang "common.appName"}} &bull; <a href="https://github.com/291-Group/LAN-Orangutan" target="_blank" rel="noreferrer noopener">{{t $.Lang "common.github"}}</a> &bull; <a href="/credits">{{t $.Lang "common.thanks"}}</a></p>
+        <p style="margin-top:0.5rem;font-size:0.8rem;">{{th $.Lang "dashboard.footer.shortcuts" "slash" (raw `<kbd class="kbd">/</kbd>`) "r" (raw `<kbd class="kbd">R</kbd>`) "t" (raw `<kbd class="kbd">T</kbd>`)}}</p>
     </footer>
 
-    <button type="button" id="scroll-top" class="scroll-top" aria-label="Back to top">
+    <button type="button" id="scroll-top" class="scroll-top" aria-label="{{t $.Lang "dashboard.backToTop"}}">
         <svg class="scroll-top-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 15l8-8 8 8"/></svg>
         <img src="/static/orangutan.svg" alt="" class="scroll-top-logo" width="28" height="28">
     </button>
 
+    {{template "i18nscript" .}}
     <script src="/static/app.js?v={{.Version}}"></script>
 </body>
 </html>

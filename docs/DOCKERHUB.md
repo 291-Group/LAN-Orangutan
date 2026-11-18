@@ -102,6 +102,12 @@ Every setting can be supplied through the environment, which overrides the confi
 | `ORANGUTAN_DATA_DIR` | Where devices and settings are stored (preset to `/var/lib/lan-orangutan`) |
 | `ORANGUTAN_SCAN_INTERVAL` | Auto-scan interval in seconds |
 | `ORANGUTAN_NETWORKS` | Extra networks to scan, comma separated |
+| `ORANGUTAN_EXCLUDE_NETWORKS` | Detected networks never to scan, comma separated |
+| `ORANGUTAN_ONLY_CONFIGURED_NETWORKS` | `true` to scan only the networks you list, ignoring detection |
+| `ORANGUTAN_CONTINUOUS_SCAN` | `false` to scan only when asked, instead of on the interval |
+| `ORANGUTAN_ENABLE_SERVICE_DETECTION` | `true` to check a few well-known ports, for more precise device types |
+| `ORANGUTAN_NMAP_MAX_RTT_TIMEOUT` | Probe timeout on networks reached through a router or tunnel, e.g. `200ms`. Set automatically if left out |
+| `ORANGUTAN_NMAP_MAX_RETRIES` | Retries on those networks, e.g. `1`. Set automatically if left out |
 | `ORANGUTAN_THEME` | `light`, `dark` or `auto` |
 | `TZ` | Container timezone |
 
@@ -109,21 +115,27 @@ Every setting can be supplied through the environment, which overrides the confi
 
 **Port:** `291` (under host networking this is taken directly from the host).
 
-**Scanning networks that aren't detected.** LAN Orangutan finds networks by reading the machine's own interfaces, so a routed subnet or VLAN is never offered automatically. List them explicitly with `ORANGUTAN_NETWORKS=192.168.10.0/24,10.0.5.0/24`. Results for a routed network have no MAC addresses or manufacturer names, since those come from ARP and only work on the same segment.
+**Scanning networks that aren't detected.** LAN Orangutan finds networks by reading the machine's own interfaces, so a routed subnet or VLAN is never offered automatically. List them explicitly with `ORANGUTAN_NETWORKS=192.168.10.0/24,10.0.5.0/24`. Results for a routed network have no MAC addresses or manufacturer names, since those come from ARP and only work on the same segment. They are scanned with tighter timing automatically, which makes them much faster, and the two `ORANGUTAN_NMAP_*` variables above tune it for your own link.
 
 ---
 
 ## Features
 
-- Auto-discovers devices with **nmap** (bundled in the image)
+- Auto-discovers devices with **nmap** (bundled in the image), plus devices already in the host's ARP table that don't answer a scan
+- IPv4 and IPv6, with a device seen on both shown once
 - Password protected, you set the password the first time you open it
-- Label, group and add notes to devices
-- Multi-network support
+- Label, group, locate and add notes to devices, with your own group names and locations
+- Rename a device or set its type yourself, and scans keep your choice
+- Mark the devices you expect, and get told when something new appears or something goes missing
+- **Notifications** by webhook to Telegram, Discord, Slack, ntfy, Home Assistant or anything that takes JSON
+- Snapshots to compare your network over time, backup and restore, and a shareable HTML report
+- Multi-network support, with faster scans of networks reached through a router or VPN, tuned automatically
 - **Tailscale integration**: connect, disconnect, and discover tailnet peers from inside the app
 - Live scan progress you can cancel, with a time estimate
 - Modern web dashboard, light/dark mode, keyboard shortcuts
-- Full CLI with JSON output
+- Full CLI with JSON output, and a REST API with tokens
 - Export to CSV/JSON
+- Available in 16 languages, including Arabic and Hebrew right to left
 
 ### Tailscale
 

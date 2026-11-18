@@ -1,0 +1,17 @@
+{
+  "intro": "LAN Orangutan kształtują jego użytkownicy. Niemal wszystko w ostatnich wydaniach zaczęło się od tego, że ktoś otworzył zgłoszenie lub dyskusję, a kilka osób wymieniało z nami uwagi, dopóki poprawka nie była dobra.",
+  "code": "Kod",
+  "for291Group": "Projekt i rozwój LAN Orangutan",
+  "forDeviceTypes": "Edycja i przypisywanie typów urządzeń (#50)",
+  "forIPv6Merge": "Naprawa zduplikowanych urządzeń IPv6 w skanowaniu z wiersza poleceń (#58)",
+  "forCiActions": "Aktualizacja kontroli kompilacji do bieżących GitHub Actions (#59)",
+  "community": "Pomysły, zgłoszenia i testy",
+  "builtWith": "Zbudowano z użyciem",
+  "builtGo": "Język i biblioteka standardowa",
+  "builtNmap": "Wykrywanie sieci",
+  "builtArpScan": "Szybkie przeszukiwanie sieci lokalnej",
+  "builtCobra": "Wiersz poleceń",
+  "builtCrypto": "Haszowanie haseł",
+  "builtIeee": "Nazwy producentów urządzeń z adresów MAC",
+  "join": "Chcesz znaleźć się na tej stronie? Otwórz zgłoszenie lub rozpocznij dyskusję na {github}."
+}
