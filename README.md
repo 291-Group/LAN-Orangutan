@@ -97,11 +97,14 @@ The image is published to both [Docker Hub](https://hub.docker.com/r/291group/la
 ### Run
 
 ```bash
-# Linux/macOS - Run with sudo for full device info (MAC addresses, vendors)
-sudo ./orangutan serve
+# Linux/macOS: extract, then run with sudo for full device info (MAC addresses, vendors).
+# The file is named for your platform, for example orangutan-linux-amd64.
+tar xzf orangutan-linux-amd64.tar.gz
+chmod +x orangutan-linux-amd64
+sudo ./orangutan-linux-amd64 serve
 
 # Windows (run as Administrator for full device info)
-orangutan.exe serve
+orangutan-windows-amd64.exe serve
 ```
 
 Open `http://localhost:291` in your browser, or `http://<that-machine>:291` from another computer on your network.

@@ -10,9 +10,10 @@ Download the latest release for your platform from [GitHub Releases](https://git
 # Download and extract
 wget https://github.com/291-Group/LAN-Orangutan/releases/latest/download/orangutan-linux-amd64.tar.gz
 tar xzf orangutan-linux-amd64.tar.gz
+chmod +x orangutan-linux-amd64
 
 # Run (use sudo for MAC addresses and vendor info)
-sudo ./orangutan serve
+sudo ./orangutan-linux-amd64 serve
 ```
 
 ### macOS
@@ -29,9 +30,10 @@ Or by hand:
 # Download and extract (Apple Silicon; on an Intel Mac use orangutan-darwin-amd64.tar.gz)
 curl -LO https://github.com/291-Group/LAN-Orangutan/releases/latest/download/orangutan-darwin-arm64.tar.gz
 tar xzf orangutan-darwin-arm64.tar.gz
+chmod +x orangutan-darwin-arm64
 
-# Run (use sudo for MAC addresses and vendor info)
-sudo ./orangutan serve
+# Run (use sudo for MAC addresses and vendor info; on Intel, orangutan-darwin-amd64)
+sudo ./orangutan-darwin-arm64 serve
 ```
 
 ### Windows

@@ -79,7 +79,7 @@ services:
 | Tag | Meaning |
 |---|---|
 | `latest` | Most recent release |
-| `3.2.1`, `3.1.4`, … | A specific release |
+| `4.0.0`, `3.4.2`, … | A specific release |
 
 Built for **linux/amd64** and **linux/arm64** (multi-arch manifest, so Raspberry Pi 4/5 and other arm64 boards pull the right image automatically).
 

@@ -51,14 +51,14 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # For a manual run, check out the tag that was entered; otherwise the
           # tag that triggered the workflow.
           ref: ${{ github.event.inputs.tag || github.ref }}
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: '1.27'
 
@@ -68,6 +68,27 @@ jobs:
           TAG="${{ github.event.inputs.tag }}"
           if [ -z "$TAG" ]; then TAG="${GITHUB_REF#refs/tags/}"; fi
           echo "VERSION=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      # Windows shows these on the file's Properties > Details tab, and code
+      # signing checks the product name and version against them. Go embeds
+      # nothing by default, so build a resource file next to main.go for the
+      # Windows build only; go build picks it up from there. A pre-release tag
+      # (4.0.1-beta.1) is fine as the product version, but the file version
+      # must be four numbers, so it drops the suffix.
+      - name: Embed Windows version info
+        if: matrix.goos == 'windows'
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          go run github.com/tc-hib/go-winres@v0.3.3 simply \
+            --arch ${{ matrix.goarch }} \
+            --manifest none \
+            --out cmd/orangutan/rsrc \
+            --product-name "LAN Orangutan" \
+            --product-version "${VERSION}" \
+            --file-version "${VERSION%%-*}.0" \
+            --file-description "Network discovery and device tracking tool" \
+            --copyright "Copyright (c) 2024 291 Group" \
+            --original-filename "orangutan-${{ matrix.suffix }}${{ matrix.ext }}"
 
       - name: Build binary
         env:
@@ -87,7 +108,7 @@ jobs:
           go build -trimpath -ldflags "${LDFLAGS}" -o orangutan-${{ matrix.suffix }}${{ matrix.ext }} ./cmd/orangutan
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: orangutan-${{ matrix.suffix }}
           path: orangutan-${{ matrix.suffix }}${{ matrix.ext }}
@@ -96,7 +117,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # For a manual run, check out the tag that was entered; otherwise the
           # tag that triggered the workflow.
@@ -110,20 +131,20 @@ jobs:
           echo "VERSION=${TAG#v}" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Login to Docker Hub
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -133,7 +154,7 @@ jobs:
         run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> $GITHUB_OUTPUT
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -153,7 +174,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # For a manual run, check out the tag that was entered; otherwise the
           # tag that triggered the workflow.
@@ -167,7 +188,7 @@ jobs:
           echo "VERSION=${TAG#v}" >> "$GITHUB_OUTPUT"
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist
 
@@ -210,6 +231,9 @@ jobs:
               zip "${binary_name%.exe}.zip" "$binary_name"
             else
               echo "  Creating tar.gz: ${binary_name}.tar.gz"
+              # The artifact upload and download drop the execute bit, so set
+              # it again; without it the extracted binary will not run.
+              chmod +x "$binary_name"
               tar -czvf "${binary_name}.tar.gz" "$binary_name"
             fi
           done
@@ -632,7 +656,7 @@ jobs:
           cat SHA256SUMS.txt
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3
         with:
           # Attach to the right release whether triggered by a tag, a release,
           # or a manual run.
