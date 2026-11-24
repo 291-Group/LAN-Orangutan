@@ -21,7 +21,7 @@ sudo ./orangutan-linux-amd64 serve
 With Homebrew:
 
 ```bash
-brew install 291-group/tap/lan-orangutan
+brew install lan-orangutan
 ```
 
 Or by hand:
