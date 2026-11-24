@@ -64,7 +64,7 @@ Grab the latest release of LAN Orangutan for your platform from [GitHub Releases
 
 ```bash
 # macOS (Homebrew)
-brew install 291-group/tap/lan-orangutan
+brew install lan-orangutan
 
 # Windows (Scoop)
 scoop bucket add 291group https://github.com/291-Group/scoop-bucket
